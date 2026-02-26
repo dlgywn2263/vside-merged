@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    "src/components/layout/WizardHeader.jsx",
+    "app/(project-wizard)/new/language/page.jsx",
+    "app/(project-wizard)/new/config/page.jsx",
+    "app/(project-wizard)/new/extra/page.jsx",
+    "app/(project-wizard)/new/workspace/page.jsx",
+    "app/(project-wizard)/new/layout.jsx",
+    "app/(project-wizard)/layout.jsx"
+  ],
+  "exclude": ["node_modules"]
+}
