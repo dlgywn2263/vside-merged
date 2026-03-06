@@ -32,7 +32,7 @@ const MOCK_SOLUTIONS: Solution[] = [
   },
 ];
 
-export function DevlogSolutionsList() {
+export function DevlogWorkspaceList() {
   return (
     <section className="space-y-3">
       {MOCK_SOLUTIONS.map((s) => {

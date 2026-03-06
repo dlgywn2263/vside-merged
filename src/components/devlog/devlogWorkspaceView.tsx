@@ -146,8 +146,8 @@ function formatTags(tags: string[]) {
   return tags.join(", ");
 }
 
-export function DevlogSolutionView({ solutionId }: { solutionId: string }) {
-  const initial = MOCK_DETAIL[solutionId];
+export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
+  const initial = MOCK_DETAIL[workspaceId];
   const [detail, setDetail] = useState<SolutionDetail | null>(initial ?? null);
 
   const [openProjectIds, setOpenProjectIds] = useState<Record<string, boolean>>(

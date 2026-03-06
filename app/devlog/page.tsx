@@ -1,4 +1,4 @@
-import { DevlogSolutionsList } from "@/components/devlog/devlogSolutionsList";
+import { DevlogWorkspaceList } from "@/components/devlog/devlogWorkspaceList";
 
 export default function DevlogPage() {
   return (
@@ -15,7 +15,7 @@ export default function DevlogPage() {
           </div>
         </div>
 
-        <DevlogSolutionsList />
+        <DevlogWorkspaceList />
       </div>
     </main>
   );
