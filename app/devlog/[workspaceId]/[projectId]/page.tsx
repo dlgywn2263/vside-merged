@@ -30,7 +30,7 @@ export default async function DevlogProjectPage({
         </div>
         <div className="mx-auto w-full max-w-[960px] space-y-5">
           {/* 검색 */}
-          <DevlogListHeader />
+          {/* <DevlogListHeader /> */}
           {/* 리스트 */}
           {/* <DevlogPostList projectId={projectId} /> */}
         </div>
