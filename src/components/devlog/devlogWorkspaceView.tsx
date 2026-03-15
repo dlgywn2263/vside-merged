@@ -14,13 +14,14 @@ import {
 } from "lucide-react";
 
 const API_BASE = "http://localhost:8080";
+const USER_ID = "user-001";
 
 type StageType = "planning" | "implementation" | "wrapup";
 
 type DevlogItem = {
-  id: string;
+  id: number;
   workspaceId: string;
-  projectId: string;
+  projectId: number;
   projectTitle: string;
   title: string;
   summary: string;
@@ -37,12 +38,14 @@ type DevlogItem = {
 };
 
 type ApiDevlogResponse = {
-  id: string;
+  id: number | string;
+  workspaceId?: string;
+  projectId?: number | string;
   title: string;
   summary: string;
   content: string;
   date: string;
-  tags: string[];
+  tags?: string[];
   stage?: StageType;
   goal?: string;
   issue?: string;
@@ -53,11 +56,12 @@ type ApiDevlogResponse = {
 };
 
 type ApiProjectDevlogGroupResponse = {
-  projectId: string;
-  projectTitle: string;
+  projectId?: number | string;
+  id?: number | string;
+  projectTitle?: string;
+  title?: string;
   posts: ApiDevlogResponse[];
 };
-
 type ApiWorkspaceDetailResponse = {
   uuid: string;
   name: string;
@@ -118,7 +122,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [workspaceModeLabel, setWorkspaceModeLabel] = useState("워크스페이스");
 
   const [logs, setLogs] = useState<DevlogItem[]>([]);
-  const [projects, setProjects] = useState<{ id: string; title: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: number; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -135,6 +139,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [form, setForm] = useState<FormValue>(emptyForm);
 
   useEffect(() => {
+    if (!workspaceId) return;
     loadWorkspace();
   }, [workspaceId]);
 
@@ -145,15 +150,25 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
       const res = await fetch(
         `${API_BASE}/api/devlogs/workspaces/${workspaceId}`,
         {
+          method: "GET",
           cache: "no-store",
+          headers: {
+            "X-USER-ID": USER_ID,
+          },
         },
       );
 
       if (!res.ok) {
-        throw new Error("워크스페이스 개발일지 조회 실패");
+        const errorText = await res.text();
+        console.error("워크스페이스 개발일지 조회 실패", {
+          status: res.status,
+          body: errorText,
+        });
+        throw new Error(`워크스페이스 개발일지 조회 실패 (${res.status})`);
       }
 
       const data: ApiWorkspaceDetailResponse = await res.json();
+      console.log("개발일지 조회 응답", data);
 
       setWorkspaceName(data.name);
       setWorkspaceModeLabel(
@@ -162,34 +177,47 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
           : "개인 워크스페이스",
       );
 
-      const mappedProjects = data.projects.map((project) => ({
-        id: project.projectId,
-        title: project.projectTitle,
-      }));
-      setProjects(mappedProjects);
+      const mappedProjects = (data.projects ?? [])
+        .map((project, index) => {
+          const rawId = project.projectId ?? project.id;
+          const numericProjectId = Number(rawId);
 
-      const flattenedLogs: DevlogItem[] = data.projects.flatMap((project) =>
-        project.posts.map((post) => ({
-          id: post.id,
-          workspaceId: data.uuid,
-          projectId: project.projectId,
-          projectTitle: project.projectTitle,
-          title: post.title,
-          summary: post.summary,
-          content: post.content,
-          date: normalizeDate(post.date),
-          tags: post.tags ?? [],
-          stage:
-            post.stage ?? inferStage(post.title, post.summary, post.tags ?? []),
-          goal: post.goal ?? "",
-          issue: post.issue ?? "",
-          solution: post.solution ?? "",
-          nextPlan: post.nextPlan ?? "",
-          commitHash: post.commitHash ?? "",
-          progress: post.progress ?? 0,
-        })),
+          return {
+            id: numericProjectId,
+            rawProjectId: rawId,
+            title:
+              project.projectTitle ?? project.title ?? `프로젝트 ${index + 1}`,
+          };
+        })
+        .filter((project) => !Number.isNaN(project.id) && project.id > 0);
+
+      const flattenedLogs: DevlogItem[] = (data.projects ?? []).flatMap(
+        (project) => {
+          const rawProjectId = project.projectId ?? project.id;
+          const numericProjectId = Number(rawProjectId);
+
+          return (project.posts ?? []).map((post) => ({
+            id: Number(post.id),
+            workspaceId: data.uuid,
+            projectId: Number.isNaN(numericProjectId) ? -1 : numericProjectId,
+            projectTitle: project.projectTitle ?? project.title ?? "프로젝트",
+            title: post.title ?? "",
+            summary: post.summary ?? "",
+            content: post.content ?? "",
+            date: normalizeDate(post.date),
+            tags: post.tags ?? [],
+            stage:
+              post.stage ??
+              inferStage(post.title ?? "", post.summary ?? "", post.tags ?? []),
+            goal: post.goal ?? "",
+            issue: post.issue ?? "",
+            solution: post.solution ?? "",
+            nextPlan: post.nextPlan ?? "",
+            commitHash: post.commitHash ?? "",
+            progress: post.progress ?? 0,
+          }));
+        },
       );
-
       setLogs(flattenedLogs);
 
       const today = todayYmd();
@@ -203,7 +231,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
         setSelectedDate(today);
       }
     } catch (error) {
-      console.error(error);
+      console.error("loadWorkspace error:", error);
       alert("개발일지 데이터를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -280,7 +308,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     setEditingTarget(null);
     setForm({
       ...emptyForm,
-      projectId: projects[0]?.id ?? "",
+      projectId: projects[0]?.id ? String(projects[0].id) : "",
       date: selectedDate || todayYmd(),
       stage: defaultStage ?? "planning",
     });
@@ -291,7 +319,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     setIsCreateOpen(false);
     setEditingTarget(item);
     setForm({
-      projectId: item.projectId,
+      projectId: String(item.projectId),
       title: item.title,
       summary: item.summary,
       content: item.content,
@@ -315,7 +343,8 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
 
   async function handleSubmit() {
     const payload = {
-      projectId: form.projectId,
+      workspaceId,
+      projectId: Number(form.projectId),
       title: form.title.trim(),
       summary: form.summary.trim(),
       content: form.content.trim(),
@@ -333,8 +362,13 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
       progress: Number(form.progress || 0),
     };
 
-    if (!payload.projectId || !payload.title || !payload.content) {
-      alert("프로젝트, 제목, 상세 내용은 필수입니다.");
+    if (
+      !payload.workspaceId ||
+      !payload.projectId ||
+      !payload.title ||
+      !payload.content
+    ) {
+      alert("워크스페이스, 프로젝트, 제목, 상세 내용은 필수입니다.");
       return;
     }
 
@@ -344,46 +378,75 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
+            "X-USER-ID": USER_ID,
           },
           body: JSON.stringify(payload),
         });
 
         if (!res.ok) {
-          throw new Error("수정 실패");
+          const errorText = await res.text();
+          console.error("개발일지 수정 실패", {
+            status: res.status,
+            body: errorText,
+          });
+          throw new Error(`수정 실패 (${res.status})`);
         }
       } else {
         const res = await fetch(`${API_BASE}/api/devlogs`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "X-USER-ID": USER_ID,
           },
           body: JSON.stringify(payload),
         });
 
         if (!res.ok) {
-          throw new Error("생성 실패");
+          const errorText = await res.text();
+          console.error("개발일지 생성 실패", {
+            status: res.status,
+            body: errorText,
+          });
+          throw new Error(`생성 실패 (${res.status})`);
         }
       }
 
       await loadWorkspace();
       closeFormModal();
     } catch (error) {
-      console.error(error);
+      console.error("handleSubmit error:", error);
       alert("저장 중 오류가 발생했습니다.");
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: number, projectId: number) {
     const ok = window.confirm("이 개발일지를 삭제할까요?");
     if (!ok) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/devlogs/${id}`, {
-        method: "DELETE",
+      const query = new URLSearchParams({
+        workspaceId,
+        projectId: String(projectId),
       });
 
+      const res = await fetch(
+        `${API_BASE}/api/devlogs/${id}?${query.toString()}`,
+        {
+          method: "DELETE",
+          headers: {
+            "X-USER-ID": USER_ID,
+          },
+          loadWorkspace,
+        },
+      );
+
       if (!res.ok) {
-        throw new Error("삭제 실패");
+        const errorText = await res.text();
+        console.error("개발일지 삭제 실패", {
+          status: res.status,
+          body: errorText,
+        });
+        throw new Error(`삭제 실패 (${res.status})`);
       }
 
       if (detailTarget?.id === id) {
@@ -392,11 +455,10 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
 
       await loadWorkspace();
     } catch (error) {
-      console.error(error);
+      console.error("handleDelete error:", error);
       alert("삭제 중 오류가 발생했습니다.");
     }
   }
-
   return (
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
@@ -610,7 +672,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
                             <Pencil size={15} />
                           </button>
                           <button
-                            onClick={() => handleDelete(log.id)}
+                            onClick={() => handleDelete(log.id, log.projectId)}
                             className="rounded-lg p-2 text-slate-500 hover:bg-white"
                           >
                             <Trash2 size={15} />
@@ -712,7 +774,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
                                   <Pencil size={14} />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(log.id)}
+                                  onClick={() =>
+                                    handleDelete(log.id, log.projectId)
+                                  }
                                   className="rounded-lg p-2 text-slate-500 hover:bg-slate-50"
                                 >
                                   <Trash2 size={14} />
@@ -814,7 +878,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
                 수정
               </button>
               <button
-                onClick={() => handleDelete(detailTarget.id)}
+                onClick={() =>
+                  handleDelete(detailTarget.id, detailTarget.projectId)
+                }
                 className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600"
               >
                 삭제
@@ -833,8 +899,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
                   {editingTarget ? "개발일지 수정" : "새 개발일지 작성"}
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  기존 CRUD 흐름은 유지하고, 단계/일정 중심으로 더 풍부하게
-                  기록할 수 있도록 구성했습니다.
+                  단계와 일정 기준으로 개발 흐름을 기록합니다.
                 </p>
               </div>
 
@@ -856,8 +921,8 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none"
                 >
                   <option value="">프로젝트 선택</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
+                  {projects.map((project, index) => (
+                    <option key={`${project.id}-${index}`} value={project.id}>
                       {project.title}
                     </option>
                   ))}
