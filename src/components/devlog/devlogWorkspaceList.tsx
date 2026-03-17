@@ -12,7 +12,7 @@ type WorkspaceItem = {
   mode: SolutionMode;
   teamName: string | null;
   lastUpdatedDate: string;
-  projectCount: number;
+  devlogCount: number;
 };
 
 const API_BASE = "http://localhost:8080";
@@ -137,9 +137,9 @@ export function DevlogWorkspaceList() {
                     {formatDate(s.lastUpdatedDate)}
                   </span>
                   <span className="mx-2 text-gray-300">·</span>
-                  프로젝트{" "}
+                  개발일지{" "}
                   <span className="font-semibold text-gray-800">
-                    {s.projectCount}개
+                    {s.devlogCount}개
                   </span>
                 </div>
               </div>

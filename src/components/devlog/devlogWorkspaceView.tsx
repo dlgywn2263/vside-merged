@@ -59,7 +59,7 @@ type ApiProjectDevlogGroupResponse = {
   projectId?: number | string;
   id?: number | string;
   projectTitle?: string;
-  title?: string;
+  name?: string;
   posts: ApiDevlogResponse[];
 };
 type ApiWorkspaceDetailResponse = {
@@ -122,7 +122,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [workspaceModeLabel, setWorkspaceModeLabel] = useState("워크스페이스");
 
   const [logs, setLogs] = useState<DevlogItem[]>([]);
-  const [projects, setProjects] = useState<{ id: number; title: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -184,12 +184,13 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
 
           return {
             id: numericProjectId,
-            rawProjectId: rawId,
-            title:
-              project.projectTitle ?? project.title ?? `프로젝트 ${index + 1}`,
+            name:
+              project.projectTitle ?? project.name ?? `프로젝트 ${index + 1}`,
           };
         })
         .filter((project) => !Number.isNaN(project.id) && project.id > 0);
+
+      setProjects(mappedProjects);
 
       const flattenedLogs: DevlogItem[] = (data.projects ?? []).flatMap(
         (project) => {
@@ -200,7 +201,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
             id: Number(post.id),
             workspaceId: data.uuid,
             projectId: Number.isNaN(numericProjectId) ? -1 : numericProjectId,
-            projectTitle: project.projectTitle ?? project.title ?? "프로젝트",
+            projectTitle: project.projectTitle ?? project.name ?? "프로젝트",
             title: post.title ?? "",
             summary: post.summary ?? "",
             content: post.content ?? "",
@@ -218,6 +219,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
           }));
         },
       );
+
       setLogs(flattenedLogs);
 
       const today = todayYmd();
@@ -237,7 +239,6 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
       setLoading(false);
     }
   }
-
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     logs.forEach((log) => {
@@ -436,7 +437,6 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
           headers: {
             "X-USER-ID": USER_ID,
           },
-          loadWorkspace,
         },
       );
 
@@ -449,14 +449,11 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
         throw new Error(`삭제 실패 (${res.status})`);
       }
 
-      if (detailTarget?.id === id) {
-        setDetailTarget(null);
-      }
-
       await loadWorkspace();
+      alert("개발일지가 삭제되었습니다.");
     } catch (error) {
-      console.error("handleDelete error:", error);
-      alert("삭제 중 오류가 발생했습니다.");
+      console.error(error);
+      alert("개발일지 삭제에 실패했습니다.");
     }
   }
   return (
@@ -915,15 +912,16 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
               <Field label="프로젝트">
                 <select
                   value={form.projectId}
+                  disabled={!!editingTarget}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, projectId: e.target.value }))
                   }
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none"
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none disabled:text-slate-400"
                 >
                   <option value="">프로젝트 선택</option>
                   {projects.map((project, index) => (
                     <option key={`${project.id}-${index}`} value={project.id}>
-                      {project.title}
+                      {project.name}
                     </option>
                   ))}
                 </select>
