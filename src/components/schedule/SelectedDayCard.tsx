@@ -2,23 +2,16 @@
 
 "use client";
 
-import type { CalendarEvent } from "./schedule.types";
 import { format } from "date-fns";
+import { ko } from "date-fns/locale";
+import type { CalendarEvent } from "./schedule.types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 
 type Props = {
   selectedDate: Date;
   dayEvents: CalendarEvent[];
-
   onCreateForDay: () => void;
   onOpenDetail: (id: string) => void;
   onEdit: (id: string) => void;
@@ -35,93 +28,63 @@ export default function SelectedDayCard({
 }: Props) {
   return (
     <Card className="rounded-2xl h-full">
-      <CardHeader>
-        <CardTitle>선택 날짜 상세</CardTitle>
-        <CardDescription>
-          {format(selectedDate, "yyyy.MM.dd (EEE)")}
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>선택 날짜 일정</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            {format(selectedDate, "yyyy.MM.dd (EEE)", { locale: ko })}
+          </p>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            일정 {dayEvents.length}개
-          </div>
-          <Button variant="outline" size="sm" onClick={onCreateForDay}>
-            + 이 날짜에 추가
-          </Button>
-        </div>
-
-        <Separator />
-
         {dayEvents.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            이 날짜엔 일정이 없습니다.
+          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground text-center">
+            해당 날짜에 포함된 일정이 없습니다.
           </div>
         ) : (
-          <div className="space-y-2">
-            {dayEvents.map((e) => (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => onOpenDetail(e.id)}
-                className="w-full text-left rounded-xl border p-3 hover:bg-muted/40 transition"
-                aria-label={`일정 상세 보기: ${e.title}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{e.category}</Badge>
-                      <div className="font-semibold truncate">{e.title}</div>
-                    </div>
+          dayEvents.map((event) => (
+            <div key={event.id} className="rounded-xl border p-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{event.category}</Badge>
+                <Badge variant="outline">
+                  {event.mode === "team" ? "Team" : "Personal"}
+                </Badge>
+                <div className="font-semibold">{event.title}</div>
+              </div>
 
-                    <div className="mt-1 flex items-center gap-2 text-sm">
-                      <Badge variant="outline">
-                        {e.startTime}
-                        {e.endTime ? ` ~ ${e.endTime}` : ""}
-                      </Badge>
-                      {e.location ? (
-                        <span className="text-muted-foreground">
-                          {e.location}
-                        </span>
-                      ) : null}
-                    </div>
+              <div className="text-sm text-muted-foreground">
+                {event.startDateISO}
+                {event.startDateISO !== event.endDateISO
+                  ? ` ~ ${event.endDateISO}`
+                  : ""}
+              </div>
 
-                    {e.description ? (
-                      <div className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                        {e.description}
-                      </div>
-                    ) : null}
-                  </div>
+              {event.location ? (
+                <div className="text-sm">{event.location}</div>
+              ) : null}
 
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        onEdit(e.id);
-                      }}
-                    >
-                      수정
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={(ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        onRemove(e.id);
-                      }}
-                    >
-                      삭제
-                    </Button>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenDetail(event.id)}
+                >
+                  상세
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onEdit(event.id)}>
+                  수정
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onRemove(event.id)}
+                >
+                  삭제
+                </Button>
+              </div>
+            </div>
+          ))
         )}
       </CardContent>
     </Card>

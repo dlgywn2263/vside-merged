@@ -33,7 +33,6 @@ type Props = {
 
 export default function ScopeToolbar({
   mode,
-  setMode,
   teams,
   teamId,
   setTeamId,
@@ -46,12 +45,8 @@ export default function ScopeToolbar({
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
       <TabsList>
-        <TabsTrigger value="personal" onClick={() => setMode("personal")}>
-          개인 일정
-        </TabsTrigger>
-        <TabsTrigger value="team" onClick={() => setMode("team")}>
-          팀 일정
-        </TabsTrigger>
+        <TabsTrigger value="personal">개인 일정</TabsTrigger>
+        <TabsTrigger value="team">팀 일정</TabsTrigger>
       </TabsList>
 
       <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -84,7 +79,10 @@ export default function ScopeToolbar({
           className="w-[240px]"
         />
 
-        <Select value={category} onValueChange={(v) => setCategory(v as any)}>
+        <Select
+          value={category}
+          onValueChange={(v) => setCategory(v as Category | "ALL")}
+        >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="카테고리" />
           </SelectTrigger>

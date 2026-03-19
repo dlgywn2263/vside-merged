@@ -1,9 +1,8 @@
-// 선택 주간의 일정 리스트(스크롤) + 상세/수정/삭제 트리거를 제공하는 좌측 하단 카드 컴포넌트
-
 "use client";
 
-import type { CalendarEvent, Mode } from "./schedule.types";
+import type { CalendarEvent, Mode, ProjectRole } from "./schedule.types";
 import { startOfWeek, endOfWeek, format } from "date-fns";
+import { ko } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +13,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ROLE_COLORS } from "./schedule.utils";
 
 type Props = {
   selectedDate: Date;
@@ -24,8 +24,27 @@ type Props = {
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
 
-  sortByDateTime: (a: CalendarEvent, b: CalendarEvent) => number;
+  sortByDateRange: (a: CalendarEvent, b: CalendarEvent) => number;
 };
+
+function getPeriodText(event: CalendarEvent) {
+  if (event.startDateISO === event.endDateISO) {
+    return format(new Date(event.startDateISO), "yyyy.MM.dd (EEE)", {
+      locale: ko,
+    });
+  }
+
+  return `${format(new Date(event.startDateISO), "yyyy.MM.dd (EEE)", {
+    locale: ko,
+  })} ~ ${format(new Date(event.endDateISO), "yyyy.MM.dd (EEE)", {
+    locale: ko,
+  })}`;
+}
+
+function getRoleBadgeClass(role?: ProjectRole) {
+  if (!role) return "";
+  return ROLE_COLORS[role];
+}
 
 export default function WeekCard({
   selectedDate,
@@ -34,15 +53,20 @@ export default function WeekCard({
   onOpenDetail,
   onEdit,
   onRemove,
-  sortByDateTime,
+  sortByDateRange,
 }: Props) {
   return (
     <Card className="rounded-2xl">
       <CardHeader>
         <CardTitle>이번 주 일정</CardTitle>
         <CardDescription>
-          {format(startOfWeek(selectedDate, { weekStartsOn: 0 }), "MM.dd")} ~{" "}
-          {format(endOfWeek(selectedDate, { weekStartsOn: 0 }), "MM.dd")}
+          {format(startOfWeek(selectedDate, { weekStartsOn: 0 }), "MM.dd", {
+            locale: ko,
+          })}{" "}
+          ~{" "}
+          {format(endOfWeek(selectedDate, { weekStartsOn: 0 }), "MM.dd", {
+            locale: ko,
+          })}
         </CardDescription>
       </CardHeader>
 
@@ -56,7 +80,7 @@ export default function WeekCard({
             <div className="space-y-2">
               {weekEvents
                 .slice()
-                .sort(sortByDateTime)
+                .sort(sortByDateRange)
                 .map((e) => (
                   <div
                     key={e.id}
@@ -65,26 +89,40 @@ export default function WeekCard({
                     <button
                       type="button"
                       onClick={() => onOpenDetail(e.id)}
-                      className="min-w-0 text-left hover:opacity-90 transition"
+                      className="min-w-0 flex-1 text-left transition hover:opacity-90"
                       aria-label={`일정 상세 보기: ${e.title}`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary">{e.category}</Badge>
-                        <div className="font-medium truncate">{e.title}</div>
+
+                        {mode === "team" && e.role ? (
+                          <Badge className={getRoleBadgeClass(e.role)}>
+                            {e.role}
+                          </Badge>
+                        ) : null}
+
+                        <div className="truncate font-medium">{e.title}</div>
                       </div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {e.dateISO} · {e.startTime}
-                        {e.endTime ? ` ~ ${e.endTime}` : ""}{" "}
-                        {e.location ? `· ${e.location}` : ""}
+
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {getPeriodText(e)}
+                        {e.location ? ` · ${e.location}` : ""}
                       </div>
+
+                      {e.description ? (
+                        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          {e.description}
+                        </div>
+                      ) : null}
+
                       {mode === "team" && e.assignees?.length ? (
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="mt-1 text-xs text-muted-foreground">
                           담당: {e.assignees.join(", ")}
                         </div>
                       ) : null}
                     </button>
 
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex shrink-0 gap-2">
                       <Button
                         variant="outline"
                         size="sm"

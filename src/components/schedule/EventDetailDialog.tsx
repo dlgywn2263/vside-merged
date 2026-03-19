@@ -56,20 +56,20 @@ export default function EventDetailDialog({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-xl border p-3">
-                <div className="text-xs text-muted-foreground">날짜</div>
-                <div className="font-medium">{event.dateISO}</div>
-              </div>
-              <div className="rounded-xl border p-3">
-                <div className="text-xs text-muted-foreground">시간</div>
+                <div className="text-xs text-muted-foreground">기간</div>
                 <div className="font-medium">
-                  {event.startTime}
-                  {event.endTime ? ` ~ ${event.endTime}` : ""}
+                  {event.startDateISO}
+                  {event.startDateISO !== event.endDateISO
+                    ? ` ~ ${event.endDateISO}`
+                    : ""}
                 </div>
               </div>
+
               <div className="rounded-xl border p-3">
                 <div className="text-xs text-muted-foreground">장소</div>
                 <div className="font-medium">{event.location ?? "없음"}</div>
               </div>
+
               <div className="rounded-xl border p-3">
                 <div className="text-xs text-muted-foreground">범위</div>
                 <div className="font-medium">
@@ -116,10 +116,6 @@ export default function EventDetailDialog({
                 삭제
               </Button>
             </div>
-
-            {/* TODO(백엔드):
-              - 상세 보기에서 "첨부파일/링크/태그" 같은 확장 필드 추가 가능
-              - 권한(팀원만 수정 가능) 체크도 여기서 적용 */}
           </div>
         ) : (
           <div className="text-sm text-muted-foreground">
