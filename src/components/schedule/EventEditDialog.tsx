@@ -72,6 +72,26 @@ type Props = {
   onSave: () => void;
 };
 
+const STAGE_LABELS: Record<ProjectStage, string> = {
+  Planning: "기획",
+  Design: "설계",
+  Development: "구현",
+  Finalization: "마무리",
+};
+
+const ROLE_LABELS: Record<ProjectRole, string> = {
+  Frontend: "프론트엔드",
+  Backend: "백엔드",
+  Designer: "디자인",
+  Fullstack: "풀스택",
+};
+
+const STATUS_LABELS: Record<EventStatus, string> = {
+  Todo: "해야 함",
+  InProgress: "진행 중",
+  Done: "완료",
+};
+
 export default function EventEditDialog({
   open,
   onOpenChange,
@@ -112,7 +132,7 @@ export default function EventEditDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label htmlFor="title">제목</Label>
             <Input
@@ -122,7 +142,7 @@ export default function EventEditDialog({
               placeholder="예: 발표 준비, 로그인 API 구현"
             />
             {!fTitle.trim() ? (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-1 text-xs text-muted-foreground">
                 제목은 필수입니다.
               </p>
             ) : null}
@@ -144,7 +164,7 @@ export default function EventEditDialog({
               value={fEndDateISO}
               onChange={(e) => setFEndDateISO(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-xs text-muted-foreground">
               종료일은 시작일보다 빠를 수 없습니다.
             </p>
           </div>
@@ -186,7 +206,7 @@ export default function EventEditDialog({
               <SelectContent>
                 {PROJECT_STAGES.map((stage) => (
                   <SelectItem key={stage} value={stage}>
-                    {stage}
+                    {STAGE_LABELS[stage]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -205,7 +225,7 @@ export default function EventEditDialog({
               <SelectContent>
                 {PROJECT_ROLES.map((role) => (
                   <SelectItem key={role} value={role}>
-                    {role}
+                    {ROLE_LABELS[role]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -224,7 +244,7 @@ export default function EventEditDialog({
               <SelectContent>
                 {EVENT_STATUSES.map((status) => (
                   <SelectItem key={status} value={status}>
-                    {status}
+                    {STATUS_LABELS[status]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -239,7 +259,7 @@ export default function EventEditDialog({
                 onChange={(e) => setFAssignees(e.target.value)}
                 placeholder="예: 효주, 민수"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-1 text-xs text-muted-foreground">
                 추후에는 팀 멤버 선택 UI로 확장할 수 있습니다.
               </p>
             </div>
@@ -256,7 +276,7 @@ export default function EventEditDialog({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-2">
+        <div className="mt-2 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             취소
           </Button>

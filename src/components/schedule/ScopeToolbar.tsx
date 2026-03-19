@@ -67,7 +67,7 @@ export default function ScopeToolbar({
             </Select>
           </div>
         ) : (
-          <Badge variant="secondary">내 일정</Badge>
+          <Badge variant="secondary">Personal</Badge>
         )}
 
         <Separator orientation="vertical" className="h-8" />

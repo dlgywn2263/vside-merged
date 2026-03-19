@@ -8,6 +8,7 @@ import type { CalendarEvent } from "./schedule.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { STAGE_BADGE_COLORS, STAGE_LABELS } from "./schedule.colors";
 
 type Props = {
   selectedDate: Date;
@@ -45,12 +46,16 @@ export default function SelectedDayCard({
         ) : (
           dayEvents.map((event) => (
             <div key={event.id} className="rounded-xl border p-4 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Badge variant="secondary">{event.category}</Badge>
-                <Badge variant="outline">
-                  {event.mode === "team" ? "Team" : "Personal"}
-                </Badge>
-                <div className="font-semibold">{event.title}</div>
+
+                {event.stage ? (
+                  <Badge className={STAGE_BADGE_COLORS[event.stage]}>
+                    {STAGE_LABELS[event.stage]}
+                  </Badge>
+                ) : null}
+
+                <div className="font-medium truncate">{event.title}</div>
               </div>
 
               <div className="text-sm text-muted-foreground">

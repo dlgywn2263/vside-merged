@@ -10,9 +10,15 @@ export type ProjectStage =
 
 export type ProjectRole = "Frontend" | "Backend" | "Designer" | "Fullstack";
 
+export type Member = {
+  id: string;
+  name: string;
+};
+
 export type Team = {
   id: string;
   name: string;
+  members: Member[];
 };
 
 export type CalendarEvent = {

@@ -12,11 +12,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import type { CalendarEvent } from "./schedule.types";
-import {
-  buildCalendarModifiers,
-  buildCalendarModifierClassNames,
-} from "./schedule.calendar";
+import type { ProjectStage } from "./schedule.types";
+import { buildCalendarModifiers } from "./schedule.calendar";
 
 type Props = {
   selectedDate: Date;
@@ -25,8 +22,7 @@ type Props = {
   monthCount: number;
   todayCount: number;
   weekCount: number;
-  // 기존 dateStageMap을 지우고 events 배열을 통째로 받습니다!
-  events?: CalendarEvent[]; 
+  dateStageMap?: Map<string, ProjectStage>;
 };
 
 export default function CalendarCard({
@@ -36,17 +32,11 @@ export default function CalendarCard({
   monthCount,
   todayCount,
   weekCount,
-  events = [],
+  dateStageMap = new Map<string, ProjectStage>(),
 }: Props) {
-  // 컴포넌트 내부에서 확실하게 계산
   const modifiers = React.useMemo(
-    () => buildCalendarModifiers(events),
-    [events]
-  );
-
-  const modifierClassNames = React.useMemo(
-    () => buildCalendarModifierClassNames(),
-    []
+    () => buildCalendarModifiers({ dateStageMap }),
+    [dateStageMap]
   );
 
   return (
@@ -63,7 +53,24 @@ export default function CalendarCard({
           onSelect={(d) => d && setSelectedDate(d)}
           className="w-full rounded-xl border p-4"
           modifiers={modifiers}
-          modifiersClassNames={modifierClassNames}
+          modifiersStyles={{
+            planning: {
+              backgroundImage:
+                "linear-gradient(to top, #3b82f6 0 5px, transparent 5px)",
+            },
+            design: {
+              backgroundImage:
+                "linear-gradient(to top, #ec4899 0 5px, transparent 5px)",
+            },
+            development: {
+              backgroundImage:
+                "linear-gradient(to top , #8b5cf6 0 5px, transparent 5px)",
+            },
+            finalization: {
+              backgroundImage:
+                "linear-gradient(to top, #22c55e 0 5px, transparent 5px)",
+            },
+          }}
         />
 
         <div className="flex flex-wrap items-center gap-2">
@@ -81,10 +88,12 @@ export default function CalendarCard({
             <div className="text-xs text-muted-foreground">이번 달 전체</div>
             <div className="text-xl font-semibold">{monthCount}</div>
           </div>
+
           <div className="rounded-lg border p-3 text-center">
             <div className="text-xs text-muted-foreground">오늘 일정</div>
             <div className="text-xl font-semibold">{todayCount}</div>
           </div>
+
           <div className="rounded-lg border p-3 text-center">
             <div className="text-xs text-muted-foreground">이번 주</div>
             <div className="text-xl font-semibold">{weekCount}</div>

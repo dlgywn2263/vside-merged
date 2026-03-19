@@ -1,6 +1,6 @@
 "use client";
 
-import type { CalendarEvent, Mode, ProjectRole } from "./schedule.types";
+import type { CalendarEvent, Mode } from "./schedule.types";
 import { startOfWeek, endOfWeek, format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ROLE_COLORS } from "./schedule.utils";
 
 type Props = {
   selectedDate: Date;
@@ -41,15 +40,9 @@ function getPeriodText(event: CalendarEvent) {
   })}`;
 }
 
-function getRoleBadgeClass(role?: ProjectRole) {
-  if (!role) return "";
-  return ROLE_COLORS[role];
-}
-
 export default function WeekCard({
   selectedDate,
   weekEvents,
-  mode,
   onOpenDetail,
   onEdit,
   onRemove,
@@ -94,13 +87,6 @@ export default function WeekCard({
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary">{e.category}</Badge>
-
-                        {mode === "team" && e.role ? (
-                          <Badge className={getRoleBadgeClass(e.role)}>
-                            {e.role}
-                          </Badge>
-                        ) : null}
-
                         <div className="truncate font-medium">{e.title}</div>
                       </div>
 
@@ -115,7 +101,7 @@ export default function WeekCard({
                         </div>
                       ) : null}
 
-                      {mode === "team" && e.assignees?.length ? (
+                      {e.assignees?.length ? (
                         <div className="mt-1 text-xs text-muted-foreground">
                           담당: {e.assignees.join(", ")}
                         </div>

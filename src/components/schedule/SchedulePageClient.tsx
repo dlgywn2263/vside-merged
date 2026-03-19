@@ -32,9 +32,6 @@ import { useScheduleForm } from "./hooks/useScheduleForm";
 import { useScheduleDerived } from "./hooks/useScheduleDerived";
 
 export default function SchedulePageClient() {
-  // ✅ 1. Hydration Mismatch 방지를 위한 클라이언트 마운트 상태
-  const [isMounted, setIsMounted] = React.useState(false);
-
   const [mode, setMode] = React.useState<Mode>("personal");
   const [teamId, setTeamId] = React.useState<string>(TEAMS[0]?.id ?? "team-a");
 
@@ -50,11 +47,6 @@ export default function SchedulePageClient() {
   const selectedISO = format(selectedDate, "yyyy-MM-dd");
 
   const form = useScheduleForm({ selectedISO });
-
-  // ✅ 2. 브라우저에 마운트 완료 시 상태 업데이트
-  React.useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   React.useEffect(() => {
     const loaded = loadEvents();
@@ -107,10 +99,8 @@ export default function SchedulePageClient() {
   }, []);
 
   React.useEffect(() => {
-    if (isMounted) {
-      saveEvents(events);
-    }
-  }, [events, isMounted]);
+    saveEvents(events);
+  }, [events]);
 
   const currentTeam: Team | undefined = React.useMemo(
     () => TEAMS.find((t) => t.id === teamId) ?? TEAMS[0],
@@ -129,6 +119,7 @@ export default function SchedulePageClient() {
     todayCount,
     personalNextTitle,
     monthTopCategory,
+    dateStageMap,
   } = useScheduleDerived({
     events,
     mode,
@@ -233,11 +224,6 @@ export default function SchedulePageClient() {
     form.setEditingId(null);
   }
 
-  // ✅ 3. 서버 렌더링 시점에는 아무것도 그리지 않음 (에러 방지 핵심)
-  if (!isMounted) {
-    return null;
-  }
-
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <TopBar
@@ -272,7 +258,7 @@ export default function SchedulePageClient() {
               monthCount={monthCount}
               todayCount={todayCount}
               weekCount={weekEvents.length}
-              events={events} // 👈 4. CalendarCard가 events 전체를 받도록 수정됨
+              dateStageMap={dateStageMap}
             />
           </div>
 

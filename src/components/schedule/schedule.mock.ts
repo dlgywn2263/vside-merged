@@ -2,7 +2,7 @@
 
 import type { Category, Team } from "./schedule.types";
 
-// 1. 현재 Category 타입("Work" | "Meeting" | "Study" | "Etc")에 맞게 수정
+// 현재 Category 타입("Work" | "Meeting" | "Study" | "Etc")에 맞게 수정
 export const CATEGORIES: Category[] = [
   "Work",
   "Meeting",
@@ -10,14 +10,22 @@ export const CATEGORIES: Category[] = [
   "Etc",
 ];
 
-// 2. 현재 Team 타입(id, name만 존재)에 맞게 members 속성 제거
 export const TEAMS: Team[] = [
   {
     id: "team-a",
     name: "Team Alpha",
+    members: [
+      { id: "m1", name: "효주" },
+      { id: "m2", name: "민수" },
+      { id: "m3", name: "지연" },
+    ],
   },
   {
     id: "team-b",
     name: "Team Beta",
+    members: [
+      { id: "m4", name: "준호" },
+      { id: "m5", name: "지훈" },
+    ]
   },
 ];
