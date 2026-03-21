@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, Check } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
 function isEmail(v: string) {
-  // 너무 빡세지 않게 기본만
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
+
+const API_BASE = "http://localhost:8080";
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -24,16 +26,19 @@ export default function SignupPage() {
 
   const [agree, setAgree] = useState({
     all: false,
-    terms: false, // (필수) 이용약관
-    privacy: false, // (필수) 개인정보 처리방침
-    marketing: false, // (선택) 마케팅 수신
+    terms: false,
+    privacy: false,
+    marketing: false,
   });
 
   const [showPw, setShowPw] = useState(false);
   const [showPw2, setShowPw2] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const router = useRouter();
 
   const passwordOk = useMemo(() => {
-    // 간단 규칙: 8자 이상
     return form.password.length >= 8;
   }, [form.password]);
 
@@ -53,9 +58,10 @@ export default function SignupPage() {
       isEmail(form.email) &&
       passwordOk &&
       passwordMatch &&
-      requiredAgreed
+      requiredAgreed &&
+      !loading
     );
-  }, [form, passwordOk, passwordMatch, requiredAgreed]);
+  }, [form, passwordOk, passwordMatch, requiredAgreed, loading]);
 
   const setAllAgree = (checked: boolean) => {
     setAgree({
@@ -75,46 +81,66 @@ export default function SignupPage() {
     setAgree({ ...next, all: allChecked });
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
 
-    // ✅ 여기서 실제 회원가입 API 호출로 바꾸면 됨
-    // await fetch("/api/auth/signup", { method:"POST", body: JSON.stringify(form)... })
-    alert("회원가입 폼 제출 (데모) — API 연결해서 처리하면 됨!");
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch(`${API_BASE}/api/users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
+          nickname: form.nickname.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("회원가입에 실패했습니다. 입력값을 다시 확인해주세요.");
+      }
+
+      router.replace("/auth/login");
+    } catch (err) {
+      console.error("회원가입 실패:", err);
+      setError(
+        err instanceof Error ? err.message : "회원가입 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-gray-50 to-white">
-      <div className=" flex min-h-dvh  items-center justify-center px-6 py-10">
-        {/* Right: Form */}
+      <div className="flex min-h-dvh items-center justify-center px-6 py-10">
         <div className="flex items-center justify-center">
-          <div className="w-[700px]  rounded-3xl border border-gray-200 bg-white p-8 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+          <div className="w-[700px] rounded-3xl border border-gray-200 bg-white p-8 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">회원가입</h2>
-                {/* <p className="mt-1 text-sm text-gray-500">
-                  아래 정보로 계정을 생성해줘.
-                </p> */}
               </div>
-              <div className="h-10 w-10 rounded-2xl bg-gray-900 text-white grid place-items-center font-bold">
+              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-900 font-bold text-white">
                 V
               </div>
             </div>
 
             <form onSubmit={onSubmit} className="mt-6 space-y-4">
-              {/* 이름 */}
-              <Field
+              {/* <Field
                 label="이름"
                 value={form.name}
-                placeholder="예) 이효숭"
+                placeholder="예) 이효주"
                 onChange={(v) => setForm((p) => ({ ...p, name: v }))}
                 hint="2글자 이상"
                 ok={form.name.trim().length >= 2}
                 showOkWhenFilled
-              />
+              /> */}
 
-              {/* 닉네임 */}
               <Field
                 label="닉네임"
                 value={form.nickname}
@@ -125,7 +151,6 @@ export default function SignupPage() {
                 showOkWhenFilled
               />
 
-              {/* 이메일 */}
               <Field
                 label="아이디 (이메일)"
                 value={form.email}
@@ -137,7 +162,6 @@ export default function SignupPage() {
                 type="email"
               />
 
-              {/* 비밀번호 */}
               <div>
                 <LabelRow
                   label="비밀번호"
@@ -188,7 +212,6 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              {/* 비밀번호 확인 */}
               <div>
                 <LabelRow
                   label="비밀번호 확인"
@@ -239,7 +262,6 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              {/* 약관 동의 */}
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
@@ -289,17 +311,23 @@ export default function SignupPage() {
                 ) : null}
               </div>
 
+              {error ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {error}
+                </div>
+              ) : null}
+
               <button
                 type="submit"
                 disabled={!canSubmit}
                 className={cn(
                   "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
                   canSubmit
-                    ? "bg-gray-900 text-white hover:bg-black shadow-sm"
-                    : "bg-gray-200 text-gray-500 cursor-not-allowed",
+                    ? "bg-gray-900 text-white shadow-sm hover:bg-black"
+                    : "cursor-not-allowed bg-gray-200 text-gray-500",
                 )}
               >
-                회원가입 완료
+                {loading ? "가입 중..." : "회원가입 완료"}
               </button>
 
               <p className="text-center text-sm text-gray-600">
@@ -315,13 +343,11 @@ export default function SignupPage() {
           </div>
         </div>
 
-        {/* Mobile helper */}
         <div className="lg:hidden -mt-6 text-center text-xs text-gray-500">
           가입 후 개인/팀 워크스페이스를 만들고 IDE로 바로 이동할 수 있어.
         </div>
       </div>
     </div>
-    // </div>
   );
 }
 
@@ -421,7 +447,7 @@ function AgreeRow({
   label: React.ReactNode;
 }) {
   return (
-    <label className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-gray-200">
+    <label className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2">
       <span className="text-sm text-gray-700">{label}</span>
       <input
         type="checkbox"

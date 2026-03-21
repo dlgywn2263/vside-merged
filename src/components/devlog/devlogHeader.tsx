@@ -1,63 +1,89 @@
-// "use client";
+"use client";
 
-// import { Search, ArrowUpDown } from "lucide-react";
+import { Plus } from "lucide-react";
+import { ProjectOption, SortType, StageType } from "@/lib/devlog/types";
+import { DevlogFilterBar } from "./DevlogFilterBar";
 
-// type DevlogListHeaderProps = {
-//   keyword: string;
-//   sort: "latest" | "oldest";
-//   onKeywordChange: (value: string) => void;
-//   onSortChange: (value: "latest" | "oldest") => void;
-// };
+type Props = {
+  workspaceName: string;
+  workspaceModeLabel: string;
 
-// export function DevlogListHeader({
-//   keyword,
-//   sort,
-//   onKeywordChange,
-//   onSortChange,
-// }: DevlogListHeaderProps) {
-//   return (
-//     <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
-//       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-//         <div>
-//           <h2 className="text-base font-bold text-gray-900">개발일지 목록</h2>
-//           <p className="mt-1 text-sm text-gray-500">
-//             제목, 요약, 내용, 태그 기준으로 검색하고 날짜순으로 정렬합니다.
-//           </p>
-//         </div>
+  search: string;
+  setSearch: (value: string) => void;
 
-//         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-//           <div className="relative min-w-[240px]">
-//             <Search
-//               size={16}
-//               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-//             />
-//             <input
-//               type="text"
-//               value={keyword}
-//               onChange={(e) => onKeywordChange(e.target.value)}
-//               placeholder="제목, 요약, 태그 검색"
-//               className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-100"
-//             />
-//           </div>
+  selectedStage: StageType | "all";
+  setSelectedStage: (value: StageType | "all") => void;
 
-//           <div className="relative">
-//             <ArrowUpDown
-//               size={16}
-//               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-//             />
-//             <select
-//               value={sort}
-//               onChange={(e) =>
-//                 onSortChange(e.target.value as "latest" | "oldest")
-//               }
-//               className="h-10 rounded-lg border border-gray-200 bg-white pl-9 pr-8 text-sm text-gray-900 outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-100"
-//             >
-//               <option value="latest">최신순</option>
-//               <option value="oldest">오래된순</option>
-//             </select>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
+  selectedTag: string;
+  setSelectedTag: (value: string) => void;
+
+  selectedProjectId: string;
+  setSelectedProjectId: (value: string) => void;
+
+  allTags: string[];
+  projects: ProjectOption[];
+
+  sort: SortType;
+  setSort: (value: SortType) => void;
+
+  resetFilters: () => void;
+  onCreate: () => void;
+};
+
+export function DevlogHeader({
+  workspaceName,
+  workspaceModeLabel,
+  search,
+  setSearch,
+  selectedStage,
+  setSelectedStage,
+  selectedTag,
+  setSelectedTag,
+  selectedProjectId,
+  setSelectedProjectId,
+  allTags,
+  projects,
+  sort,
+  setSort,
+  resetFilters,
+  onCreate,
+}: Props) {
+  return (
+    <div className="space-y-4">
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            개발일지
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {workspaceName} · {workspaceModeLabel}의 개발일지를 단계와 일정
+            기준으로 관리합니다.
+          </p>
+        </div>
+
+        <button
+          onClick={onCreate}
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+        >
+          <Plus size={16} />새 개발일지
+        </button>
+      </header>
+
+      <DevlogFilterBar
+        search={search}
+        setSearch={setSearch}
+        selectedStage={selectedStage}
+        setSelectedStage={setSelectedStage}
+        selectedTag={selectedTag}
+        setSelectedTag={setSelectedTag}
+        selectedProjectId={selectedProjectId}
+        setSelectedProjectId={setSelectedProjectId}
+        allTags={allTags}
+        projects={projects}
+        sort={sort}
+        setSort={setSort}
+        resetFilters={resetFilters}
+      />
+    </div>
+  );
+}

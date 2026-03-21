@@ -16,7 +16,6 @@ type WorkspaceItem = {
 };
 
 const API_BASE = "http://localhost:8080";
-const USER_ID = "user-001";
 
 function formatDate(dateString: string) {
   if (!dateString) return "-";
@@ -34,9 +33,20 @@ export function DevlogWorkspaceList() {
         setLoading(true);
         setError(null);
 
+        /**
+         * 로그인 성공 시 AuthContext에서 localStorage에 저장한 userId 사용
+         * 현재 백엔드는 아직 X-USER-ID 헤더로 현재 사용자를 판별함
+         */
+        const token = localStorage.getItem("accessToken");
+
+        if (!token) {
+          throw new Error("로그인 정보가 없습니다. 다시 로그인해주세요.");
+        }
+
         const res = await fetch(`${API_BASE}/api/devlogs/workspaces`, {
+          method: "GET",
           headers: {
-            "X-USER-ID": USER_ID,
+            Authorization: `Bearer ${token}`,
           },
           cache: "no-store",
         });
@@ -48,8 +58,12 @@ export function DevlogWorkspaceList() {
         const data: WorkspaceItem[] = await res.json();
         setWorkspaces(data);
       } catch (err) {
-        console.error(err);
-        setError("개발일지 워크스페이스 목록을 불러오지 못했습니다.");
+        console.error("워크스페이스 목록 조회 오류:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "개발일지 워크스페이스 목록을 불러오지 못했습니다.",
+        );
       } finally {
         setLoading(false);
       }
@@ -91,14 +105,12 @@ export function DevlogWorkspaceList() {
           <Link
             key={s.uuid}
             href={`/devlog/${s.uuid}`}
-            className="w-full rounded-2xl border border-gray-200 bg-white px-5 py-4
-                       hover:shadow-sm hover:border-gray-300 transition
-                       flex items-center justify-between gap-4"
+            className="flex w-full items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 transition hover:border-gray-300 hover:shadow-sm"
           >
-            <div className="flex items-center gap-4 min-w-[320px]">
+            <div className="flex min-w-[320px] items-center gap-4">
               <div
                 className={[
-                  "h-11 w-11 rounded-xl grid place-items-center",
+                  "grid h-11 w-11 place-items-center rounded-xl",
                   isTeam
                     ? "bg-green-100 text-green-700"
                     : "bg-blue-50 text-blue-600",
@@ -108,8 +120,8 @@ export function DevlogWorkspaceList() {
               </div>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="text-sm font-bold text-gray-900 truncate">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="truncate text-sm font-bold text-gray-900">
                     {s.name}
                   </div>
 

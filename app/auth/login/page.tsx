@@ -14,29 +14,74 @@ function isEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
+const API_BASE = "http://localhost:8080";
+
+type LoginResponse = {
+  accessToken: string;
+  userId: number;
+};
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const canSubmit = useMemo(() => {
-    return isEmail(email) && password.length > 0;
-  }, [email, password]);
+    return isEmail(email) && password.length > 0 && !loading;
+  }, [email, password, loading]);
 
   const { login } = useAuth();
   const router = useRouter();
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // ✅ 이거 반드시 필요
+    e.preventDefault();
 
-    const user = {
-      id: "u1",
-      name: "이효숭",
-      email: "hyoju@example.com",
-    };
+    if (!canSubmit) return;
 
-    login(user);
-    router.replace("/dashboard"); // ✅ 메인 페이지 경로
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch(`${API_BASE}/api/users/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+      }
+
+      const data: LoginResponse = await res.json();
+
+      /**
+       * AuthContext에 로그인 상태 저장
+       * 현재 백엔드 로그인 응답에는 nickname이 없으므로
+       * 우선 name에는 이메일을 넣어 둠
+       */
+      login({
+        id: String(data.userId),
+        name: email.trim(),
+        email: email.trim(),
+        token: data.accessToken,
+      });
+
+      router.replace("/dashboard");
+    } catch (err) {
+      console.error("로그인 실패:", err);
+      setError(
+        err instanceof Error ? err.message : "로그인 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -47,7 +92,7 @@ export default function LoginPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">로그인</h1>
             </div>
-            <div className="h-10 w-10 rounded-2xl bg-gray-900 text-white grid place-items-center font-bold">
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gray-900 font-bold text-white">
               V
             </div>
           </div>
@@ -84,7 +129,7 @@ export default function LoginPage() {
               </label>
               <div className="relative mt-1">
                 <input
-                  type={showPw ? "text" : "password"} // ✅ 수정
+                  type={showPw ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호"
@@ -101,20 +146,26 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {error ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {error}
+              </div>
+            ) : null}
+
             <button
               type="submit"
               disabled={!canSubmit}
               className={cn(
-                "w-full rounded-2xl px-4 py-4 text-md font-semibold transition mt-3",
+                "mt-3 w-full rounded-2xl px-4 py-4 text-md font-semibold transition",
                 canSubmit
-                  ? "bg-gray-900 text-white hover:bg-black shadow-sm"
-                  : "bg-gray-200 text-gray-500 cursor-not-allowed",
+                  ? "bg-gray-900 text-white shadow-sm hover:bg-black"
+                  : "cursor-not-allowed bg-gray-200 text-gray-500",
               )}
             >
-              로그인
+              {loading ? "로그인 중..." : "로그인"}
             </button>
 
-            <div className="flex items-center justify-between text-sm text-gray-600 mt-5">
+            <div className="mt-5 flex items-center justify-between text-sm text-gray-600">
               <span>아직 계정이 없어요</span>
               <Link
                 href="/auth/signup"
