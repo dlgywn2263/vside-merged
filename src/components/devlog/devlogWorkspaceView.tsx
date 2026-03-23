@@ -13,7 +13,6 @@ import { emptyForm } from "@/lib/devlog/constants";
 import {
   getProjectPosts,
   mapApiDevlogToItem,
-  startOfMonth,
   todayYmd,
 } from "@/lib/devlog/utils";
 import {
@@ -23,15 +22,20 @@ import {
   updateDevlog,
 } from "@/lib/devlog/api";
 import { DevlogHeader } from "./DevlogHeader";
-import { DevlogCalendarPanel } from "./DevlogCalendarPanel";
 import { DevlogStageBoard } from "./DevlogStageBoard";
 import { DevlogDetailModal } from "./DevlogDetailModal";
 import { DevlogFormModal } from "./DevlogFormModal";
+import DevlogScheduleReadonlyPanel from "./DevlogScheduleReadonlyPanel";
+import type { Mode } from "@/components/schedule/schedule.types";
 
 export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [workspaceName, setWorkspaceName] = useState("프로젝트 관리");
   const [workspaceModeLabel, setWorkspaceModeLabel] = useState("워크스페이스");
+  const [scheduleMode, setScheduleMode] = useState<Mode>("personal");
 
+  /**
+   * 개발일지 상태
+   */
   const [logs, setLogs] = useState<DevlogItem[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,9 +45,6 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [selectedTag, setSelectedTag] = useState("all");
   const [selectedProjectId, setSelectedProjectId] = useState("all");
   const [sort, setSort] = useState<SortType>("latest");
-
-  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState(todayYmd());
 
   const [detailTarget, setDetailTarget] = useState<DevlogItem | null>(null);
   const [editingTarget, setEditingTarget] = useState<DevlogItem | null>(null);
@@ -59,6 +60,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     loadWorkspace();
   }, [workspaceId]);
 
+  /**
+   * 개발일지 로드
+   */
   async function loadWorkspace() {
     setLoading(true);
 
@@ -70,6 +74,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
       setWorkspaceModeLabel(
         data.mode === "team" ? "팀 워크스페이스" : "개인 워크스페이스",
       );
+      setScheduleMode(data.mode);
 
       const mappedProjects: ProjectOption[] = (data.projects ?? [])
         .map((project, index) => {
@@ -94,17 +99,6 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
       );
 
       setLogs(flattenedLogs);
-
-      const today = todayYmd();
-      const hasToday = flattenedLogs.some((item) => item.date === today);
-
-      if (hasToday) {
-        setSelectedDate(today);
-      } else if (flattenedLogs.length > 0) {
-        setSelectedDate(flattenedLogs[0].date);
-      } else {
-        setSelectedDate(today);
-      }
     } catch (error) {
       console.error("loadWorkspace error:", error);
       alert("개발일지 데이터를 불러오지 못했습니다.");
@@ -113,6 +107,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     }
   }
 
+  /**
+   * 필터용 태그 목록
+   */
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
 
@@ -123,6 +120,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     return ["all", ...Array.from(tagSet)];
   }, [logs]);
 
+  /**
+   * 오른쪽 개발일지 필터링
+   */
   const filteredLogs = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
@@ -163,6 +163,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     return next;
   }, [logs, search, selectedStage, selectedTag, selectedProjectId, sort]);
 
+  /**
+   * 단계별 보드 데이터
+   */
   const logsByStage = useMemo(() => {
     return {
       planning: filteredLogs.filter((log) => log.stage === "planning"),
@@ -174,25 +177,17 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     };
   }, [filteredLogs]);
 
-  const selectedDateLogs = useMemo(
-    () => filteredLogs.filter((log) => log.date === selectedDate),
-    [filteredLogs, selectedDate],
-  );
-
-  const markedDates = useMemo(
-    () => new Set(filteredLogs.map((item) => item.date)),
-    [filteredLogs],
-  );
-
   function openCreateModal(defaultStage?: StageType) {
     setDetailTarget(null);
     setEditingTarget(null);
+
     setForm({
       ...emptyForm,
       projectId: projects[0]?.id ? String(projects[0].id) : "",
-      date: selectedDate || todayYmd(),
+      date: todayYmd(),
       stage: defaultStage ?? "planning",
     });
+
     setIsCreateOpen(true);
   }
 
@@ -200,6 +195,7 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     setDetailTarget(null);
     setIsCreateOpen(false);
     setEditingTarget(item);
+
     setForm({
       projectId: String(item.projectId),
       title: item.title,
@@ -221,7 +217,11 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   function closeFormModal() {
     setIsCreateOpen(false);
     setEditingTarget(null);
-    setForm({ ...emptyForm, date: todayYmd() });
+
+    setForm({
+      ...emptyForm,
+      date: todayYmd(),
+    });
   }
 
   async function handleSubmit() {
@@ -257,9 +257,11 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
 
     try {
       await deleteDevlog(id, workspaceId, projectId);
+
       if (detailTarget?.id === id) {
         setDetailTarget(null);
       }
+
       await loadWorkspace();
       alert("개발일지가 삭제되었습니다.");
     } catch (error) {
@@ -299,23 +301,17 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
 
       {loading ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
-          개발일지를 불러오는 중...
+          데이터를 불러오는 중...
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
-          <DevlogCalendarPanel
-            calendarMonth={calendarMonth}
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
-            setCalendarMonth={setCalendarMonth}
-            markedDates={markedDates}
-            selectedDateLogs={selectedDateLogs}
-            onOpenDetail={setDetailTarget}
-            onEdit={openEditModal}
-            onDelete={handleDelete}
-            onCreate={() => openCreateModal()}
+          {/* 왼쪽: 일정관리 읽기 전용 캘린더 */}
+          <DevlogScheduleReadonlyPanel
+            workspaceId={workspaceId}
+            mode={scheduleMode}
           />
 
+          {/* 오른쪽: 기존 개발일지 단계 보드 */}
           <DevlogStageBoard
             logsByStage={logsByStage}
             onOpenDetail={setDetailTarget}
