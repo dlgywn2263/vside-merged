@@ -14,6 +14,7 @@ function getAuthHeaders(): HeadersInit {
 
   return {
     Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
   };
 }
 
@@ -68,6 +69,29 @@ export async function fetchDevlogDaySchedules(
   });
 
   const response = await fetch(`${API_BASE}/api/schedules?${query}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+
+  return handleJsonResponse<ApiScheduleResponse[]>(response);
+}
+
+/**
+ * 개발일지 좌측 캘린더용 주간 일정 조회
+ */
+export async function fetchDevlogWeekSchedules(
+  mode: Mode,
+  workspaceId: string,
+  dateISO: string,
+): Promise<ApiScheduleResponse[]> {
+  const query = new URLSearchParams({
+    view: mode,
+    workspaceId,
+    date: dateISO,
+  });
+
+  const response = await fetch(`${API_BASE}/api/schedules/weekly?${query}`, {
     method: "GET",
     headers: getAuthHeaders(),
     cache: "no-store",

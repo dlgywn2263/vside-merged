@@ -1,33 +1,45 @@
 import { format } from "date-fns";
 import type { ProjectStage } from "./schedule.types";
 
-type StageMap = Map<string, ProjectStage>;
+export type StageMap = Map<string, ProjectStage[]>;
 
-type Params = {
-  dateStageMap: StageMap;
-};
-
-export function buildCalendarModifiers({ dateStageMap }: Params) {
-  return {
-    planning: (date: Date) =>
-      dateStageMap.get(format(date, "yyyy-MM-dd")) === "Planning",
-    design: (date: Date) =>
-      dateStageMap.get(format(date, "yyyy-MM-dd")) === "Design",
-    implementation: (date: Date) =>
-      dateStageMap.get(format(date, "yyyy-MM-dd")) === "Implementation",
-    wrapup: (date: Date) =>
-      dateStageMap.get(format(date, "yyyy-MM-dd")) === "Wrapup",
-  };
+export function getDateKey(date: Date) {
+  return format(date, "yyyy-MM-dd");
 }
 
-export function buildCalendarModifierClassNames() {
-  const base =
-    "after:content-[''] after:absolute after:left-1.5 after:right-1.5 after:bottom-1 after:h-[3px] after:rounded-full after:z-[2]";
+export function getStagesOfDate(
+  date: Date,
+  dateStageMap: StageMap,
+): ProjectStage[] {
+  return dateStageMap.get(getDateKey(date)) ?? [];
+}
 
-  return {
-    planning: `${base} after:bg-blue-500`,
-    design: `${base} after:bg-pink-500`,
-    implementation: `${base} after:bg-purple-500`,
-    wrapup: `${base} after:bg-green-500`,
-  };
+export function getStageColor(stage: ProjectStage) {
+  switch (stage) {
+    case "Planning":
+      return "#3b82f6";
+    case "Design":
+      return "#ec4899";
+    case "Implementation":
+      return "#8b5cf6";
+    case "Wrapup":
+      return "#22c55e";
+    default:
+      return "#94a3b8";
+  }
+}
+
+export function getStageLabel(stage: ProjectStage) {
+  switch (stage) {
+    case "Planning":
+      return "기획";
+    case "Design":
+      return "설계";
+    case "Implementation":
+      return "구현";
+    case "Wrapup":
+      return "마무리";
+    default:
+      return stage;
+  }
 }

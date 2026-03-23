@@ -3,7 +3,6 @@
 import * as React from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import type {
@@ -12,17 +11,17 @@ import type {
   Mode,
 } from "@/components/schedule/schedule.types";
 
+import CalendarCard from "@/components/schedule/CalendarCard";
 import {
   mapApiScheduleToCalendarEvent,
   dedupeEvents,
 } from "@/components/schedule/schedule.utils";
-
-import { buildCalendarModifiers } from "@/components/schedule/schedule.calendar";
 import { useScheduleDerived } from "@/components/schedule/hooks/useScheduleDerived";
 
 import {
   fetchDevlogDaySchedules,
   fetchDevlogMonthSchedules,
+  fetchDevlogWeekSchedules,
 } from "@/lib/devlog/devlogScheduleApi";
 
 import DevlogReadonlySelectedDayCard from "./DevlogReadonlySelectedDayCard";
@@ -45,7 +44,10 @@ export default function DevlogScheduleReadonlyPanel({
   const selectedDateISO = format(selectedDate, "yyyy-MM-dd");
 
   const loadSchedules = React.useCallback(async () => {
-    if (!workspaceId || !mode) return;
+    if (!workspaceId || !mode) {
+      setEvents([]);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -54,14 +56,15 @@ export default function DevlogScheduleReadonlyPanel({
       const year = Number(format(selectedDate, "yyyy"));
       const month = Number(format(selectedDate, "M"));
 
-      const [monthSchedules, daySchedules] = await Promise.all([
+      const [monthSchedules, daySchedules, weekSchedules] = await Promise.all([
         fetchDevlogMonthSchedules(mode, workspaceId, year, month),
         fetchDevlogDaySchedules(mode, workspaceId, selectedDateISO),
+        fetchDevlogWeekSchedules(mode, workspaceId, selectedDateISO),
       ]);
 
       const merged = dedupeEvents(
-        [...monthSchedules, ...daySchedules].map((item: ApiScheduleResponse) =>
-          mapApiScheduleToCalendarEvent(item),
+        [...monthSchedules, ...daySchedules, ...weekSchedules].map(
+          (item: ApiScheduleResponse) => mapApiScheduleToCalendarEvent(item),
         ),
       );
 
@@ -72,6 +75,7 @@ export default function DevlogScheduleReadonlyPanel({
           ? err.message
           : "일정 데이터를 불러오는 중 오류가 발생했습니다.";
       setError(message);
+      setEvents([]);
     } finally {
       setLoading(false);
     }
@@ -81,7 +85,7 @@ export default function DevlogScheduleReadonlyPanel({
     loadSchedules();
   }, [loadSchedules, selectedMonthKey, selectedDateISO]);
 
-  const { dayEvents, dateStageMap } = useScheduleDerived({
+  const { dayEvents, weekEvents, monthCount, todayCount } = useScheduleDerived({
     events,
     mode,
     workspaceId,
@@ -89,11 +93,6 @@ export default function DevlogScheduleReadonlyPanel({
     query: "",
     selectedDate,
   });
-
-  const modifiers = React.useMemo(
-    () => buildCalendarModifiers({ dateStageMap }),
-    [dateStageMap],
-  );
 
   return (
     <div className="space-y-4">
@@ -106,33 +105,15 @@ export default function DevlogScheduleReadonlyPanel({
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="rounded-2xl bg-[#fafafa] p-4">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => date && setSelectedDate(date)}
-              className="w-full"
-              modifiers={modifiers}
-              modifiersStyles={{
-                planning: {
-                  backgroundImage:
-                    "linear-gradient(to top, #3b82f6 0 5px, transparent 5px)",
-                },
-                design: {
-                  backgroundImage:
-                    "linear-gradient(to top, #ec4899 0 5px, transparent 5px)",
-                },
-                implementation: {
-                  backgroundImage:
-                    "linear-gradient(to top, #8b5cf6 0 5px, transparent 5px)",
-                },
-                wrapup: {
-                  backgroundImage:
-                    "linear-gradient(to top, #22c55e 0 5px, transparent 5px)",
-                },
-              }}
-            />
-          </div>
+          <CalendarCard
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            dayCount={dayEvents.length}
+            monthCount={monthCount}
+            todayCount={todayCount}
+            weekCount={weekEvents.length}
+            events={events}
+          />
 
           {loading ? (
             <div className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">

@@ -10,7 +10,11 @@ import {
   STAGE_BADGE_COLORS,
   STAGE_LABELS,
 } from "@/components/schedule/schedule.colors";
-import type { ProjectStage } from "@/components/schedule/schedule.types";
+import type {
+  CalendarEvent,
+  Mode,
+  ProjectStage,
+} from "@/components/schedule/schedule.types";
 
 type Props = {
   workspaceId: string;
@@ -32,22 +36,20 @@ type ApiScheduleItem = {
   location?: string;
 };
 
-type DayScheduleItem = {
-  id: string;
-  title: string;
-  content: string;
-  startDateISO: string;
-  endDateISO: string;
-  stage?: ProjectStage;
-  category: string;
-  location?: string;
-};
-
 type SummaryResponse = {
   monthCount?: number;
   todayCount?: number;
   weekCount?: number;
   monthlyCount?: number;
+};
+
+/**
+ * 개발일지 패널에서 쓰는 확장 이벤트 타입
+ * CalendarCard에 넘기기 위해 CalendarEvent 형태를 맞추고,
+ * 상세 카드에서 보여줄 content도 유지한다.
+ */
+type DevlogCalendarEvent = CalendarEvent & {
+  content: string;
 };
 
 const API_BASE =
@@ -75,7 +77,11 @@ function normalizeDate(value?: string) {
   return value.slice(0, 10);
 }
 
-function mapScheduleItem(item: ApiScheduleItem): DayScheduleItem {
+function mapScheduleItem(
+  item: ApiScheduleItem,
+  workspaceId: string,
+  view: Mode,
+): DevlogCalendarEvent {
   const start =
     normalizeDate(item.startDateISO) ||
     normalizeDate(item.startDate) ||
@@ -89,47 +95,36 @@ function mapScheduleItem(item: ApiScheduleItem): DayScheduleItem {
 
   return {
     id: String(item.id ?? crypto.randomUUID()),
+    mode: view,
+    workspaceId,
+    workspaceName: undefined,
     title: item.title ?? "제목 없음",
+    description: item.description ?? item.content ?? "",
     content: item.content ?? item.description ?? "",
+    category:
+      item.category === "Meeting" ||
+      item.category === "Study" ||
+      item.category === "Etc"
+        ? item.category
+        : "Work",
+    location: item.location ?? "",
     startDateISO: start,
     endDateISO: end,
+    assignees: [],
     stage: toProjectStage(item.stage),
-    category: item.category ?? "일정",
-    location: item.location ?? "",
+    role: undefined,
+    status: undefined,
+    creatorId: undefined,
+    creatorName: undefined,
   };
-}
-
-function buildDateStageMap(items: DayScheduleItem[]) {
-  const map = new Map<string, ProjectStage>();
-
-  for (const item of items) {
-    if (!item.stage) continue;
-
-    const start = new Date(item.startDateISO);
-    const end = new Date(item.endDateISO);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
-
-    const cursor = new Date(start);
-
-    while (cursor <= end) {
-      const key = ymd(cursor);
-
-      if (!map.has(key)) {
-        map.set(key, item.stage);
-      }
-
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-
-  return map;
 }
 
 export default function DevlogSchedulePanel({ workspaceId, view }: Props) {
   const [selectedDate, setSelectedDate] = React.useState<Date>(new Date());
-  const [monthEvents, setMonthEvents] = React.useState<DayScheduleItem[]>([]);
-  const [dayEvents, setDayEvents] = React.useState<DayScheduleItem[]>([]);
+  const [monthEvents, setMonthEvents] = React.useState<DevlogCalendarEvent[]>(
+    [],
+  );
+  const [dayEvents, setDayEvents] = React.useState<DevlogCalendarEvent[]>([]);
   const [monthCount, setMonthCount] = React.useState(0);
   const [todayCount, setTodayCount] = React.useState(0);
   const [weekCount, setWeekCount] = React.useState(0);
@@ -137,12 +132,7 @@ export default function DevlogSchedulePanel({ workspaceId, view }: Props) {
 
   const selectedYear = selectedDate.getFullYear();
   const selectedMonth = selectedDate.getMonth() + 1;
-
   const dayCount = dayEvents.length;
-
-  const dateStageMap = React.useMemo(() => {
-    return buildDateStageMap(monthEvents);
-  }, [monthEvents]);
 
   React.useEffect(() => {
     if (!workspaceId) return;
@@ -203,8 +193,12 @@ export default function DevlogSchedulePanel({ workspaceId, view }: Props) {
       const dayJson: ApiScheduleItem[] = await dayRes.json();
       const summaryJson: SummaryResponse = await summaryRes.json();
 
-      const mappedMonthEvents = (calendarJson ?? []).map(mapScheduleItem);
-      const mappedDayEvents = (dayJson ?? []).map(mapScheduleItem);
+      const mappedMonthEvents = (calendarJson ?? []).map((item) =>
+        mapScheduleItem(item, workspaceId, view),
+      );
+      const mappedDayEvents = (dayJson ?? []).map((item) =>
+        mapScheduleItem(item, workspaceId, view),
+      );
 
       setMonthEvents(mappedMonthEvents);
       setDayEvents(mappedDayEvents);
@@ -232,30 +226,30 @@ export default function DevlogSchedulePanel({ workspaceId, view }: Props) {
         monthCount={monthCount}
         todayCount={todayCount}
         weekCount={weekCount}
-        dateStageMap={dateStageMap}
+        events={monthEvents}
       />
 
-      <Card className="rounded-2xl h-full">
+      <Card className="h-full rounded-2xl">
         <CardHeader>
           <CardTitle>선택 날짜 일정</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             {format(selectedDate, "yyyy.MM.dd (EEE)", { locale: ko })}
           </p>
         </CardHeader>
 
         <CardContent className="space-y-3">
           {loading ? (
-            <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground text-center">
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
               일정을 불러오는 중입니다.
             </div>
           ) : dayEvents.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground text-center">
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
               해당 날짜에 포함된 일정이 없습니다.
             </div>
           ) : (
             dayEvents.map((event) => (
-              <div key={event.id} className="rounded-xl border p-4 space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
+              <div key={event.id} className="space-y-3 rounded-xl border p-4">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{event.category}</Badge>
 
                   {event.stage ? (
@@ -264,7 +258,7 @@ export default function DevlogSchedulePanel({ workspaceId, view }: Props) {
                     </Badge>
                   ) : null}
 
-                  <div className="font-medium truncate">{event.title}</div>
+                  <div className="truncate font-medium">{event.title}</div>
                 </div>
 
                 <div className="text-sm text-muted-foreground">

@@ -106,7 +106,7 @@ export default function SchedulePageClient() {
     todayCount,
     personalNextTitle,
     monthTopCategory,
-    dateStageMap,
+    scopedFiltered,
   } = useScheduleDerived({
     events,
     mode,
@@ -115,7 +115,6 @@ export default function SchedulePageClient() {
     query,
     selectedDate,
   });
-
   const loadWorkspaceOptions = React.useCallback(async () => {
     try {
       setBootLoading(true);
@@ -387,7 +386,7 @@ export default function SchedulePageClient() {
               monthCount={monthCount}
               todayCount={todayCount}
               weekCount={weekEvents.length}
-              dateStageMap={dateStageMap}
+              events={scopedFiltered}
             />
           </div>
 

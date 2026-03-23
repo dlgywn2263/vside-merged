@@ -134,14 +134,21 @@ export function useScheduleDerived({
   }, [scopedFiltered, selectedDate]);
 
   const dateStageMap = React.useMemo(() => {
-    const map = new Map<string, ProjectStage>();
+    const map = new Map<string, ProjectStage[]>();
 
     for (const event of scopedFiltered) {
       if (!event.stage) continue;
 
       const dates = getDatesInRange(event.startDateISO, event.endDateISO);
+
       for (const iso of dates) {
-        map.set(iso, event.stage);
+        const current = map.get(iso) ?? [];
+
+        if (!current.includes(event.stage)) {
+          current.push(event.stage);
+        }
+
+        map.set(iso, current);
       }
     }
 
@@ -157,6 +164,6 @@ export function useScheduleDerived({
     todayCount,
     personalNextTitle,
     monthTopCategory,
-    dateStageMap,
+    // dateStageMap,
   };
 }
