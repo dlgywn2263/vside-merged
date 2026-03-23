@@ -1,8 +1,16 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { ProjectOption, SortType, StageType } from "@/lib/devlog/types";
+import { SortType, StageType } from "@/lib/devlog/types";
 import { DevlogFilterBar } from "./DevlogFilterBar";
+
+type WorkspaceMode = "personal" | "team";
+
+type WorkspaceOption = {
+  uuid: string;
+  name: string;
+  mode: WorkspaceMode;
+};
 
 type Props = {
   workspaceName: string;
@@ -14,20 +22,18 @@ type Props = {
   selectedStage: StageType | "all";
   setSelectedStage: (value: StageType | "all") => void;
 
-  selectedTag: string;
-  setSelectedTag: (value: string) => void;
-
-  selectedProjectId: string;
-  setSelectedProjectId: (value: string) => void;
-
-  allTags: string[];
-  projects: ProjectOption[];
-
   sort: SortType;
   setSort: (value: SortType) => void;
 
   resetFilters: () => void;
   onCreate: () => void;
+
+  selectedMode: WorkspaceMode;
+  setSelectedMode: (value: WorkspaceMode) => void;
+
+  workspaces: WorkspaceOption[];
+  selectedWorkspaceId: string;
+  setSelectedWorkspaceId: (value: string) => void;
 };
 
 export function DevlogHeader({
@@ -37,16 +43,15 @@ export function DevlogHeader({
   setSearch,
   selectedStage,
   setSelectedStage,
-  selectedTag,
-  setSelectedTag,
-  selectedProjectId,
-  setSelectedProjectId,
-  allTags,
-  projects,
   sort,
   setSort,
   resetFilters,
   onCreate,
+  selectedMode,
+  setSelectedMode,
+  workspaces,
+  selectedWorkspaceId,
+  setSelectedWorkspaceId,
 }: Props) {
   return (
     <div className="space-y-4">
@@ -74,15 +79,14 @@ export function DevlogHeader({
         setSearch={setSearch}
         selectedStage={selectedStage}
         setSelectedStage={setSelectedStage}
-        selectedTag={selectedTag}
-        setSelectedTag={setSelectedTag}
-        selectedProjectId={selectedProjectId}
-        setSelectedProjectId={setSelectedProjectId}
-        allTags={allTags}
-        projects={projects}
         sort={sort}
         setSort={setSort}
         resetFilters={resetFilters}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
+        workspaces={workspaces}
+        selectedWorkspaceId={selectedWorkspaceId}
+        setSelectedWorkspaceId={setSelectedWorkspaceId}
       />
     </div>
   );

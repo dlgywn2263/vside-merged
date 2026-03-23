@@ -1,38 +1,46 @@
 "use client";
 
 import { Search, SlidersHorizontal } from "lucide-react";
-import { ProjectOption, SortType, StageType } from "@/lib/devlog/types";
+import { SortType, StageType } from "@/lib/devlog/types";
+
+type WorkspaceMode = "personal" | "team";
+
+type WorkspaceOption = {
+  uuid: string;
+  name: string;
+  mode: WorkspaceMode;
+};
 
 type Props = {
   search: string;
   selectedStage: StageType | "all";
-  selectedTag: string;
-  selectedProjectId: string;
-  allTags: string[];
-  projects: ProjectOption[];
   sort: SortType;
   setSearch: (value: string) => void;
   setSelectedStage: (value: StageType | "all") => void;
-  setSelectedTag: (value: string) => void;
-  setSelectedProjectId: (value: string) => void;
   setSort: (value: SortType) => void;
   resetFilters: () => void;
+
+  selectedMode: WorkspaceMode;
+  setSelectedMode: (value: WorkspaceMode) => void;
+
+  workspaces: WorkspaceOption[];
+  selectedWorkspaceId: string;
+  setSelectedWorkspaceId: (value: string) => void;
 };
 
 export function DevlogFilterBar({
   search,
   selectedStage,
-  selectedTag,
-  selectedProjectId,
-  allTags,
-  projects,
   sort,
   setSearch,
   setSelectedStage,
-  setSelectedTag,
-  setSelectedProjectId,
   setSort,
   resetFilters,
+  selectedMode,
+  setSelectedMode,
+  workspaces,
+  selectedWorkspaceId,
+  setSelectedWorkspaceId,
 }: Props) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -41,7 +49,7 @@ export function DevlogFilterBar({
         <h2 className="text-sm font-semibold text-slate-700">필터</h2>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="md:col-span-2 xl:col-span-2">
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
             <Search size={16} className="text-slate-400" />
@@ -53,19 +61,6 @@ export function DevlogFilterBar({
             />
           </div>
         </div>
-
-        <select
-          value={selectedProjectId}
-          onChange={(e) => setSelectedProjectId(e.target.value)}
-          className="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none"
-        >
-          <option value="all">전체 프로젝트</option>
-          {projects.map((project) => (
-            <option key={project.id} value={String(project.id)}>
-              {project.name}
-            </option>
-          ))}
-        </select>
 
         <select
           value={selectedStage}
@@ -82,19 +77,32 @@ export function DevlogFilterBar({
         </select>
 
         <select
-          value={selectedTag}
-          onChange={(e) => setSelectedTag(e.target.value)}
+          value={selectedMode}
+          onChange={(e) => setSelectedMode(e.target.value as WorkspaceMode)}
           className="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none"
         >
-          {allTags.map((tag) => (
-            <option key={tag} value={tag}>
-              {tag === "all" ? "전체 태그" : tag}
-            </option>
-          ))}
+          <option value="personal">개인</option>
+          <option value="team">팀</option>
         </select>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_auto_auto_auto]">
+        <select
+          value={selectedWorkspaceId}
+          onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+          className="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none"
+        >
+          {workspaces.length === 0 ? (
+            <option value="">선택 가능한 워크스페이스 없음</option>
+          ) : (
+            workspaces.map((workspace) => (
+              <option key={workspace.uuid} value={workspace.uuid}>
+                {workspace.name}
+              </option>
+            ))
+          )}
+        </select>
+
         <button
           onClick={() => setSort("latest")}
           className={`rounded-full px-3 py-1.5 text-xs font-medium ${

@@ -32,22 +32,41 @@ import type {
   ProjectStage,
 } from "@/components/schedule/schedule.types";
 
-export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
+type WorkspaceMode = "personal" | "team";
+
+type WorkspaceOption = {
+  uuid: string;
+  name: string;
+  mode: WorkspaceMode;
+};
+
+type Props = {
+  workspaceId: string;
+  selectedMode: WorkspaceMode;
+  setSelectedMode: (value: WorkspaceMode) => void;
+  workspaces: WorkspaceOption[];
+  selectedWorkspaceId: string;
+  setSelectedWorkspaceId: (value: string) => void;
+};
+
+export function DevlogWorkspaceView({
+  workspaceId,
+  selectedMode,
+  setSelectedMode,
+  workspaces,
+  selectedWorkspaceId,
+  setSelectedWorkspaceId,
+}: Props) {
   const [workspaceName, setWorkspaceName] = useState("프로젝트 관리");
   const [workspaceModeLabel, setWorkspaceModeLabel] = useState("워크스페이스");
   const [scheduleMode, setScheduleMode] = useState<Mode>("personal");
 
-  /**
-   * 개발일지 상태
-   */
   const [logs, setLogs] = useState<DevlogItem[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [selectedStage, setSelectedStage] = useState<StageType | "all">("all");
-  const [selectedTag, setSelectedTag] = useState("all");
-  const [selectedProjectId, setSelectedProjectId] = useState("all");
   const [sort, setSort] = useState<SortType>("latest");
 
   const [detailTarget, setDetailTarget] = useState<DevlogItem | null>(null);
@@ -64,9 +83,17 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     loadWorkspace();
   }, [workspaceId]);
 
-  /**
-   * 개발일지 로드
-   */
+  useEffect(() => {
+    setDetailTarget(null);
+    setEditingTarget(null);
+    setIsCreateOpen(false);
+
+    setForm({
+      ...emptyForm,
+      date: todayYmd(),
+    });
+  }, [workspaceId]);
+
   async function loadWorkspace() {
     setLoading(true);
 
@@ -111,22 +138,6 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     }
   }
 
-  /**
-   * 필터용 태그 목록
-   */
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-
-    logs.forEach((log) => {
-      log.tags.forEach((tag) => tagSet.add(tag));
-    });
-
-    return ["all", ...Array.from(tagSet)];
-  }, [logs]);
-
-  /**
-   * 오른쪽 개발일지 필터링
-   */
   const filteredLogs = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
@@ -149,13 +160,8 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
       const matchesKeyword = !keyword || text.includes(keyword);
       const matchesStage =
         selectedStage === "all" || log.stage === selectedStage;
-      const matchesTag =
-        selectedTag === "all" || log.tags.includes(selectedTag);
-      const matchesProject =
-        selectedProjectId === "all" ||
-        String(log.projectId) === selectedProjectId;
 
-      return matchesKeyword && matchesStage && matchesTag && matchesProject;
+      return matchesKeyword && matchesStage;
     });
 
     next.sort((a, b) =>
@@ -165,11 +171,8 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     );
 
     return next;
-  }, [logs, search, selectedStage, selectedTag, selectedProjectId, sort]);
+  }, [logs, search, selectedStage, sort]);
 
-  /**
-   * 단계별 보드 데이터
-   */
   const logsByStage = useMemo(() => {
     return {
       planning: filteredLogs.filter((log) => log.stage === "planning"),
@@ -196,13 +199,17 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
     }
   }
 
+  function getDefaultProjectId() {
+    return projects[0]?.id ? String(projects[0].id) : "";
+  }
+
   function openCreateModal(defaultStage?: StageType) {
     setDetailTarget(null);
     setEditingTarget(null);
 
     setForm({
       ...emptyForm,
-      projectId: projects[0]?.id ? String(projects[0].id) : "",
+      projectId: getDefaultProjectId(),
       date: todayYmd(),
       stage: defaultStage ?? "planning",
     });
@@ -216,8 +223,9 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
 
     setForm({
       ...emptyForm,
-      projectId: projects[0]?.id ? String(projects[0].id) : "",
+      projectId: getDefaultProjectId(),
       title: event.title,
+      date: todayYmd(),
       stage: mapScheduleStageToDevlogStage(event.stage),
       summary: "",
       content: "",
@@ -316,8 +324,6 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
   function resetFilters() {
     setSearch("");
     setSelectedStage("all");
-    setSelectedTag("all");
-    setSelectedProjectId("all");
     setSort("latest");
   }
 
@@ -330,16 +336,15 @@ export function DevlogWorkspaceView({ workspaceId }: { workspaceId: string }) {
         setSearch={setSearch}
         selectedStage={selectedStage}
         setSelectedStage={setSelectedStage}
-        selectedTag={selectedTag}
-        setSelectedTag={setSelectedTag}
-        selectedProjectId={selectedProjectId}
-        setSelectedProjectId={setSelectedProjectId}
-        allTags={allTags}
-        projects={projects}
         sort={sort}
         setSort={setSort}
         resetFilters={resetFilters}
         onCreate={() => openCreateModal()}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
+        workspaces={workspaces}
+        selectedWorkspaceId={selectedWorkspaceId}
+        setSelectedWorkspaceId={setSelectedWorkspaceId}
       />
 
       {loading ? (
