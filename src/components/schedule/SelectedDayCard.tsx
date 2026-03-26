@@ -47,6 +47,9 @@ export default function SelectedDayCard({
           dayEvents.map((event) => (
             <div key={event.id} className="rounded-xl border p-4 space-y-3">
               <div className="flex items-center gap-2">
+                <div className="font-medium truncate">
+                  {event.workspaceName}
+                </div>
                 <Badge variant="secondary">{event.category}</Badge>
 
                 {event.stage ? (
@@ -54,10 +57,8 @@ export default function SelectedDayCard({
                     {STAGE_LABELS[event.stage]}
                   </Badge>
                 ) : null}
-
-                <div className="font-medium truncate">{event.title}</div>
               </div>
-
+              <div className="font-medium truncate">{event.title}</div>
               <div className="text-sm text-muted-foreground">
                 {event.startDateISO}
                 {event.startDateISO !== event.endDateISO
@@ -77,7 +78,11 @@ export default function SelectedDayCard({
                 >
                   상세
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => onEdit(event.id)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEdit(event.id)}
+                >
                   수정
                 </Button>
                 <Button

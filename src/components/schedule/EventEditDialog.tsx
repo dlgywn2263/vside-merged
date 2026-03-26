@@ -86,7 +86,7 @@ const ROLE_LABELS: Record<ProjectRole, string> = {
 };
 
 const STATUS_LABELS: Record<EventStatus, string> = {
-  Todo: "해야 함",
+  Todo: "예정",
   InProgress: "진행 중",
   Done: "완료",
 };

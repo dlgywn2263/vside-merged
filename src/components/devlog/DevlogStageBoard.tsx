@@ -11,6 +11,13 @@ type Props = {
   onCreate: (stage: StageType) => void;
 };
 
+const STAGE_ORDER: StageType[] = [
+  "planning",
+  "design",
+  "implementation",
+  "wrapup",
+];
+
 export function DevlogStageBoard({
   logsByStage,
   onOpenDetail,
@@ -18,29 +25,54 @@ export function DevlogStageBoard({
   onDelete,
   onCreate,
 }: Props) {
+  const visibleStages = STAGE_ORDER.filter(
+    (stage) => (logsByStage[stage] ?? []).length > 0,
+  );
+
+  const isEmpty = visibleStages.length === 0;
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="grid gap-4">
-        {(
-          ["planning", "design", "implementation", "wrapup"] as StageType[]
-        ).map((stage) => (
-          <div key={stage} className="rounded-2xl bg-slate-50 p-4">
-            <div className="mb-4">
-              <div className="text-xl font-bold text-slate-900">
-                {stageMeta[stage].label}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                {stageMeta[stage].description}
-              </div>
-            </div>
+      {isEmpty ? (
+        // 🔥 아무것도 없을 때 (빈 상태 UI)
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="text-lg font-semibold text-slate-700">
+            아직 작성된 개발일지가 없습니다
+          </div>
 
-            <div className="space-y-3">
-              {logsByStage[stage].length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-6 text-center text-xs text-slate-400">
-                  해당 단계의 개발일지가 없습니다.
+          <div className="mt-2 text-sm text-slate-400">
+            첫 일지를 작성하면 단계별로 자동 정리됩니다
+          </div>
+
+          <div className="mt-6 flex gap-2 flex-wrap justify-center">
+            {STAGE_ORDER.map((stage) => (
+              <button
+                key={stage}
+                onClick={() => onCreate(stage)}
+                className="flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                <Plus size={14} />
+                {stageMeta[stage].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        // 🔥 단계 존재할 때만 렌더링
+        <div className="grid gap-4">
+          {visibleStages.map((stage) => (
+            <div key={stage} className="rounded-2xl bg-slate-50 p-4">
+              <div className="mb-4">
+                <div className="text-xl font-bold text-slate-900">
+                  {stageMeta[stage].label}
                 </div>
-              ) : (
-                logsByStage[stage].map((log) => (
+                <div className="mt-1 text-xs text-slate-500">
+                  {stageMeta[stage].description}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {logsByStage[stage].map((log) => (
                   <div
                     key={log.id}
                     className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100"
@@ -52,9 +84,11 @@ export function DevlogStageBoard({
                       <div className="text-xs font-semibold text-slate-400">
                         {shortDate(log.date)}
                       </div>
+
                       <div className="mt-1 line-clamp-2 text-base font-bold text-slate-900">
                         {log.title}
                       </div>
+
                       <div className="mt-1 line-clamp-2 text-sm text-slate-500">
                         {log.summary}
                       </div>
@@ -76,9 +110,10 @@ export function DevlogStageBoard({
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
-                      <div className="text-[11px] text-slate-400">
+                      {/* <div className="text-[11px] text-slate-400">
                         진행률 {log.progress ?? 0}%
-                      </div>
+                      </div> */}
+
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => onEdit(log)}
@@ -86,6 +121,7 @@ export function DevlogStageBoard({
                         >
                           <Pencil size={14} />
                         </button>
+
                         <button
                           onClick={() => onDelete(log.id, log.projectId)}
                           className="rounded-lg p-2 text-slate-500 hover:bg-slate-50"
@@ -95,20 +131,21 @@ export function DevlogStageBoard({
                       </div>
                     </div>
                   </div>
-                ))
-              )}
+                ))}
 
-              <button
-                onClick={() => onCreate(stage)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50"
-              >
-                <Plus size={16} />
-                {stageMeta[stage].label} 일지 추가
-              </button>
+                {/* 단계별 추가 버튼은 유지 */}
+                <button
+                  onClick={() => onCreate(stage)}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50"
+                >
+                  <Plus size={16} />
+                  {stageMeta[stage].label} 일지 추가
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
