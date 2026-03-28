@@ -7,11 +7,6 @@ export function ActivityKpis() {
    */
   const items = [
     {
-      label: "파일 수정",
-      value: "28",
-      icon: <FileEdit size={18} className="text-gray-700" />,
-    },
-    {
       label: "커밋/푸시",
       value: "9",
       icon: <GitCommit size={18} className="text-gray-700" />,

@@ -35,12 +35,6 @@ export function KpiCards() {
       sub: "우선 확인 필요",
       icon: <Bell size={18} className="text-gray-700" />,
     },
-    {
-      label: "활동 점수",
-      value: "72",
-      sub: "이번 주",
-      icon: <Flame size={18} className="text-gray-700" />,
-    },
   ];
 
   return (
@@ -52,10 +46,11 @@ export function KpiCards() {
         >
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-gray-600">{k.label}</p>
-            <div className="h-9 w-9 rounded-xl bg-gray-100 flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100">
               {k.icon}
             </div>
           </div>
+
           <p className="mt-3 text-3xl font-extrabold text-gray-900">
             {k.value}
           </p>

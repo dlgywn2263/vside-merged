@@ -15,7 +15,7 @@ export default function DashboardPage() {
         <DashboardHeader />
 
         {/* KPI 요약 */}
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <section className="grid grid-cols-3 gap-4">
           <KpiCards />
         </section>
 
