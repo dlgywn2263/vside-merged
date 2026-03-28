@@ -21,7 +21,7 @@ import {
   fetchWorkspaceDevlogs,
   updateDevlog,
 } from "@/lib/devlog/api";
-import { DevlogHeader } from "./devlogHeader";
+import { DevlogHeader } from "./DevlogHeader";
 import { DevlogStageBoard } from "./DevlogStageBoard";
 import { DevlogDetailModal } from "./DevlogDetailModal";
 import { DevlogFormModal } from "./DevlogFormModal";
