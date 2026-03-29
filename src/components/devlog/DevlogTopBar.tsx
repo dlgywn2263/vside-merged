@@ -36,7 +36,7 @@ type Props = {
   setSelectedWorkspaceId: (value: string) => void;
 };
 
-export function Temp({
+export function DevlogTopBar({
   workspaceName,
   workspaceModeLabel,
   search,
