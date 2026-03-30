@@ -53,7 +53,6 @@ export default function SignupPage() {
 
   const canSubmit = useMemo(() => {
     return (
-      form.name.trim().length >= 2 &&
       form.nickname.trim().length >= 2 &&
       isEmail(form.email) &&
       passwordOk &&

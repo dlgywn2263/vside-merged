@@ -6,6 +6,8 @@ import { ActivityBars } from "@/components/activity/ActivityBars";
 import { ActivityBreakdown } from "@/components/activity/ActivityBreakdown";
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 
+const projectName = "{프로젝트 이름}";
+
 export default function ActivityPage() {
   return (
     <main className="bg-white">
@@ -14,7 +16,7 @@ export default function ActivityPage() {
           <div>
             <p className="text-sm text-gray-500">대시보드</p>
             <h1 className="mt-1 text-2xl font-extrabold text-gray-900">
-              활동 요약
+              {projectName}
             </h1>
           </div>
           <Link

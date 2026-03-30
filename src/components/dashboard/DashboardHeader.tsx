@@ -9,7 +9,7 @@ export function DashboardHeader() {
    * - GET /api/dashboard/summary (요약 데이터)
    */
   const user = {
-    id: "u1",
+    id: 1,
     name: "이효숭",
     email: "hyoju@example.com",
   };
