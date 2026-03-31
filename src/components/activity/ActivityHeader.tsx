@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { CalendarRange, Filter } from "lucide-react";
 
 export function ActivityHeader() {
-
   const [range, setRange] = useState<"7d" | "30d">("7d");
   const [scope, setScope] = useState<"me" | "team">("me");
   const [workspace, setWorkspace] = useState("all");
@@ -16,25 +15,9 @@ export function ActivityHeader() {
   }, [workspace]);
 
   return (
-    <div className="space-y-3">
-      {/* 진행률 한 줄 */}
-      <div className="flex items-center justify-end gap-3">
-        <div className="w-full max-w-[220px]">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-            <div
-              className="h-full rounded-full bg-gray-900 transition-all duration-500"
-              style={{ width: `${totalProgress}%` }}
-            />
-          </div>
-        </div>
-
-        <span className="min-w-[36px] text-right text-sm font-semibold text-gray-900">
-          {totalProgress}%
-        </span>
-      </div>
-
-      {/* 필터 박스 */}
-      <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+    <section className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+      <div className="flex flex-col gap-4">
+        {/* 상단: 필터 영역 */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <CalendarRange size={16} />
@@ -106,7 +89,26 @@ export function ActivityHeader() {
             </div>
           </div>
         </div>
-      </section>
-    </div>
+
+        {/* 진행률 */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 whitespace-nowrap">
+            진행률
+          </span>
+          <div className="flex-1">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-gray-900 transition-all duration-500"
+                style={{ width: `${totalProgress}%` }}
+              />
+            </div>
+          </div>
+
+          <span className="min-w-[40px] text-right text-sm font-semibold text-gray-900">
+            {totalProgress}%
+          </span>
+        </div>
+      </div>
+    </section>
   );
 }
