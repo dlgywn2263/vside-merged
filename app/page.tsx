@@ -12,7 +12,7 @@ export default function Page() {
 
   useEffect(() => {
     if (isLoggedIn) {
-      router.replace("/dashboard"); // 메인 페이지
+      router.replace("/main"); // 메인 페이지
     }
   }, [isLoggedIn, router]);
   return (

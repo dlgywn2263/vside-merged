@@ -25,7 +25,7 @@ export function ActivityHeader() {
           </div>
 
           <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:gap-3">
-            <div className="flex gap-2">
+            {/* <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setRange("7d")}
@@ -48,7 +48,7 @@ export function ActivityHeader() {
               >
                 30일
               </button>
-            </div>
+            </div> */}
 
             <div className="flex gap-2">
               <button
@@ -60,7 +60,7 @@ export function ActivityHeader() {
                     : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                내 활동
+                개인
               </button>
               <button
                 type="button"
@@ -71,7 +71,7 @@ export function ActivityHeader() {
                     : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                팀 전체
+                팀
               </button>
             </div>
 
@@ -82,7 +82,6 @@ export function ActivityHeader() {
                 onChange={(e) => setWorkspace(e.target.value)}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none"
               >
-                <option value="all">전체 워크스페이스</option>
                 <option value="w1">Team Alpha Solution</option>
                 <option value="w2">My Personal Solution</option>
               </select>

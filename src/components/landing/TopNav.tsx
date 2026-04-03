@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, Menu, X, LogOut, User } from "lucide-react";
+import { Bell, Menu, X, LogOut, User, House } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -119,16 +119,18 @@ export default function TopNav() {
   };
 
   const NAV_ITEMS = [
+    // { href: "/main", label: "홈" },
     { href: "/dashboard", label: "대시보드" },
-    { href: "/projects", label: "프로젝트 관리" },
+    { href: "/projects", label: "에디터" },
     { href: "/schedule", label: "일정관리" },
     { href: "/devlog", label: "개발일지" },
+    { href: "/my", label: "마이페이지" },
     { href: "/help", label: "이용가이드" },
   ];
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur">
-      <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between">
+      <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between text-xl">
         {/* 로고 */}
         <Link href="/" className="font-black tracking-tight">
           VSIDE

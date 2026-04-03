@@ -174,7 +174,7 @@ export function ProjectManagerList() {
   }
 
   /**
-   * 워크스페이스 목록 조회
+   * 프로젝트 목록 조회
    */
   async function loadWorkspaces() {
     try {
@@ -202,7 +202,7 @@ export function ProjectManagerList() {
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(text || "워크스페이스 목록 조회에 실패했습니다.");
+        throw new Error(text || "프로젝트 목록 조회에 실패했습니다.");
       }
 
       const data: Workspace[] = await response.json();
@@ -213,7 +213,7 @@ export function ProjectManagerList() {
       setError(
         err instanceof Error
           ? err.message
-          : "워크스페이스 목록 조회 중 오류가 발생했습니다.",
+          : "프로젝트 목록 조회 중 오류가 발생했습니다.",
       );
     } finally {
       setLoading(false);
@@ -283,7 +283,7 @@ export function ProjectManagerList() {
   async function handleInviteMember(payload: { email: string }) {
     try {
       if (!selected?.id) {
-        throw new Error("선택된 워크스페이스가 없습니다.");
+        throw new Error("선택된 프로젝트가 없습니다.");
       }
 
       const response = await fetch(`${API_BASE}/api/workspaces/invite`, {
@@ -365,7 +365,7 @@ export function ProjectManagerList() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="워크스페이스/프로젝트 검색"
+              placeholder="프로젝트 검색"
               className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-indigo-200 md:w-72"
             />
           </div>
@@ -430,7 +430,7 @@ export function ProjectManagerList() {
       {/* 로딩 / 에러 */}
       {loading ? (
         <div className="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-500">
-          워크스페이스를 불러오는 중입니다...
+          프로젝트를 불러오는 중입니다...
         </div>
       ) : null}
 
@@ -442,11 +442,11 @@ export function ProjectManagerList() {
 
       {!loading && !error && filtered.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-500">
-          표시할 워크스페이스가 없습니다.
+          표시할 프로젝트가 없습니다.
         </div>
       ) : null}
 
-      {/* 워크스페이스 그룹 목록 */}
+      {/* 프로젝트 그룹 목록 */}
       {!loading && filtered.length > 0 ? (
         <div className="space-y-4">
           {filtered.map((w) => {
@@ -478,8 +478,7 @@ export function ProjectManagerList() {
                       </div>
 
                       <p className="mt-1 truncate text-sm text-gray-500">
-                        최근 수정: {w.updatedAt} · 프로젝트 {w.projects.length}
-                        개
+                        최근 수정: {w.updatedAt}
                       </p>
                     </div>
                   </div>
@@ -497,13 +496,12 @@ export function ProjectManagerList() {
                       className="rounded-xl p-2 text-gray-700 hover:bg-gray-100"
                       aria-label="접기/펼치기"
                     >
-                      <ChevronDown
-                        className={cn(
-                          "transition",
-                          isCollapsed && "-rotate-90",
-                        )}
-                        size={18}
-                      />
+                      <Link
+                        href={`/workspace/${w.id}`}
+                        className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        열기
+                      </Link>
                     </button>
 
                     {/* 점3개 메뉴 */}
@@ -514,7 +512,7 @@ export function ProjectManagerList() {
                       <button
                         type="button"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100"
-                        aria-label="워크스페이스 메뉴"
+                        aria-label="프로젝트 메뉴"
                         onClick={() =>
                           setOpenMenuId((cur) => (cur === w.id ? null : w.id))
                         }
@@ -533,7 +531,7 @@ export function ProjectManagerList() {
                             }}
                           >
                             <Info size={16} className="text-gray-500" />
-                            워크스페이스 정보
+                            프로젝트 정보
                           </button>
 
                           <Link
@@ -543,7 +541,7 @@ export function ProjectManagerList() {
                           >
                             <span className="flex items-center gap-2">
                               <FolderOpen size={16} className="text-gray-500" />
-                              워크스페이스 열기
+                              프로젝트 열기
                             </span>
                           </Link>
 
@@ -553,7 +551,7 @@ export function ProjectManagerList() {
                             onClick={() => openSettings(w)}
                           >
                             <Settings size={16} className="text-gray-500" />
-                            워크스페이스 설정
+                            프로젝트 설정
                           </button>
 
                           <div className="h-px bg-gray-100" />
@@ -567,7 +565,7 @@ export function ProjectManagerList() {
                             }}
                           >
                             <Trash2 size={16} className="text-red-600" />
-                            워크스페이스 삭제
+                            프로젝트 삭제
                           </button>
                         </div>
                       )}
@@ -576,7 +574,7 @@ export function ProjectManagerList() {
                 </div>
 
                 {/* 내부 프로젝트 리스트 */}
-                {!isCollapsed ? (
+                {/* {!isCollapsed ? (
                   <div className="px-5 py-4">
                     {w.projects.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
@@ -606,18 +604,13 @@ export function ProjectManagerList() {
                               </p>
                             </div>
 
-                            <Link
-                              href={`/workspace/${w.id}/project/${p.id}`}
-                              className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                            >
-                              열기
-                            </Link>
+                            
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                ) : null}
+                ) : null} */}
               </section>
             );
           })}
