@@ -7,8 +7,8 @@ import { ArrowLeft } from "lucide-react";
 
 const HEADER_MAP = {
   "/new/workspace": {
-    title: "워크스페이스 생성",
-    subtitle: "워크스페이스를 생성하세요",
+    title: "프로젝트 생성",
+    subtitle: "프로젝트를 생성하세요",
   },
   "/new/language": {
     title: "언어 선택",

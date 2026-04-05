@@ -73,7 +73,7 @@ export default function LoginPage() {
         token: data.accessToken,
       });
 
-      router.replace("/dashboard");
+      router.replace("/main");
     } catch (err) {
       console.error("로그인 실패:", err);
       setError(

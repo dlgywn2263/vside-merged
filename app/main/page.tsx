@@ -317,16 +317,19 @@ export default function MainDashboard() {
 
           <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto">
             <Link
-              href="/project"
+              href="/projects"
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-4 py-2.5 text-sm font-semibold text-[#5873F9] hover:bg-[#EEF3FF] transition-colors"
             >
               프로젝트 둘러보기
               <Icons.arrowRight />
             </Link>
 
-            <button className="inline-flex items-center justify-center gap-2 bg-[#5873F9] hover:bg-[#4863E8] transition-colors text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm">
+            <Link
+              href="/new/workspace"
+              className="inline-flex items-center justify-center gap-2 bg-[#5873F9] hover:bg-[#4863E8] transition-colors text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm"
+            >
               <Icons.plus />새 프로젝트 생성
-            </button>
+            </Link>
           </div>
         </section>
 
