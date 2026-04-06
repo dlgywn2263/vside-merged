@@ -72,14 +72,14 @@ export default function ScopeToolbar({
       <div className="flex flex-wrap items-center justify-end gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {mode === "personal" ? "개인 워크스페이스" : "팀 워크스페이스"}
+            {mode === "personal" ? "개인 프로젝트" : "팀 프로젝트"}
           </span>
           <Select
             value={selectedWorkspaceId}
             onValueChange={setSelectedWorkspaceId}
           >
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="워크스페이스 선택" />
+              <SelectValue placeholder="프로젝트 선택" />
             </SelectTrigger>
             <SelectContent>
               {workspaceOptions.map((workspace) => (

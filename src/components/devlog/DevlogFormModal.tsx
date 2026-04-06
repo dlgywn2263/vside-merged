@@ -48,23 +48,6 @@ export function DevlogFormModal({
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* <DevlogField label="프로젝트">
-            <select
-              value={form.projectId}
-              disabled={!!editingTarget}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, projectId: e.target.value }))
-              }
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none disabled:text-slate-400"
-            >
-              <option value="">프로젝트 선택</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </DevlogField> */}
           <DevlogField label="제목" className="md:col-span-2">
             <input
               value={form.title}
@@ -104,20 +87,6 @@ export function DevlogFormModal({
               className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none"
             />
           </DevlogField>
-
-          {/* <DevlogField label="진행률">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={form.progress}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, progress: e.target.value }))
-              }
-              placeholder="0~100"
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none"
-            />
-          </DevlogField> */}
 
           <DevlogField label="요약" className="md:col-span-2">
             <input

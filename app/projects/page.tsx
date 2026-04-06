@@ -3,11 +3,11 @@ import { ProjectManagerList } from "@/components/projects/ProjectManagerList";
 import { Plus } from "lucide-react";
 export default function ProjectsPage() {
   return (
-    <main className="bg-white">
+    <main className="min-h-screen bg-[#F8F9FA] ">
       <div className="mx-auto max-w-6xl px-6 py-10 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-extrabold text-gray-900">에디터</h1>
+            <h1 className="text-2xl font-extrabold text-gray-900">AIVS</h1>
             <p className="mt-1 text-sm text-gray-500">
               프로젝트를 생성하고 진입할 수 있습니다.
             </p>

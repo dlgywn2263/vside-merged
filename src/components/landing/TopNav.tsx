@@ -119,13 +119,12 @@ export default function TopNav() {
   };
 
   const NAV_ITEMS = [
-    // { href: "/main", label: "홈" },
     { href: "/dashboard", label: "대시보드" },
-    { href: "/projects", label: "에디터" },
+    { href: "/projects", label: "AIVS" },
+    { href: "/relocation", label: "재배치" },
     { href: "/schedule", label: "일정관리" },
     { href: "/devlog", label: "개발일지" },
     { href: "/my", label: "마이페이지" },
-    { href: "/help", label: "이용가이드" },
   ];
 
   return (

@@ -3,7 +3,8 @@
 import { SchedulePreview } from "@/components/dashboard/SchedulePreview";
 import { DevlogPreview } from "@/components/dashboard/DevlogPreview";
 import Link from "next/link";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo } from "react";
+import { ArrowRight } from "lucide-react";
 
 // --- Mock Data ---
 const SUMMARY_STATS = [
@@ -114,6 +115,9 @@ const PROJECTS = [
   },
 ];
 
+// 최근 몇 개만 보여줄지
+const MAX_RECENT_PROJECTS = 4;
+
 // --- Icons (SVG) ---
 const Icons = {
   user: () => (
@@ -220,79 +224,37 @@ const Icons = {
 
 type ProjectType = (typeof PROJECTS)[number];
 
-function chunkProjects<T>(items: T[], size: number) {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
+function parseLastModified(value: string) {
+  if (value.includes("시간 전")) {
+    const hours = Number(value.replace("시간 전", "").trim()) || 0;
+    return Date.now() - hours * 60 * 60 * 1000;
   }
-  return chunks;
+
+  if (value.includes("분 전")) {
+    const minutes = Number(value.replace("분 전", "").trim()) || 0;
+    return Date.now() - minutes * 60 * 1000;
+  }
+
+  if (value.includes("일 전")) {
+    const days = Number(value.replace("일 전", "").trim()) || 0;
+    return Date.now() - days * 24 * 60 * 60 * 1000;
+  }
+
+  const normalized = value.replace(/\./g, "-");
+  const parsed = new Date(normalized).getTime();
+
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 export default function MainDashboard() {
-  const [filter, setFilter] = useState<"all" | "personal" | "team">("all");
-  const [currentPage, setCurrentPage] = useState(0);
-
-  const dragStartX = useRef<number | null>(null);
-  const dragCurrentX = useRef<number | null>(null);
-  const isDragging = useRef(false);
-
-  const filteredProjects = useMemo(() => {
-    return PROJECTS.filter((p) => filter === "all" || p.type === filter);
-  }, [filter]);
-
-  const projectPages = useMemo(() => {
-    return chunkProjects(filteredProjects, 6);
-  }, [filteredProjects]);
-
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [filter]);
-
-  const goToPrevPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 0));
-  };
-
-  const goToNextPage = () => {
-    setCurrentPage((prev) => Math.min(prev + 1, projectPages.length - 1));
-  };
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    dragCurrentX.current = e.clientX;
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging.current) return;
-    dragCurrentX.current = e.clientX;
-  };
-
-  const handlePointerEnd = () => {
-    if (!isDragging.current) return;
-
-    const startX = dragStartX.current;
-    const endX = dragCurrentX.current;
-
-    if (startX === null || endX === null) {
-      isDragging.current = false;
-      dragStartX.current = null;
-      dragCurrentX.current = null;
-      return;
-    }
-
-    const diff = endX - startX;
-    const threshold = 60;
-
-    if (diff <= -threshold) {
-      goToNextPage();
-    } else if (diff >= threshold) {
-      goToPrevPage();
-    }
-
-    isDragging.current = false;
-    dragStartX.current = null;
-    dragCurrentX.current = null;
-  };
+  const recentProjects = useMemo(() => {
+    return [...PROJECTS]
+      .sort(
+        (a, b) =>
+          parseLastModified(b.lastModified) - parseLastModified(a.lastModified),
+      )
+      .slice(0, MAX_RECENT_PROJECTS);
+  }, []);
 
   return (
     <main className="min-h-screen bg-[#F8F9FA] p-5 md:p-8 font-sans text-gray-800">
@@ -321,14 +283,15 @@ export default function MainDashboard() {
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-4 py-2.5 text-sm font-semibold text-[#5873F9] hover:bg-[#EEF3FF] transition-colors"
             >
               프로젝트 둘러보기
-              <Icons.arrowRight />
+              <ArrowRight size={17} />
             </Link>
 
             <Link
               href="/new/workspace"
               className="inline-flex items-center justify-center gap-2 bg-[#5873F9] hover:bg-[#4863E8] transition-colors text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm"
             >
-              <Icons.plus />새 프로젝트 생성
+              새 프로젝트 생성
+              <Icons.plus />
             </Link>
           </div>
         </section>
@@ -365,100 +328,25 @@ export default function MainDashboard() {
           })}
         </section>
 
-        {/* 3. Recent Projects - 6 per page + drag/swipe */}
+        {/* 3. Recent Projects - filter/scroll removed */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">최근 프로젝트</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                최근 진행한 프로젝트를 빠르게 확인하세요.
-              </p>
-            </div>
-
-            <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
-              {(["all", "personal", "team"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setFilter(type)}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    filter === type
-                      ? "bg-white text-gray-900 shadow-sm border border-gray-200"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {type === "all"
-                    ? "전체"
-                    : type === "personal"
-                      ? "개인"
-                      : "팀"}
-                </button>
-              ))}
-            </div>
+          <div className="mb-5">
+            <h2 className="text-lg font-bold text-gray-900">최근 프로젝트</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              최근에 수정한 프로젝트만 빠르게 확인하세요.
+            </p>
           </div>
 
-          {projectPages.length === 0 ? (
-            <div className="h-[300px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
+          {recentProjects.length === 0 ? (
+            <div className="h-[220px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
               표시할 프로젝트가 없습니다.
             </div>
           ) : (
-            <>
-              <div
-                className="overflow-hidden select-none cursor-grab active:cursor-grabbing"
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerEnd}
-                onPointerLeave={handlePointerEnd}
-                onPointerCancel={handlePointerEnd}
-                style={{ touchAction: "pan-y" }}
-              >
-                <div
-                  className="flex transition-transform duration-300 ease-out"
-                  style={{ transform: `translateX(-${currentPage * 100}%)` }}
-                >
-                  {projectPages.map((page, pageIndex) => (
-                    <div key={pageIndex} className="w-full shrink-0">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {page.map((project) => (
-                          <ProjectCard key={project.id} project={project} />
-                        ))}
-
-                        {page.length < 6 &&
-                          Array.from({ length: 6 - page.length }).map(
-                            (_, i) => (
-                              <div
-                                key={`empty-${pageIndex}-${i}`}
-                                className="rounded-xl border border-transparent bg-transparent"
-                              />
-                            ),
-                          )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {projectPages.length > 1 && (
-                <div className="mt-5 flex items-center justify-center gap-2">
-                  {projectPages.map((_, index) => {
-                    const active = currentPage === index;
-
-                    return (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setCurrentPage(index)}
-                        aria-label={`${index + 1}번 페이지로 이동`}
-                        className={`rounded-full transition-all duration-200 ${
-                          active
-                            ? "w-6 h-2.5 bg-[#5873F9]"
-                            : "w-2.5 h-2.5 bg-gray-300 hover:bg-gray-400"
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+              {recentProjects.map((project) => (
+                <ProjectCard key={project.id} project={project} />
+              ))}
+            </div>
           )}
         </section>
 

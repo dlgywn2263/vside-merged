@@ -115,7 +115,7 @@ export default function DevlogPage() {
 
   if (!allWorkspaces.length) {
     return (
-      <div className="mx-auto max-w-[1400px] px-6 py-10">
+      <div className="mx-auto max-w-[1200px] px-6 py-10 ">
         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
           표시할 워크스페이스가 없습니다.
         </div>
@@ -125,7 +125,7 @@ export default function DevlogPage() {
 
   if (!selectedWorkspaceId) {
     return (
-      <div className="mx-auto max-w-[1400px] px-6 py-10">
+      <div className="mx-auto max-w-[1200px] px-6 py-10">
         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
           선택 가능한 워크스페이스가 없습니다.
         </div>
@@ -134,15 +134,17 @@ export default function DevlogPage() {
   }
 
   return (
-    <div className="  mx-auto max-w-[1400px] px-6 py-10 ">
-      <DevlogWorkspaceView
-        workspaceId={selectedWorkspaceId}
-        selectedMode={selectedMode}
-        setSelectedMode={setSelectedMode}
-        workspaces={filteredWorkspaces}
-        selectedWorkspaceId={selectedWorkspaceId}
-        setSelectedWorkspaceId={setSelectedWorkspaceId}
-      />
-    </div>
+    <section className="bg-[#F8F9FA] min-h-screen">
+      <div className="  mx-auto max-w-[1200px] px-6 py-10  ">
+        <DevlogWorkspaceView
+          workspaceId={selectedWorkspaceId}
+          selectedMode={selectedMode}
+          setSelectedMode={setSelectedMode}
+          workspaces={filteredWorkspaces}
+          selectedWorkspaceId={selectedWorkspaceId}
+          setSelectedWorkspaceId={setSelectedWorkspaceId}
+        />
+      </div>
+    </section>
   );
 }

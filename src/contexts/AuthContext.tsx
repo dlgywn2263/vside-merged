@@ -6,7 +6,7 @@ type User = {
   id: string;
   name: string;
   email: string;
-  token?: string; // 로그인 JWT 저장용
+  token?: string;
 };
 
 type AuthContextType = {
@@ -20,28 +20,30 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [ready, setReady] = useState(false);
 
-  // 새로고침 시 로그인 유지
   useEffect(() => {
-    const stored = localStorage.getItem("user");
-    if (stored) {
-      setUser(JSON.parse(stored));
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        localStorage.removeItem("user");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("userId");
+      }
     }
+    setReady(true);
   }, []);
 
   const login = (user: User) => {
     setUser(user);
-
-    // 기존 user 저장 구조 유지
     localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("userId", user.id);
 
-    // 토큰이 있으면 따로도 저장
     if (user.token) {
       localStorage.setItem("accessToken", user.token);
     }
-
-    // 개발일지 API에서 아직 X-USER-ID 헤더를 쓰고 있으므로 userId도 따로 저장
-    localStorage.setItem("userId", user.id);
   };
 
   const logout = () => {
@@ -50,6 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("userId");
   };
+
+  if (!ready) return null;
 
   return (
     <AuthContext.Provider
@@ -67,6 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  if (!ctx) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
   return ctx;
 }

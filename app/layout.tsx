@@ -1,6 +1,7 @@
 import "./globals.css";
-import TopNav from "@/components/landing/TopNav";
-import { AuthProvider } from "@/contexts/AuthContext";
+import Providers from "./providers";
+import AppShell from "./app-shell";
+
 export default function RootLayout({
   children,
 }: {
@@ -9,13 +10,9 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        {/* ✅ 모든 페이지에서 공통으로 보이는 헤더 */}
-
-        {/* 페이지별 콘텐츠 */}
-        <AuthProvider>
-          <TopNav />
-          {children}
-        </AuthProvider>
+        <Providers>
+          <AppShell>{children}</AppShell>
+        </Providers>
       </body>
     </html>
   );

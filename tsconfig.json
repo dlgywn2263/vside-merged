@@ -35,7 +35,9 @@
     "app/(project-wizard)/new/extra/page.jsx",
     "app/(project-wizard)/new/workspace/page.jsx",
     "app/(project-wizard)/new/layout.jsx",
-    "app/(project-wizard)/layout.jsx"
+    "app/(project-wizard)/layout.jsx",
+    "app/relocation/page.jsx",
+    "app/providers.jsx"
   ],
   "exclude": ["node_modules"]
 }
