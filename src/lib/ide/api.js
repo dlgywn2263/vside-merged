@@ -27,7 +27,11 @@ const authFetch = async (url, options = {}) => {
     headers.set("Content-Type", "application/json");
   }
 
-  return fetch(url, { ...options, headers });
+  try {
+    return await fetch(url, { ...options, headers });
+  } catch (error) {
+    throw new Error(error?.message || "네트워크 요청 중 오류가 발생했습니다.");
+  }
 };
 
 // ============================================================================
@@ -135,7 +139,12 @@ export const createWorkspaceLegacyApi = async (
 
 export const fetchWorkspaceProjectsApi = async (workspaceId) => {
   const response = await authFetch(`${API_BASE}/${workspaceId}/projects`);
-  if (!response.ok) throw new Error("프로젝트 목록 로드 실패");
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "프로젝트 목록 로드 실패");
+  }
+
   return await response.json();
 };
 
@@ -629,7 +638,12 @@ export const fetchAiAutocompleteApi = async (payload) => {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error("Autocomplete failed");
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "Autocomplete failed");
+  }
+
   return await response.text();
 };
 
@@ -728,15 +742,20 @@ export const fetchVirtualViewsApi = async (
   const response = await authFetch(
     `${API_BASE}/${workspaceId}/rearrange?branchName=${encodeURIComponent(branchName)}`,
   );
-  if (!response.ok) throw new Error("가상 뷰 목록을 불러오지 못했습니다.");
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "가상 뷰 목록을 불러오지 못했습니다.");
+  }
 
   const text = await response.text();
   if (!text) return [];
 
   try {
-    return JSON.parse(text);
-  } catch {
-    return [];
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    throw new Error("가상 뷰 응답 형식이 올바르지 않습니다.");
   }
 };
 

@@ -7,7 +7,6 @@ import {
   VscFolder,
   VscFolderOpened,
   VscFile,
-  VscWand,
   VscCheck,
   VscChevronRight,
   VscChevronDown,
@@ -70,17 +69,62 @@ const getFileIcon = (name) => {
   }
 };
 
+const normalizeWorkspaceMode = (mode) => {
+  if (!mode) return null;
+  const value = String(mode).toLowerCase();
+
+  if (value === "team") return "team";
+  if (value === "personal") return "personal";
+
+  return null;
+};
+
+const detectWorkspaceMode = (id, explicitMode = null) => {
+  const normalizedExplicitMode = normalizeWorkspaceMode(explicitMode);
+  if (normalizedExplicitMode) return normalizedExplicitMode;
+
+  if (!id) return "personal";
+  if (typeof window === "undefined") return "personal";
+
+  const normalizedId = String(id);
+
+  try {
+    const rawTeamList = JSON.parse(
+      localStorage.getItem("teamWorkspaces") || "[]",
+    );
+
+    const normalizedTeamIds = Array.isArray(rawTeamList)
+      ? rawTeamList.map((item) =>
+          String(item?.uuid || item?.id || item?.workspaceId || item),
+        )
+      : [];
+
+    return normalizedTeamIds.includes(normalizedId) ? "team" : "personal";
+  } catch (error) {
+    console.error("teamWorkspaces 파싱 실패:", error);
+    return "personal";
+  }
+};
+
 const getWorkspacePath = (id) => {
   if (!id) return "/";
   if (typeof window === "undefined") return "/";
 
-  const teamList = JSON.parse(localStorage.getItem("teamWorkspaces") || "[]");
-  const isTeam = teamList.includes(id);
+  const normalizedId = String(id);
 
-  return `/workspace/${isTeam ? "team" : "personal"}/${id}`;
+  const teamList = JSON.parse(localStorage.getItem("teamWorkspaces") || "[]");
+  const normalizedTeamList = Array.isArray(teamList)
+    ? teamList.map((item) =>
+        String(item?.uuid || item?.id || item?.workspaceId || item),
+      )
+    : [];
+
+  const isTeam = normalizedTeamList.includes(normalizedId);
+
+  return `/ide/${isTeam ? "team" : "personal"}/${normalizedId}`;
 };
 
-const OriginalTree = ({ node }) => {
+const OriginalTree = ({ node, workspaceMode }) => {
   const [isOpen, setIsOpen] = useState(true);
   const dispatch = useDispatch();
   const router = useRouter();
@@ -98,7 +142,7 @@ const OriginalTree = ({ node }) => {
         className="flex items-center gap-2 py-1.5 px-2 hover:bg-gray-200/60 rounded-md text-gray-700 ml-5 transition-colors cursor-pointer"
         onClick={() => {
           dispatch(openFile(node));
-          router.push(getWorkspacePath(workspaceId));
+          router.push(getWorkspacePath(workspaceId, workspaceMode));
         }}
       >
         {getFileIcon(node.name)}
@@ -136,6 +180,7 @@ const OriginalTree = ({ node }) => {
             <OriginalTree
               key={child.id || child.path || `${child.name}-${idx}`}
               node={child}
+              workspaceMode={workspaceMode}
             />
           ))}
         </div>
@@ -144,7 +189,7 @@ const OriginalTree = ({ node }) => {
   );
 };
 
-const VirtualFolderTree = ({ folder, onDropFile }) => {
+const VirtualFolderTree = ({ folder, onDropFile, workspaceMode }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -154,7 +199,7 @@ const VirtualFolderTree = ({ folder, onDropFile }) => {
 
   const handleFileClick = (file) => {
     dispatch(openFile(file));
-    router.push(getWorkspacePath(workspaceId));
+    router.push(getWorkspacePath(workspaceId, workspaceMode));
   };
 
   return (
@@ -262,6 +307,7 @@ export default function ResourceRelocationPage() {
 
   const [branches, setBranches] = useState(["master"]);
   const [selectedBranch, setSelectedBranch] = useState("master");
+  const [currentWorkspaceMode, setCurrentWorkspaceMode] = useState("personal");
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -333,6 +379,8 @@ export default function ResourceRelocationPage() {
 
   const handleSelectWorkspace = async (ws) => {
     const targetId = ws.uuid || ws.id || ws.workspaceId;
+    const detectedMode = detectWorkspaceMode(targetId, ws.mode);
+
     setIsLoadingWs(true);
 
     try {
@@ -340,6 +388,7 @@ export default function ResourceRelocationPage() {
 
       dispatch(setWorkspaceId(targetId));
       dispatch(setWorkspaceTree(root));
+      setCurrentWorkspaceMode(detectedMode);
 
       if (root?.children?.length > 0) {
         const firstProject = root.children[0].name;
@@ -573,6 +622,18 @@ export default function ResourceRelocationPage() {
     }
   };
 
+  const handleGoToIde = () => {
+    if (!workspaceId) {
+      alert("워크스페이스 정보가 없어 IDE로 이동할 수 없습니다.");
+      return;
+    }
+
+    const targetPath = getWorkspacePath(workspaceId, currentWorkspaceMode);
+    console.log("IDE 이동 경로:", targetPath);
+
+    router.push(targetPath);
+  };
+
   return (
     <div className="w-screen h-screen bg-[#f3f4f6] flex flex-col font-sans overflow-hidden relative">
       <MenuBar />
@@ -613,9 +674,6 @@ export default function ResourceRelocationPage() {
         {viewMode === "list" ? (
           <div className="max-w-[1200px] w-full mx-auto py-12 px-6 flex flex-col h-full animate-fade-in">
             <div className="flex items-center gap-3 mb-8">
-              {/* <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
-                <VscWand size={28} />
-              </div> */}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
                   자료 재배치
@@ -675,7 +733,7 @@ export default function ResourceRelocationPage() {
                 </button>
 
                 <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
-                  <VscWand size={24} />
+                  <VscSparkle size={24} />
                 </div>
 
                 <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
@@ -704,7 +762,7 @@ export default function ResourceRelocationPage() {
               </div>
 
               <button
-                onClick={() => router.push(getWorkspacePath(workspaceId))}
+                onClick={handleGoToIde}
                 className="px-6 py-2.5 bg-[#111827] text-white text-[13px] font-bold rounded-xl hover:bg-black transition-colors flex items-center gap-2 shadow-md shadow-gray-400/20"
               >
                 IDE 에디터로 돌아가기 <VscArrowRight />
@@ -925,6 +983,7 @@ export default function ResourceRelocationPage() {
                               <OriginalTree
                                 key={child.id || `orig-${idx}`}
                                 node={child}
+                                workspaceMode={currentWorkspaceMode}
                               />
                             ))
                           ) : (
@@ -938,6 +997,7 @@ export default function ResourceRelocationPage() {
                               key={folder.name || `virt-folder-${idx}`}
                               folder={folder}
                               onDropFile={handleDropFile}
+                              workspaceMode={currentWorkspaceMode}
                             />
                           ))
                         )}

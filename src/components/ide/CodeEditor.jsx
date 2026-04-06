@@ -595,77 +595,96 @@ export default function CodeEditor() {
   useEffect(() => {
     if (!monaco) return;
 
-    if (!window._conflictCmdsRegistered) {
-      monaco.editor.registerCommand(
-        "accept-current",
-        (accessor, uri, conflict) =>
-          applyConflictEdit(monaco, uri, conflict, "current"),
-      );
-      monaco.editor.registerCommand(
-        "accept-incoming",
-        (accessor, uri, conflict) =>
-          applyConflictEdit(monaco, uri, conflict, "incoming"),
-      );
-      monaco.editor.registerCommand("accept-both", (accessor, uri, conflict) =>
-        applyConflictEdit(monaco, uri, conflict, "both"),
-      );
-      window._conflictCmdsRegistered = true;
-    }
+    const provider = monaco.languages.registerInlineCompletionsProvider("*", {
+      provideInlineCompletions: (model, position, context, token) => {
+        return new Promise((resolve) => {
+          let settled = false;
+          let timer = null;
 
-    const provider = monaco.languages.registerCodeLensProvider("*", {
-      provideCodeLenses: (model) => {
-        const lenses = [];
-        const lines = model.getValue().split("\n");
-        let currentConflict = null;
+          const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            if (timer) clearTimeout(timer);
+            resolve(result);
+          };
 
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.startsWith("<<<<<<<")) currentConflict = { start: i + 1 };
-          else if (line.startsWith("=======") && currentConflict) {
-            currentConflict.mid = i + 1;
-          } else if (line.startsWith(">>>>>>>")) {
-            if (currentConflict && currentConflict.mid) {
-              currentConflict.end = i + 1;
-              const range = new monaco.Range(
-                currentConflict.start,
-                1,
-                currentConflict.start,
-                1,
-              );
+          token.onCancellationRequested(() => {
+            finish({ items: [] });
+          });
 
-              lenses.push({
-                range,
-                command: {
-                  id: "accept-current",
-                  title: "✓ 현재 변경 사항 수락",
-                  arguments: [model.uri, currentConflict],
-                },
-              });
-              lenses.push({
-                range,
-                command: {
-                  id: "accept-incoming",
-                  title: "✓ 수신 변경 사항 수락",
-                  arguments: [model.uri, currentConflict],
-                },
-              });
-              lenses.push({
-                range,
-                command: {
-                  id: "accept-both",
-                  title: "✓ 모두 수락",
-                  arguments: [model.uri, currentConflict],
-                },
-              });
-
-              currentConflict = null;
+          timer = setTimeout(async () => {
+            if (token.isCancellationRequested) {
+              finish({ items: [] });
+              return;
             }
-          }
-        }
 
-        return { lenses, dispose: () => {} };
+            const prefix = model.getValueInRange(
+              new monaco.Range(1, 1, position.lineNumber, position.column),
+            );
+
+            const suffix = model.getValueInRange(
+              new monaco.Range(
+                position.lineNumber,
+                position.column,
+                model.getLineCount(),
+                model.getLineMaxColumn(model.getLineCount()),
+              ),
+            );
+
+            if (prefix.trim().length < 5) {
+              finish({ items: [] });
+              return;
+            }
+
+            try {
+              const suggestion = await fetchAiAutocompleteApi({
+                prefix,
+                suffix,
+              });
+
+              if (token.isCancellationRequested) {
+                finish({ items: [] });
+                return;
+              }
+
+              if (suggestion && suggestion.trim() !== "") {
+                finish({
+                  items: [
+                    {
+                      insertText: suggestion,
+                      range: new monaco.Range(
+                        position.lineNumber,
+                        position.column,
+                        position.lineNumber,
+                        position.column,
+                      ),
+                    },
+                  ],
+                });
+              } else {
+                finish({ items: [] });
+              }
+            } catch (error) {
+              if (
+                token.isCancellationRequested ||
+                error?.name === "AbortError" ||
+                error?.type === "cancellation" ||
+                error?.message?.includes("canceled") ||
+                error?.msg?.includes("canceled")
+              ) {
+                finish({ items: [] });
+                return;
+              }
+
+              console.error("autocomplete error:", error);
+              finish({ items: [] });
+            }
+          }, 1500);
+        });
       },
-      resolveCodeLens: (model, codeLens) => codeLens,
+      freeInlineCompletions: () => {},
+      handleItemDidShow: () => {},
+      disposeInlineCompletions: () => {},
     });
 
     return () => provider.dispose();
@@ -889,22 +908,27 @@ export default function CodeEditor() {
   useEffect(() => {
     if (!monaco) return;
 
-    let timeout = null;
-
     const provider = monaco.languages.registerInlineCompletionsProvider("*", {
-      provideInlineCompletions: async (model, position, context, token) => {
+      provideInlineCompletions: (model, position, context, token) => {
         return new Promise((resolve) => {
-          if (timeout) clearTimeout(timeout);
+          let settled = false;
 
-          timeout = setTimeout(async () => {
+          const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            resolve(result);
+          };
+
+          const timer = setTimeout(async () => {
             if (token.isCancellationRequested) {
-              resolve({ items: [] });
+              finish({ items: [] });
               return;
             }
 
             const prefix = model.getValueInRange(
               new monaco.Range(1, 1, position.lineNumber, position.column),
             );
+
             const suffix = model.getValueInRange(
               new monaco.Range(
                 position.lineNumber,
@@ -915,7 +939,7 @@ export default function CodeEditor() {
             );
 
             if (prefix.trim().length < 5) {
-              resolve({ items: [] });
+              finish({ items: [] });
               return;
             }
 
@@ -925,8 +949,13 @@ export default function CodeEditor() {
                 suffix,
               });
 
+              if (token.isCancellationRequested) {
+                finish({ items: [] });
+                return;
+              }
+
               if (suggestion && suggestion.trim() !== "") {
-                resolve({
+                finish({
                   items: [
                     {
                       insertText: suggestion,
@@ -940,12 +969,29 @@ export default function CodeEditor() {
                   ],
                 });
               } else {
-                resolve({ items: [] });
+                finish({ items: [] });
               }
-            } catch {
-              resolve({ items: [] });
+            } catch (error) {
+              if (
+                token.isCancellationRequested ||
+                error?.name === "AbortError" ||
+                error?.type === "cancellation" ||
+                error?.message?.includes("canceled") ||
+                error?.msg?.includes("canceled")
+              ) {
+                finish({ items: [] });
+                return;
+              }
+
+              console.error("autocomplete error:", error);
+              finish({ items: [] });
             }
           }, 1500);
+
+          token.onCancellationRequested(() => {
+            clearTimeout(timer);
+            finish({ items: [] });
+          });
         });
       },
       freeInlineCompletions: () => {},
