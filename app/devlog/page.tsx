@@ -1,29 +1,9 @@
-// import { DevlogWorkspaceList } from "@/components/devlog/devlogWorkspaceList";
-
-// export default function DevlogPage() {
-//   return (
-//     <main className="bg-white">
-//       <div className="mx-auto max-w-6xl px-6 py-10 space-y-6">
-//         <div className="flex items-start justify-between gap-4">
-//           <div>
-//             <h1 className="mt-1 text-3xl font-extrabold text-gray-900">
-//               개발일지
-//             </h1>
-//             <p className="mt-1 text-sm text-gray-500">
-//               솔루션(개인/팀)별 프로젝트 개발일지를 확인할 수 있습니다
-//             </p>
-//           </div>
-//         </div>
-
-//         <DevlogWorkspaceList />
-//       </div>
-//     </main>
-//   );
-// }
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { DevlogWorkspaceView } from "@/components/devlog/devlogWorkspaceView";
+
 type WorkspaceMode = "personal" | "team";
 
 type WorkspaceListItem = {
@@ -34,7 +14,18 @@ type WorkspaceListItem = {
 
 const API_BASE = "http://localhost:8080";
 
+function normalizeWorkspaceId(value: string | null) {
+  if (!value) return null;
+  if (value === "undefined" || value === "null") return null;
+  return value;
+}
+
 export default function DevlogPage() {
+  const searchParams = useSearchParams();
+  const requestedWorkspaceId = normalizeWorkspaceId(
+    searchParams.get("workspaceId"),
+  );
+
   const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +34,7 @@ export default function DevlogPage() {
 
   useEffect(() => {
     loadWorkspaces();
-  }, []);
+  }, [requestedWorkspaceId]);
 
   async function loadWorkspaces() {
     setLoading(true);
@@ -58,6 +49,7 @@ export default function DevlogPage() {
         `${API_BASE}/api/devlogs/workspaces?sort=latest`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: "no-store",
         },
       );
 
@@ -68,6 +60,16 @@ export default function DevlogPage() {
       const data: WorkspaceListItem[] = await res.json();
       setAllWorkspaces(data);
 
+      const requested = requestedWorkspaceId
+        ? data.find((item) => item.uuid === requestedWorkspaceId)
+        : null;
+
+      if (requested) {
+        setSelectedMode(requested.mode);
+        setSelectedWorkspaceId(requested.uuid);
+        return;
+      }
+
       const personalFirst = data.find((item) => item.mode === "personal");
       const teamFirst = data.find((item) => item.mode === "team");
       const first = personalFirst ?? teamFirst ?? null;
@@ -75,6 +77,8 @@ export default function DevlogPage() {
       if (first) {
         setSelectedMode(first.mode);
         setSelectedWorkspaceId(first.uuid);
+      } else {
+        setSelectedWorkspaceId("");
       }
     } catch (error) {
       console.error("loadWorkspaces error:", error);
@@ -105,7 +109,7 @@ export default function DevlogPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[1400px] px-6 py-10 ">
+      <div className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
           데이터를 불러오는 중...
         </div>
@@ -115,7 +119,7 @@ export default function DevlogPage() {
 
   if (!allWorkspaces.length) {
     return (
-      <div className="mx-auto max-w-[1200px] px-6 py-10 ">
+      <div className="mx-auto max-w-[1200px] px-6 py-10">
         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
           표시할 워크스페이스가 없습니다.
         </div>
@@ -135,7 +139,7 @@ export default function DevlogPage() {
 
   return (
     <section className="bg-[#F8F9FA] min-h-screen">
-      <div className="  mx-auto max-w-[1200px] px-6 py-10  ">
+      <div className="mx-auto max-w-[1200px] px-6 py-10">
         <DevlogWorkspaceView
           workspaceId={selectedWorkspaceId}
           selectedMode={selectedMode}
