@@ -352,6 +352,10 @@ export function ProjectManagerList() {
     };
   }, [settingsOpen, inviteOpen]);
 
+  const getWorkspaceOpenHref = (w: Workspace) => {
+    return w.mode === "team" ? `/ide/team/${w.id}` : `/ide/personal/${w.id}`;
+  };
+
   return (
     <>
       {/* 상단 컨트롤 바 */}
@@ -485,24 +489,12 @@ export function ProjectManagerList() {
 
                   <div className="flex items-center gap-2">
                     {/* 접기 / 펼치기 */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCollapsed((cur) => ({
-                          ...cur,
-                          [w.id]: !isCollapsed,
-                        }))
-                      }
-                      className="rounded-xl p-2 text-gray-700 hover:bg-gray-100"
-                      aria-label="접기/펼치기"
+                    <Link
+                      href={getWorkspaceOpenHref(w)}
+                      className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                     >
-                      <Link
-                        href={`/workspace/${w.id}`}
-                        className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                      >
-                        열기
-                      </Link>
-                    </button>
+                      열기
+                    </Link>
 
                     {/* 점3개 메뉴 */}
                     <div
@@ -535,7 +527,7 @@ export function ProjectManagerList() {
                           </button>
 
                           <Link
-                            href={`/workspace/${w.id}`}
+                            href={getWorkspaceOpenHref(w)}
                             className="block px-4 py-2.5 text-sm hover:bg-gray-50"
                             onClick={() => setOpenMenuId(null)}
                           >
@@ -572,45 +564,6 @@ export function ProjectManagerList() {
                     </div>
                   </div>
                 </div>
-
-                {/* 내부 프로젝트 리스트 */}
-                {/* {!isCollapsed ? (
-                  <div className="px-5 py-4">
-                    {w.projects.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-                        아직 프로젝트가 없습니다.
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {w.projects.map((p) => (
-                          <div
-                            key={p.id}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-3 flex-wrap">
-                                <Link
-                                  href={`/workspace/${w.id}/project/${p.id}`}
-                                  className="truncate font-semibold text-gray-900 hover:underline underline-offset-4"
-                                >
-                                  {p.name}
-                                </Link>
-
-                                <LanguageBadge value={p.language} />
-                              </div>
-
-                              <p className="mt-1 text-sm text-gray-500">
-                                최근 수정 날짜 : {p.updatedAt}
-                              </p>
-                            </div>
-
-                            
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null} */}
               </section>
             );
           })}
