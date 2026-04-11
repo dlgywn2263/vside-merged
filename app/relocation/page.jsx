@@ -722,7 +722,7 @@ export default function ResourceRelocationPage() {
             )}
           </div>
         ) : (
-          <div className="max-w-[1400px] w-full mx-auto py-8 px-6 flex flex-col h-full animate-fade-in">
+          <div className="max-w-[1300px] w-full mx-auto py-8 px-6 flex flex-col h-full animate-fade-in">
             <div className="mb-6 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
                 <button
@@ -732,11 +732,11 @@ export default function ResourceRelocationPage() {
                   <VscChevronLeft size={24} />
                 </button>
 
-                <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
+                {/* <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
                   <VscSparkle size={24} />
-                </div>
+                </div> */}
 
-                <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
                   자료 재배치 매니저
                   {activeProject && (
                     <span className="text-[13px] font-bold bg-gray-800 text-white px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
