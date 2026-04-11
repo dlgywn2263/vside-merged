@@ -1,12 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search, Funnel } from "lucide-react";
+
+const API_BASE = "http://localhost:8080";
 
 type ProjectType = "personal" | "team";
 
-type ProjectItem = {
+type WorkspaceProject = {
+  id: string;
+  name: string;
+  language: string;
+  updatedAt: string;
+};
+
+type WorkspaceItem = {
+  id: string;
+  name: string;
+  mode: ProjectType;
+  updatedAt: string;
+  description?: string | null;
+  teamName?: string | null;
+  projects: WorkspaceProject[];
+};
+
+type ScheduleProgressResponse = {
+  workspaceId: string;
+  workspaceName: string;
+  type: string;
+  totalCount: number;
+  doneCount: number;
+  progress: number;
+};
+
+type DashboardCardItem = {
   id: string;
   title: string;
   description: string;
@@ -17,66 +45,6 @@ type ProjectItem = {
   lastModified: string;
 };
 
-const PROJECTS: ProjectItem[] = [
-  {
-    id: "p-001",
-    title: "Portfolio Website",
-    description: "개인 포트폴리오 페이지 리뉴얼 작업",
-    tech: "TypeScript",
-    type: "personal",
-    progress: 85,
-    lastModified: "1시간 전",
-  },
-  {
-    id: "p-002",
-    title: "VSIDE Dashboard",
-    description: "대시보드 정보 구조와 위젯 구성 개선",
-    tech: "Next.js",
-    type: "team",
-    progress: 36,
-    memberCount: 4,
-    lastModified: "2026.02.06",
-  },
-  {
-    id: "p-003",
-    title: "Together Project",
-    description: "협업용 프로젝트 구조 정리 및 연결",
-    tech: "Vue.js",
-    type: "team",
-    progress: 100,
-    memberCount: 5,
-    lastModified: "2026.02.05",
-  },
-  {
-    id: "p-004",
-    title: "개인 블로그 마이그레이션",
-    description: "기존 블로그에서 새 구조로 이전",
-    tech: "React",
-    type: "personal",
-    progress: 15,
-    lastModified: "2026.02.01",
-  },
-  {
-    id: "p-005",
-    title: "Admin Dashboard 리팩토링",
-    description: "관리자 화면 UI/상태 구조 정리",
-    tech: "React",
-    type: "team",
-    progress: 54,
-    memberCount: 3,
-    lastModified: "2026.02.07",
-  },
-  {
-    id: "p-006",
-    title: "캘린더 UI 개선",
-    description: "일정 보기 경험과 시각 표현 개선",
-    tech: "Next.js",
-    type: "personal",
-    progress: 72,
-    lastModified: "2026.02.08",
-  },
-];
-
 const FILTERS = [
   { key: "all", label: "전체" },
   { key: "team", label: "팀" },
@@ -85,14 +53,167 @@ const FILTERS = [
 
 type FilterType = (typeof FILTERS)[number]["key"];
 
+function getStoredUserId(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (rawUser) {
+      const parsedUser = JSON.parse(rawUser);
+      const userId = parsedUser?.id;
+
+      if (userId !== undefined && userId !== null && userId !== "") {
+        return String(userId);
+      }
+    }
+
+    const userId = localStorage.getItem("userId");
+    return userId ? String(userId) : null;
+  } catch {
+    const userId = localStorage.getItem("userId");
+    return userId ? String(userId) : null;
+  }
+}
+
+function getAuthHeaders(): HeadersInit {
+  if (typeof window === "undefined") return {};
+
+  const token =
+    localStorage.getItem("accessToken") || localStorage.getItem("token");
+
+  if (!token) return {};
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export default function DashboardProjectSelectPage() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
+  const [projects, setProjects] = useState<DashboardCardItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadDashboardProjects();
+  }, []);
+
+  async function loadDashboardProjects() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const userId = getStoredUserId();
+      if (!userId) {
+        setProjects([]);
+        setError("로그인 사용자 정보가 없습니다.");
+        return;
+      }
+
+      const workspaceRes = await fetch(
+        `${API_BASE}/api/workspaces?userId=${encodeURIComponent(userId)}`,
+        {
+          method: "GET",
+          headers: {
+            ...getAuthHeaders(),
+          },
+          cache: "no-store",
+        },
+      );
+
+      if (!workspaceRes.ok) {
+        const text = await workspaceRes.text();
+        throw new Error(text || "워크스페이스 목록 조회에 실패했습니다.");
+      }
+
+      const workspaces: WorkspaceItem[] = await workspaceRes.json();
+      const workspaceList = Array.isArray(workspaces) ? workspaces : [];
+
+      const progressResults = await Promise.all(
+        workspaceList.map(async (workspace) => {
+          try {
+            const progressRes = await fetch(
+              `${API_BASE}/api/schedules/progress?view=${encodeURIComponent(
+                workspace.mode,
+              )}&workspaceId=${encodeURIComponent(workspace.id)}`,
+              {
+                method: "GET",
+                headers: {
+                  ...getAuthHeaders(),
+                },
+                cache: "no-store",
+              },
+            );
+
+            if (!progressRes.ok) {
+              return {
+                workspaceId: workspace.id,
+                workspaceName: workspace.name,
+                type: workspace.mode,
+                totalCount: 0,
+                doneCount: 0,
+                progress: 0,
+              } satisfies ScheduleProgressResponse;
+            }
+
+            return (await progressRes.json()) as ScheduleProgressResponse;
+          } catch {
+            return {
+              workspaceId: workspace.id,
+              workspaceName: workspace.name,
+              type: workspace.mode,
+              totalCount: 0,
+              doneCount: 0,
+              progress: 0,
+            } satisfies ScheduleProgressResponse;
+          }
+        }),
+      );
+
+      const progressMap = new Map<string, ScheduleProgressResponse>();
+      progressResults.forEach((item) => {
+        progressMap.set(item.workspaceId, item);
+      });
+
+      const merged: DashboardCardItem[] = workspaceList.map((workspace) => {
+        const latestProject =
+          Array.isArray(workspace.projects) && workspace.projects.length > 0
+            ? workspace.projects[0]
+            : null;
+
+        const progressInfo = progressMap.get(workspace.id);
+
+        return {
+          id: workspace.id,
+          title: workspace.name,
+          description: workspace.description?.trim() || "설명이 없습니다.",
+          tech: latestProject?.language || "-",
+          type: workspace.mode,
+          progress: progressInfo?.progress ?? 0,
+          lastModified: workspace.updatedAt || "-",
+          memberCount: undefined,
+        };
+      });
+
+      setProjects(merged);
+    } catch (err) {
+      console.error(err);
+      setProjects([]);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "대시보드 프로젝트 목록 조회 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filteredProjects = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    return PROJECTS.filter((project) => {
+    return projects.filter((project) => {
       const matchesFilter = filter === "all" || project.type === filter;
 
       const matchesSearch =
@@ -103,7 +224,7 @@ export default function DashboardProjectSelectPage() {
 
       return matchesFilter && matchesSearch;
     });
-  }, [filter, search]);
+  }, [filter, search, projects]);
 
   return (
     <main className="min-h-screen bg-[#F8F9FA] px-6 py-10 md:px-8">
@@ -168,7 +289,15 @@ export default function DashboardProjectSelectPage() {
         </section>
 
         <section className="mt-6">
-          {filteredProjects.length === 0 ? (
+          {loading ? (
+            <div className="flex h-64 items-center justify-center rounded-3xl border border-gray-200 bg-white text-sm text-gray-400">
+              프로젝트를 불러오는 중입니다.
+            </div>
+          ) : error ? (
+            <div className="flex h-64 items-center justify-center rounded-3xl border border-red-200 bg-red-50 text-sm text-red-500">
+              {error}
+            </div>
+          ) : filteredProjects.length === 0 ? (
             <div className="flex h-64 items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-white text-sm text-gray-400">
               조건에 맞는 프로젝트가 없습니다.
             </div>
@@ -177,7 +306,7 @@ export default function DashboardProjectSelectPage() {
               {filteredProjects.map((project) => (
                 <Link
                   key={project.id}
-                  href={`/dashboard/${project.id}`}
+                  href={`/dashboard/${project.id}?mode=${project.type}`}
                   className="group rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-[#5873F9]/40 hover:shadow-md"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -236,9 +365,7 @@ export default function DashboardProjectSelectPage() {
 
                   <div className="mt-5 flex items-center justify-between">
                     <div className="text-xs text-gray-500">
-                      {project.type === "team"
-                        ? `팀원 ${project.memberCount ?? 0}명`
-                        : "개인 작업"}
+                      {project.type === "team" ? "팀 작업" : "개인 작업"}
                     </div>
 
                     <div className="inline-flex items-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-sm font-semibold text-[#5873F9]">

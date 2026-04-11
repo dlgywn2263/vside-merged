@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { format } from "date-fns";
+import { useSearchParams } from "next/navigation";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 import type {
@@ -39,8 +40,26 @@ import EventEditDialog from "./EventEditDialog";
 import { useScheduleForm } from "./hooks/useScheduleForm";
 import { useScheduleDerived } from "./hooks/useScheduleDerived";
 
+function normalizeWorkspaceId(value: string | null) {
+  if (!value) return null;
+  if (value === "undefined" || value === "null") return null;
+  return value;
+}
+
+function normalizeMode(value: string | null): Mode | null {
+  if (value === "personal" || value === "team") return value;
+  return null;
+}
+
 export default function SchedulePageClient() {
-  const [mode, setMode] = React.useState<Mode>("personal");
+  const searchParams = useSearchParams();
+
+  const requestedWorkspaceId = normalizeWorkspaceId(
+    searchParams.get("workspaceId"),
+  );
+  const requestedMode = normalizeMode(searchParams.get("view"));
+
+  const [mode, setMode] = React.useState<Mode>(requestedMode ?? "personal");
 
   const [personalWorkspaces, setPersonalWorkspaces] = React.useState<
     WorkspaceOption[]
@@ -76,6 +95,12 @@ export default function SchedulePageClient() {
     mode === "personal" ? selectedPersonalWorkspaceId : selectedTeamWorkspaceId;
 
   const form = useScheduleForm({ selectedISO });
+
+  React.useEffect(() => {
+    if (requestedMode) {
+      setMode(requestedMode);
+    }
+  }, [requestedMode]);
 
   const currentTeam: Team | undefined = React.useMemo(() => {
     if (mode !== "team" || !selectedTeamWorkspaceId) return undefined;
@@ -115,6 +140,7 @@ export default function SchedulePageClient() {
     query,
     selectedDate,
   });
+
   const loadWorkspaceOptions = React.useCallback(async () => {
     try {
       setBootLoading(true);
@@ -142,25 +168,49 @@ export default function SchedulePageClient() {
       setPersonalWorkspaces(personalOptions);
       setTeamWorkspaces(teamOptions);
 
-      setSelectedPersonalWorkspaceId((prev) => {
-        if (prev && personalOptions.some((w) => w.workspaceId === prev)) {
-          return prev;
-        }
-        return personalOptions[0]?.workspaceId ?? "";
-      });
+      const requestedPersonal =
+        requestedWorkspaceId &&
+        personalOptions.find(
+          (item) => item.workspaceId === requestedWorkspaceId,
+        );
 
-      setSelectedTeamWorkspaceId((prev) => {
-        if (prev && teamOptions.some((w) => w.workspaceId === prev)) {
-          return prev;
-        }
-        return teamOptions[0]?.workspaceId ?? "";
-      });
+      const requestedTeam =
+        requestedWorkspaceId &&
+        teamOptions.find((item) => item.workspaceId === requestedWorkspaceId);
+
+      if (requestedMode === "personal" && requestedPersonal) {
+        setMode("personal");
+        setSelectedPersonalWorkspaceId(requestedPersonal.workspaceId);
+      } else if (requestedMode === "team" && requestedTeam) {
+        setMode("team");
+        setSelectedTeamWorkspaceId(requestedTeam.workspaceId);
+      } else if (requestedPersonal) {
+        setMode("personal");
+        setSelectedPersonalWorkspaceId(requestedPersonal.workspaceId);
+      } else if (requestedTeam) {
+        setMode("team");
+        setSelectedTeamWorkspaceId(requestedTeam.workspaceId);
+      } else {
+        setSelectedPersonalWorkspaceId((prev) => {
+          if (prev && personalOptions.some((w) => w.workspaceId === prev)) {
+            return prev;
+          }
+          return personalOptions[0]?.workspaceId ?? "";
+        });
+
+        setSelectedTeamWorkspaceId((prev) => {
+          if (prev && teamOptions.some((w) => w.workspaceId === prev)) {
+            return prev;
+          }
+          return teamOptions[0]?.workspaceId ?? "";
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "워크스페이스 조회 실패");
     } finally {
       setBootLoading(false);
     }
-  }, []);
+  }, [requestedWorkspaceId, requestedMode]);
 
   const loadTeamMembers = React.useCallback(async () => {
     if (mode !== "team" || !selectedTeamWorkspaceId) {
@@ -308,6 +358,7 @@ export default function SchedulePageClient() {
       participants: mode === "team" ? form.fAssignees.trim() : "",
       description: form.fDesc.trim(),
     };
+
     const updatePayload = {
       title,
       startDate: form.fStartDateISO,
@@ -320,6 +371,7 @@ export default function SchedulePageClient() {
       participants: mode === "team" ? form.fAssignees.trim() : "",
       description: form.fDesc.trim(),
     };
+
     try {
       if (!form.editingId) {
         await apiFetchJson<ApiScheduleResponse>(
