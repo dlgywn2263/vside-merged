@@ -459,7 +459,7 @@ export function ProjectManagerList() {
             return (
               <section
                 key={w.id}
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
+                className=" rounded-2xl border border-gray-200 bg-white"
               >
                 {/* 헤더 */}
                 <div className="flex items-center justify-between gap-4 border-b border-gray-200 bg-gray-50 px-5 py-4">

@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "../types";
-import { Card, Field, cn } from "../ui";
+import { Card, cn } from "../ui";
 import { ActivityBars } from "../../activity/ActivityBars";
+import { updateMyProfile } from "../api";
 
 export default function ProfileTab({
   user,
@@ -13,74 +14,58 @@ export default function ProfileTab({
   onSaveUser: (next: User) => void;
 }) {
   const [editing, setEditing] = useState(false);
-
-  const [firstName, setFirstName] = useState(user.firstName);
-  const [lastName, setLastName] = useState(user.lastName);
-  const [username, setUsername] = useState(user.username);
-  const [location, setLocation] = useState(user.location ?? "");
-  const [website, setWebsite] = useState(user.website ?? "");
+  const [nickname, setNickname] = useState(user.nickname);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setFirstName(user.firstName);
-    setLastName(user.lastName);
-    setUsername(user.username);
-    setLocation(user.location ?? "");
-    setWebsite(user.website ?? "");
+    setNickname(user.nickname);
   }, [user]);
 
   const dirty = useMemo(() => {
-    return (
-      firstName !== user.firstName ||
-      lastName !== user.lastName ||
-      username !== user.username ||
-      location !== (user.location ?? "") ||
-      website !== (user.website ?? "")
-    );
-  }, [firstName, lastName, username, location, website, user]);
+    return nickname.trim() !== user.nickname;
+  }, [nickname, user.nickname]);
 
   const canSave = useMemo(() => {
-    if (!firstName.trim()) return false;
-    if (!lastName.trim()) return false;
-    if (!username.trim()) return false;
-    if (website.trim() && !/^https?:\/\/.+/i.test(website.trim())) return false;
-    return true;
-  }, [firstName, lastName, username, website]);
+    return !!nickname.trim();
+  }, [nickname]);
 
   const cancel = () => {
-    setFirstName(user.firstName);
-    setLastName(user.lastName);
-    setUsername(user.username);
-    setLocation(user.location ?? "");
-    setWebsite(user.website ?? "");
+    setNickname(user.nickname);
     setEditing(false);
   };
 
-  const save = () => {
-    if (!canSave) return;
+  const save = async () => {
+    if (!canSave || !dirty) return;
 
-    const next: User = {
-      ...user,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      username: username.trim(),
-      location: location.trim() || undefined,
-      website: website.trim() || undefined,
-      displayName: `${lastName.trim()}${firstName.trim()}`,
-    };
+    try {
+      setSaving(true);
 
-    onSaveUser(next);
+      const updated = await updateMyProfile({
+        nickname: nickname.trim(),
+        profileImageUrl: user.profileImageUrl ?? null,
+      });
 
-    // TODO(백엔드 연동):
-    // await fetch("/api/me/profile", { method: "PATCH", body: JSON.stringify(next) })
+      onSaveUser({
+        id: String(updated.id),
+        email: updated.email,
+        nickname: updated.nickname,
+        profileImageUrl: updated.profileImageUrl ?? null,
+        createdAt: updated.createdAt,
+      });
 
-    setEditing(false);
+      setEditing(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "프로필 수정에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="grid gap-6">
       <Card
         title="개인 정보"
-        desc="프로필 정보를 수정할 수 있습니다."
+        desc="사용자명을 수정할 수 있습니다."
         right={
           editing ? (
             <div className="flex gap-2">
@@ -88,6 +73,7 @@ export default function ProfileTab({
                 type="button"
                 className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-100"
                 onClick={cancel}
+                disabled={saving}
               >
                 취소
               </button>
@@ -95,14 +81,14 @@ export default function ProfileTab({
                 type="button"
                 className={cn(
                   "rounded-xl px-4 py-2 text-sm font-semibold",
-                  canSave && dirty
+                  canSave && dirty && !saving
                     ? "bg-gray-900 text-white hover:bg-black"
                     : "bg-gray-200 text-gray-500 cursor-not-allowed",
                 )}
                 onClick={save}
-                disabled={!(canSave && dirty)}
+                disabled={!(canSave && dirty) || saving}
               >
-                저장
+                {saving ? "저장 중..." : "저장"}
               </button>
             </div>
           ) : (
@@ -117,80 +103,36 @@ export default function ProfileTab({
         }
       >
         <div className="grid gap-4">
-          {/* 이름/성 2컬럼 */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <div className="text-sm font-semibold text-gray-700">이름</div>
-              <input
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                disabled={!editing}
-              />
-            </div>
-            <div className="grid gap-2">
-              <div className="text-sm font-semibold text-gray-700">성</div>
-              <input
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                disabled={!editing}
-              />
-            </div>
-          </div>
-
           <div className="grid gap-2">
             <div className="text-sm font-semibold text-gray-700">사용자명</div>
             <input
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={!editing}
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              disabled={!editing || saving}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <div className="text-sm font-semibold text-gray-700">이메일</div>
+            <input
+              className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+              value={user.email}
+              disabled
             />
             <div className="text-xs text-gray-500">
-              TODO: 중복 체크 API (/api/users/check-username)
+              이메일 변경은 계정 탭에서 처리합니다.
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <div className="text-sm font-semibold text-gray-700">위치</div>
-            <input
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              disabled={!editing}
-              placeholder="예: 서울, 대한민국"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <div className="text-sm font-semibold text-gray-700">웹사이트</div>
-            <input
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              disabled={!editing}
-              placeholder="https://example.com"
-            />
-            {editing &&
-            website.trim() &&
-            !/^https?:\/\/.+/i.test(website.trim()) ? (
-              <div className="text-xs text-red-600">
-                https:// 로 시작하는 주소로 입력해줘.
-              </div>
-            ) : null}
-          </div>
-
-          {/* 보기 모드 안내 */}
-          {/* {!editing ? (
-            <Field
-              label="이메일"
-              value={user.email}
-              hint="이메일 변경은 ‘계정’ 탭에서 합니다."
-            />
-          ) : null} */}
+          {user.createdAt ? (
+            <div className="text-xs text-gray-500">
+              가입일: {user.createdAt}
+            </div>
+          ) : null}
         </div>
       </Card>
+
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h2 className="text-lg font-bold text-gray-900">일자별 활동량</h2>
         <p className="mt-1 text-sm text-gray-500">선택한 기간 기준</p>
