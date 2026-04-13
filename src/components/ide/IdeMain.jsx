@@ -17,6 +17,10 @@ import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
 
+// 💡 [추가] 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
+import CreateProjectModal from "@/components/ide/CreateProjectModal";
+import WebPreview from "@/components/ide/WebPreview"; 
+
 import { fetchWorkspaceProjectsApi, fetchVirtualViewsApi } from "@/lib/ide/api";
 
 import {
@@ -201,6 +205,10 @@ export default function IdeMain() {
         <ActivityBar />
         {renderMainContent()}
       </div>
+
+      <CreateProjectModal />
+      {/* 💡 [NEW] 플로팅 웹 미리보기 창 장착 완료! */}
+      <WebPreview />
     </div>
   );
 }

@@ -23,7 +23,7 @@ export default function AgentPanel() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef(null); 
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -39,7 +39,8 @@ export default function AgentPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [agentMessages, isLoading]);
 
-  const handleSend = async (customQuery = null) => {
+  // 💡 [수정됨] isAutoImport 플래그를 추가하여 자동 임포트 특수 로직을 처리합니다.
+  const handleSend = async (customQuery = null, isAutoImport = false) => {
     const textToSend = typeof customQuery === "string" ? customQuery : input;
     if (!textToSend.trim() || isLoading) return;
 
@@ -49,11 +50,17 @@ export default function AgentPanel() {
 
     try {
       let finalQuery = textToSend;
-
       let strictRule =
         "\n\n(명령어: 답변은 마크다운 불릿(-)으로 3문장 이내로 핵심만 요약해. 코드 수정/리팩토링이면 suggestedCode 필드에 수정된 파일 전체 코드를 넣고, 단순 질문이면 빈 문자열로 둬.)";
 
-      if (selectedText && selectedText.trim() !== "") {
+      // 💡 [NEW] 자동 Import 버튼을 눌렀을 때 적용되는 강력한 프롬프트 룰
+      if (isAutoImport) {
+        finalQuery = `현재 파일의 전체 코드를 분석해서, 누락된 Java/Spring Boot 'import' 문을 찾아 최상단에 모두 추가한 완벽한 전체 코드로 다시 작성해줘. 기존 로직은 절대 건드리지 마.`;
+        strictRule = 
+          '\n\n(🚨 CRITICAL RULE: DO NOT output raw Java code directly! You MUST wrap your response strictly in the requested JSON format { "explanation": "...", "suggestedCode": "..." }. The suggestedCode MUST contain the ENTIRE file content including the new imports!)';
+      } 
+      // 일반 선택 텍스트 질문일 경우
+      else if (selectedText && selectedText.trim() !== "") {
         finalQuery = `[사용자가 현재 선택(드래그)한 타겟 코드]\n${selectedText}\n\n[사용자 요청 사항]\n${textToSend}`;
         strictRule =
           '\n\n(🚨 CRITICAL RULE: DO NOT output raw Java code directly! You MUST wrap your response strictly in the requested JSON format { "explanation": "...", "suggestedCode": "..." }. If you output raw code outside of JSON, the server will crash!)';
@@ -86,7 +93,7 @@ export default function AgentPanel() {
               originalCode: fileContents[activeFileId],
               suggestedCode: response.suggestedCode,
               targetPath: activeFileId,
-              explanation: "채팅 요청에 따른 코드 수정 제안",
+              explanation: isAutoImport ? "누락된 Import 문 추가 제안" : "채팅 요청에 따른 코드 수정 제안",
             }),
           );
         }
@@ -197,6 +204,25 @@ export default function AgentPanel() {
             </div>
           )}
 
+          {/* 💡 [NEW] 빠른 액션 버튼 영역 (자동 Import 추가) */}
+          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+            <button
+              onClick={() => handleSend("✨ 현재 파일에 누락된 Import 문 추가해줘", true)}
+              disabled={isLoading || !activeFileId}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-extrabold rounded-md transition-colors disabled:opacity-50 active:scale-95"
+              title="현재 열린 파일에 누락된 Java/Spring Import 문을 자동으로 찾아 추가합니다."
+            >
+              <VscSparkle size={12} /> 자동 Import
+            </button>
+            <button
+              onClick={() => handleSend("코드에 주석 좀 달아줘")}
+              disabled={isLoading || !activeFileId}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 text-[11px] font-bold rounded-md transition-colors disabled:opacity-50 active:scale-95"
+            >
+              주석 달기
+            </button>
+          </div>
+
           <div className="flex flex-col gap-2 bg-white border border-gray-300 rounded-lg focus-within:border-blue-500 px-3 py-2 transition-all shadow-inner">
             <textarea
               ref={inputRef}
@@ -220,7 +246,7 @@ export default function AgentPanel() {
                 disabled={isLoading || !input.trim()}
                 className={`cursor-pointer p-1.5 rounded-md transition-colors ${
                   input.trim()
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
                     : "bg-gray-100 text-gray-400"
                 }`}
                 onClick={() => handleSend()}
