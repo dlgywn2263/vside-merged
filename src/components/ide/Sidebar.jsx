@@ -9,7 +9,6 @@ import {
   VscChevronDown,
   VscChevronRight,
   VscFile,
-  VscFiles,
   VscFolder,
   VscNewFile,
   VscNewFolder,
@@ -19,6 +18,8 @@ import {
   VscSparkle,
   VscTrash,
   VscWand,
+  VscSymbolClass,
+  VscSymbolMisc,
 } from "react-icons/vsc";
 import {
   DiJava,
@@ -42,6 +43,8 @@ import {
   endCreation,
   writeToTerminal,
 } from "@/store/slices/uiSlice";
+
+// 💡 [추가] saveFileApi를 import 목록에 추가했습니다!
 import {
   createFileApi,
   fetchProjectFilesApi,
@@ -49,6 +52,7 @@ import {
   fetchFileContentApi,
   fetchWorkspaceProjectsApi,
   deactivateVirtualViewApi,
+  saveFileApi, 
 } from "@/lib/ide/api";
 
 const getFileIcon = (name) => {
@@ -80,11 +84,15 @@ const FileTreeItem = ({
   onExpandProject,
   onFileClick,
   onContextMenu,
+  pendingCreation,
+  handleInputKeyDown,
+  confirmInput,
 }) => {
   const { activeFileId, activeProject } = useSelector(
     (state) => state.fileSystem,
   );
   const [isExpanded, setIsExpanded] = useState(false);
+  const inlineInputRef = useRef(null);
 
   const currentProjectName = node.type === "project" ? node.name : projectName;
   const nodeType = (node.type || "file").toLowerCase();
@@ -92,6 +100,15 @@ const FileTreeItem = ({
   const isFolder = nodeType === "folder" || nodeType === "virtual_folder";
   const isFile =
     nodeType === "file" || (!isProject && !isFolder && !node.children);
+
+  const isCreatingHere = pendingCreation && pendingCreation.parentId === (node.realPath || node.id);
+
+  useEffect(() => {
+    if (isCreatingHere && inlineInputRef.current) {
+      inlineInputRef.current.focus();
+      if (!isExpanded && (isFolder || isProject)) setIsExpanded(true);
+    }
+  }, [isCreatingHere]);
 
   const getIcon = () => {
     if (isProject) return <VscRepo className="text-blue-600" />;
@@ -130,7 +147,7 @@ const FileTreeItem = ({
         `}
         style={{ paddingLeft: `${depth * 12 + 10}px` }}
         onClick={handleClick}
-        onContextMenu={(e) => onContextMenu(e, node)}
+        onContextMenu={(e) => onContextMenu(e, node, currentProjectName)}
       >
         <div className="flex items-center overflow-hidden group">
           <span className="mr-1.5 opacity-60 text-gray-500 shrink-0">
@@ -167,6 +184,21 @@ const FileTreeItem = ({
         )}
       </div>
 
+      {isCreatingHere && (
+        <div className="py-1 pr-4" style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}>
+          <input
+            ref={inlineInputRef}
+            className="bg-white text-gray-800 border border-blue-400 focus:border-blue-600 outline-none w-full h-7 px-2 text-xs rounded shadow-sm transition-colors"
+            onKeyDown={(e) => handleInputKeyDown(e, pendingCreation.parentId)}
+            onBlur={(e) => confirmInput(e.target.value.trim(), pendingCreation.parentId)}
+            placeholder={
+              pendingCreation.type === 'package' ? "예: domain.user.dto" :
+              pendingCreation.type === 'java' ? "클래스명 (예: UserController)" : "이름을 입력하세요..."
+            }
+          />
+        </div>
+      )}
+
       {isExpanded && Array.isArray(node.children) && (
         <div>
           {node.children
@@ -184,6 +216,9 @@ const FileTreeItem = ({
                 onExpandProject={onExpandProject}
                 onFileClick={onFileClick}
                 onContextMenu={onContextMenu}
+                pendingCreation={pendingCreation}
+                handleInputKeyDown={handleInputKeyDown}
+                confirmInput={confirmInput}
               />
             ))}
         </div>
@@ -292,7 +327,9 @@ export default function Sidebar() {
   };
 
   useEffect(() => {
-    if (pendingCreation && inputRef.current) inputRef.current.focus();
+    if (pendingCreation && pendingCreation.parentId === "root-folder" && inputRef.current) {
+      inputRef.current.focus();
+    }
   }, [pendingCreation]);
 
   const confirmInput = async (name, parentId) => {
@@ -302,33 +339,73 @@ export default function Sidebar() {
     }
 
     try {
-      let path = name;
-      if (parentId !== "root-folder" && parentId !== "") {
-        path = parentId + "/" + name;
+      let finalName = name;
+      let apiType = pendingCreation.type;
+      let skeletonCode = "";
+
+      if (apiType === "package") {
+        finalName = name.replace(/\./g, "/");
+        apiType = "folder";
+      } 
+      else if (apiType === "java") {
+        finalName = name.endsWith(".java") ? name : `${name}.java`;
+        apiType = "file";
+
+        const className = finalName.replace(".java", "");
+        let packageName = "";
+        
+        if (parentId && parentId.includes("src/main/java/")) {
+          packageName = parentId.split("src/main/java/")[1].replace(/\//g, ".");
+        } else if (parentId && parentId !== "root-folder") {
+          packageName = parentId.replace(/\//g, ".");
+        }
+
+        if (packageName) {
+          skeletonCode = `package ${packageName};\n\npublic class ${className} {\n    \n}\n`;
+        } else {
+          skeletonCode = `public class ${className} {\n    \n}\n`;
+        }
       }
 
+      let path = finalName;
+      if (parentId !== "root-folder" && parentId !== "") {
+        path = parentId + "/" + finalName;
+      }
+
+      // 1. 빈 파일 생성
       await createFileApi(
         workspaceId,
         activeProject,
         activeBranch,
         path,
-        pendingCreation.type,
+        apiType,
       );
 
-      if (parentId === "root-folder" && pendingCreation.type === "folder") {
-        dispatch(setActiveProject(name));
-        dispatch(
-          writeToTerminal(
-            `[System] 새 프로젝트 '${name}' 이(가) 시작 프로젝트로 자동 지정되었습니다.\n`,
-          ),
-        );
-        handleExpandProject(name);
+      if (parentId === "root-folder" && apiType === "folder") {
+        dispatch(setActiveProject(finalName));
+        dispatch(writeToTerminal(`[System] 새 프로젝트 '${finalName}' 이(가) 시작 프로젝트로 자동 지정되었습니다.\n`));
+        handleExpandProject(finalName);
       } else {
         handleExpandProject(activeProject);
       }
 
-      if (pendingCreation.type === "file") {
-        dispatch(openFile({ id: path, name, type: "file" }));
+      // 2. 파일 열기 및 뼈대 코드 자동 저장 처리
+      if (apiType === "file") {
+        dispatch(openFile({ id: path, name: finalName, type: "file" }));
+        
+        if (skeletonCode) {
+          // 프론트엔드 에디터 화면에 즉시 주입
+          dispatch(updateFileContent({ filePath: path, content: skeletonCode }));
+          
+          // 💡 [핵심] 백엔드에도 즉시 자동 저장 요청!
+          try {
+            await saveFileApi(workspaceId, activeProject, activeBranch, path, skeletonCode);
+            dispatch(writeToTerminal(`[System] ${finalName} 템플릿 생성 및 자동 저장 완료!\n`));
+          } catch (saveError) {
+            console.error("자동 저장 에러:", saveError);
+            dispatch(writeToTerminal(`[System] 파일은 생성되었으나 자동 저장에 실패했습니다. (직접 저장해주세요)\n`));
+          }
+        }
       }
     } catch (e) {
       alert(e.message);
@@ -342,10 +419,13 @@ export default function Sidebar() {
     if (e.key === "Escape") dispatch(endCreation());
   };
 
-  const handleContextMenu = (e, node) => {
+  const handleContextMenu = (e, node, projectName) => {
     e.preventDefault();
     e.stopPropagation();
     if (isVirtualMode) return;
+
+    const targetProj = projectName || activeProject;
+    const isJavaEnv = targetProj?.toLowerCase().includes("스프링") || targetProj?.toLowerCase().includes("java") || targetProj?.toLowerCase().includes("demo");
 
     setContextMenu({
       x: e.clientX,
@@ -354,6 +434,7 @@ export default function Sidebar() {
       path: node.id,
       type: node.type,
       isRoot: node.type === "project",
+      isJavaEnv,
     });
   };
 
@@ -511,6 +592,9 @@ export default function Sidebar() {
               onExpandProject={handleExpandProject}
               onFileClick={handleFileClick}
               onContextMenu={handleContextMenu}
+              pendingCreation={pendingCreation}
+              handleInputKeyDown={handleInputKeyDown}
+              confirmInput={confirmInput}
             />
           ))
         ) : (
@@ -521,7 +605,7 @@ export default function Sidebar() {
           </div>
         )}
 
-        {pendingCreation && (
+        {pendingCreation && pendingCreation.parentId === "root-folder" && (
           <div className="pl-6 pr-4 py-1.5 mt-1">
             <input
               ref={inputRef}
@@ -539,24 +623,40 @@ export default function Sidebar() {
 
       {contextMenu && !isVirtualMode && (
         <div
-          className="fixed bg-white border border-gray-200 shadow-[0_4px_12px_rgba(0,0,0,0.1)] rounded-md py-1.5 w-48 z-[9999]"
+          className="fixed bg-white border border-gray-200 shadow-[0_4px_12px_rgba(0,0,0,0.1)] rounded-md py-1.5 w-56 z-[9999]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
-          <div
-            className="px-4 py-1.5 hover:bg-gray-100 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 transition-colors"
-            onClick={() => handleContextMenuNew("file")}
-          >
-            <VscNewFile size={14} className="text-gray-500" /> 새 파일 (New
-            File)
-          </div>
-
-          <div
-            className="px-4 py-1.5 hover:bg-gray-100 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 transition-colors"
-            onClick={() => handleContextMenuNew("folder")}
-          >
-            <VscNewFolder size={14} className="text-gray-500" /> 새 폴더 (New
-            Folder)
-          </div>
+          {contextMenu.isJavaEnv ? (
+            <>
+              <div
+                className="px-4 py-1.5 hover:bg-gray-100 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 transition-colors"
+                onClick={() => handleContextMenuNew("java")}
+              >
+                <VscSymbolClass size={14} className="text-orange-500" /> Java 클래스 (Class)
+              </div>
+              <div
+                className="px-4 py-1.5 hover:bg-gray-100 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 transition-colors"
+                onClick={() => handleContextMenuNew("package")}
+              >
+                <VscSymbolMisc size={14} className="text-yellow-600" /> 패키지 (Package)
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className="px-4 py-1.5 hover:bg-gray-100 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 transition-colors"
+                onClick={() => handleContextMenuNew("file")}
+              >
+                <VscNewFile size={14} className="text-gray-500" /> 새 파일 (New File)
+              </div>
+              <div
+                className="px-4 py-1.5 hover:bg-gray-100 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 transition-colors"
+                onClick={() => handleContextMenuNew("folder")}
+              >
+                <VscNewFolder size={14} className="text-gray-500" /> 새 폴더 (New Folder)
+              </div>
+            </>
+          )}
 
           <div className="h-[1px] bg-gray-100 my-1 mx-2" />
 
@@ -566,8 +666,7 @@ export default function Sidebar() {
                 className="px-4 py-1.5 hover:bg-blue-50 cursor-pointer text-[13px] flex items-center gap-2 text-gray-700 font-bold transition-colors"
                 onClick={handleSetStartup}
               >
-                <VscRocket size={14} className="text-blue-600" /> 시작
-                프로젝트로 설정
+                <VscRocket size={14} className="text-blue-600" /> 시작 프로젝트로 설정
               </div>
               <div className="h-[1px] bg-gray-100 my-1 mx-2" />
             </>
