@@ -42,50 +42,65 @@ export default function DevlogScheduleReadonlyPanel({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const selectedMonthKey = format(selectedDate, "yyyy-MM");
   const selectedDateISO = format(selectedDate, "yyyy-MM-dd");
 
-  const loadSchedules = React.useCallback(async () => {
-    if (!workspaceId || !mode) {
-      setEvents([]);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const year = Number(format(selectedDate, "yyyy"));
-      const month = Number(format(selectedDate, "M"));
-
-      const [monthSchedules, daySchedules, weekSchedules] = await Promise.all([
-        fetchDevlogMonthSchedules(mode, workspaceId, year, month),
-        fetchDevlogDaySchedules(mode, workspaceId, selectedDateISO),
-        fetchDevlogWeekSchedules(mode, workspaceId, selectedDateISO),
-      ]);
-
-      const merged = dedupeEvents(
-        [...monthSchedules, ...daySchedules, ...weekSchedules].map(
-          (item: ApiScheduleResponse) => mapApiScheduleToCalendarEvent(item),
-        ),
-      );
-
-      setEvents(merged);
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "일정 데이터를 불러오는 중 오류가 발생했습니다.";
-      setError(message);
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [mode, workspaceId, selectedDate, selectedDateISO]);
-
   React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadSchedules() {
+      if (!workspaceId || !mode) {
+        setEvents([]);
+        setError(null);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const year = Number(format(selectedDate, "yyyy"));
+        const month = Number(format(selectedDate, "M"));
+
+        const [monthSchedules, daySchedules, weekSchedules] = await Promise.all(
+          [
+            fetchDevlogMonthSchedules(mode, workspaceId, year, month),
+            fetchDevlogDaySchedules(mode, workspaceId, selectedDateISO),
+            fetchDevlogWeekSchedules(mode, workspaceId, selectedDateISO),
+          ],
+        );
+
+        const merged = dedupeEvents(
+          [...monthSchedules, ...daySchedules, ...weekSchedules].map(
+            (item: ApiScheduleResponse) => mapApiScheduleToCalendarEvent(item),
+          ),
+        );
+
+        if (!cancelled) {
+          setEvents(merged);
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "일정 데이터를 불러오는 중 오류가 발생했습니다.";
+
+        if (!cancelled) {
+          setError(message);
+          setEvents([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
     loadSchedules();
-  }, [loadSchedules, selectedMonthKey, selectedDateISO]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, mode, selectedDateISO, selectedDate]);
 
   const { dayEvents, weekEvents, monthCount, todayCount } = useScheduleDerived({
     events,

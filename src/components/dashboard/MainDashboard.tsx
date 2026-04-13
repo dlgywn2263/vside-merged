@@ -200,7 +200,7 @@ export default function MainDashboard({
           )}
         </div>
 
-        <ActivityHeader />
+        <ActivityHeader workspaceId={safeWorkspaceId} mode={effectiveMode} />
 
         <section className="grid grid-cols-3 gap-4">
           <ActivityKpis />
