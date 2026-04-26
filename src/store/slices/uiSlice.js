@@ -28,6 +28,13 @@ const initialState = {
 
   agentMessages: [],
   selectedText: "",
+
+  // 💡 [NEW] 보이스챗 백그라운드 연결 상태 추가
+  isVoiceConnected: false, 
+  
+  // 💡 [NEW] 웹 미리보기 상태 추가
+  isPreviewVisible: false,
+  previewUrl: "",
 };
 
 const uiSlice = createSlice({
@@ -138,6 +145,18 @@ const uiSlice = createSlice({
     setSelectedText: (state, action) => {
       state.selectedText = action.payload;
     },
+
+    setVoiceConnected: (state, action) => {
+      state.isVoiceConnected = action.payload;
+    },
+    
+    // 💡 [NEW] 미리보기 URL 및 표시 여부 설정
+    setIsPreviewVisible: (state, action) => {
+      state.isPreviewVisible = action.payload;
+    },
+    setPreviewUrl: (state, action) => {
+      state.previewUrl = action.payload;
+    },
   },
 });
 
@@ -169,6 +188,10 @@ export const {
   addAgentMessage,
   clearAgentMessages,
   setSelectedText,
+  setVoiceConnected,
+  // 💡 [NEW] export 추가
+  setIsPreviewVisible,
+  setPreviewUrl,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

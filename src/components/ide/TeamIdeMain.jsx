@@ -18,6 +18,10 @@ import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
 
+// 💡 [추가] 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
+import CreateProjectModal from "@/components/ide/CreateProjectModal";
+import WebPreview from "@/components/ide/WebPreview"; 
+
 import {
   fetchWorkspaceProjectsApi,
   fetchChatHistoryApi,
@@ -413,6 +417,12 @@ export default function TeamIdeMain() {
         <ActivityBar />
         {renderMainContent()}
       </div>
+
+      {/* 💡 [핵심] 여기에 모달이 렌더링되면 화면 전체를 덮게 됩니다! */}
+      <CreateProjectModal />
+      
+      {/* 💡 [NEW] 팀 워크스페이스용 플로팅 웹 미리보기 창 장착 완료! */}
+      <WebPreview />
     </div>
   );
 }

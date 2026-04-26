@@ -1,7 +1,6 @@
 "use client";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 const API_BASE = `${BASE_URL}/api/workspaces`;
 const GIT_API_BASE = `${BASE_URL}/api/git`;
@@ -148,13 +147,14 @@ export const fetchWorkspaceProjectsApi = async (workspaceId) => {
   return await response.json();
 };
 
-// wizard / 기존 create project 둘 다 이걸 쓰면 됨
+// 💡 [핵심 변경 포인트 1] 프론트에서 백엔드로 templateType 파라미터를 추가 전송합니다!
 export const createProjectApi = async ({
   workspaceId,
   projectName,
   language,
   description = "",
   gitUrl = "",
+  templateType = "CONSOLE", // 기본값은 콘솔로 설정하여 하위 호환성 유지
 }) => {
   const response = await authFetch(`${API_BASE}/project`, {
     method: "POST",
@@ -164,6 +164,7 @@ export const createProjectApi = async ({
       language,
       description,
       gitUrl,
+      templateType, // 백엔드의 CreateProjectRequest DTO로 쏙 들어갑니다!
     }),
   });
 
@@ -175,13 +176,14 @@ export const createProjectApi = async ({
   return await response.text();
 };
 
-// 기존 이름 호환
+// 💡 [핵심 변경 포인트 2] 이 함수를 호출할 때도 templateType을 넘길 수 있게 열어줍니다.
 export const createProjectInWorkspaceApi = async (
   workspaceId,
   projectName,
   language,
   description = "",
   gitUrl = "",
+  templateType = "CONSOLE"
 ) => {
   return createProjectApi({
     workspaceId,
@@ -189,6 +191,7 @@ export const createProjectInWorkspaceApi = async (
     language,
     description,
     gitUrl,
+    templateType, // 방금 고친 createProjectApi로 토스!
   });
 };
 
@@ -574,7 +577,7 @@ export const createCodeMapComponentApi = async (
     method: "POST",
     body: JSON.stringify({ workspaceId, projectName, branchName, name, type }),
   });
-  if (!response.ok) throw new Error("컴포넌트 생성 실패");
+  if (!response.ok) throw new Error("컴포넌 생성 실패");
   return await response.text();
 };
 
