@@ -3,5 +3,9 @@
 import SchedulePageClient from "@/components/schedule/SchedulePageClient";
 
 export default function Page() {
-  return <SchedulePageClient />;
+  return (
+    <main className="bg-gray-50">
+      <SchedulePageClient />;
+    </main>
+  );
 }
