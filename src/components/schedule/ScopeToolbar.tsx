@@ -78,7 +78,7 @@ export default function ScopeToolbar({
             value={selectedWorkspaceId}
             onValueChange={setSelectedWorkspaceId}
           >
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-[220px] bg-white">
               <SelectValue placeholder="프로젝트 선택" />
             </SelectTrigger>
             <SelectContent>
@@ -100,14 +100,14 @@ export default function ScopeToolbar({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="검색 (제목/설명/장소)"
-          className="w-[240px]"
+          className="w-[240px] bg-white"
         />
 
         <Select
           value={category}
           onValueChange={(v) => setCategory(v as Category | "ALL")}
         >
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[160px] bg-white">
             <SelectValue placeholder="카테고리" />
           </SelectTrigger>
           <SelectContent>
