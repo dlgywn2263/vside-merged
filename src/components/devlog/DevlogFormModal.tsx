@@ -27,8 +27,8 @@ export function DevlogFormModal({
   onSubmit,
 }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <div className="mb-6 flex items-start justify-between">
           <div>
             <h3 className="text-2xl font-bold text-slate-900">
