@@ -113,15 +113,17 @@ export default function DevlogScheduleReadonlyPanel({
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-2xl border bg-white">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-[18px] font-bold">일정관리</CardTitle>
-          <p className="text-sm text-muted-foreground">
+      <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="px-7 ">
+          {/* <CardTitle className="text-[18px] font-bold text-slate-900">
+            일정관리
+          </CardTitle> */}
+          <p className="text-sm text-slate-500">
             {format(selectedDate, "yyyy.MM.dd", { locale: ko })} 일정
           </p>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="px-7 ">
           <CalendarCard
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
@@ -130,14 +132,15 @@ export default function DevlogScheduleReadonlyPanel({
             todayCount={todayCount}
             weekCount={weekEvents.length}
             events={events}
+            variant="plain"
           />
 
           {loading ? (
-            <div className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
               일정을 불러오는 중입니다.
             </div>
           ) : error ? (
-            <div className="rounded-xl border border-dashed p-5 text-center text-sm text-red-500">
+            <div className="mt-4 rounded-xl border border-dashed border-red-200 p-5 text-center text-sm text-red-500">
               {error}
             </div>
           ) : null}
