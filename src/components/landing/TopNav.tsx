@@ -129,10 +129,10 @@ export default function TopNav() {
 
   return (
     <header className="sticky top-0 z-[2000] border-b border-gray-200 bg-white/80 backdrop-blur">
-      <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between text-xl">
+      <div className="mx-auto max-w-6xl px-6 py-2 flex items-center justify-between text-xl">
         {/* 로고 */}
         <Link href="/" className="font-black tracking-tight">
-          VSIDE
+          Devw
         </Link>
 
         {/* 데스크톱 네비 */}
