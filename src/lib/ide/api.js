@@ -1,9 +1,11 @@
 "use client";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 const API_BASE = `${BASE_URL}/api/workspaces`;
 const GIT_API_BASE = `${BASE_URL}/api/git`;
+const SCHEDULE_API_BASE = `${BASE_URL}/api/schedules`;
 const AUTH_API_BASE = `${BASE_URL}/api/users`;
 const SYSTEM_API_BASE = `${BASE_URL}/api/system`;
 const CODEMAP_API_BASE = `${BASE_URL}/api/codemap`;
@@ -14,13 +16,20 @@ const getCurrentUserId = () =>
 
 const authFetch = async (url, options = {}) => {
   const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    typeof window !== "undefined"
+      ? localStorage.getItem("token") ||
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("jwt") ||
+        localStorage.getItem("authToken")
+      : null;
+
+  if (!token) {
+    throw new Error("로그인 정보가 없습니다. 다시 로그인해주세요.");
+  }
 
   const headers = new Headers(options.headers || {});
 
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  headers.set("Authorization", `Bearer ${token}`);
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
@@ -78,6 +87,20 @@ export const getUserProfileApi = async (userId) => {
 export const getMyWorkspacesApi = async (userId = getCurrentUserId()) => {
   const response = await authFetch(`${API_BASE}?userId=${userId}`);
   if (!response.ok) throw new Error("워크스페이스 목록 로드 실패");
+  return await response.json();
+};
+export const fetchScheduleProgressApi = async ({ view, workspaceId }) => {
+  const response = await authFetch(
+    `${SCHEDULE_API_BASE}/progress?view=${encodeURIComponent(
+      view,
+    )}&workspaceId=${encodeURIComponent(workspaceId)}`,
+  );
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "일정 진행률 로드 실패");
+  }
+
   return await response.json();
 };
 
@@ -146,6 +169,16 @@ export const fetchWorkspaceProjectsApi = async (workspaceId) => {
 
   return await response.json();
 };
+export const getMyWorkspacesByTokenApi = async () => {
+  const response = await authFetch(`${API_BASE}/me`);
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "내 워크스페이스 목록 로드 실패");
+  }
+
+  return await response.json();
+};
 
 // 💡 [핵심 변경 포인트 1] 프론트에서 백엔드로 templateType 파라미터를 추가 전송합니다!
 export const createProjectApi = async ({
@@ -183,7 +216,7 @@ export const createProjectInWorkspaceApi = async (
   language,
   description = "",
   gitUrl = "",
-  templateType = "CONSOLE"
+  templateType = "CONSOLE",
 ) => {
   return createProjectApi({
     workspaceId,
