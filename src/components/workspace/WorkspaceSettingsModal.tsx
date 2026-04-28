@@ -40,7 +40,7 @@ export function WorkspaceSettingsModal({
   if (!open || !workspace) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[9999]">
       {/* 오버레이 */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
