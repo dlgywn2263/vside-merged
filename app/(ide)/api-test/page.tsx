@@ -601,37 +601,85 @@ export default function ApiTesterPage() {
             </div>
           </div>
 
-          {/* Recent Tests 섹션 (하단 목록) */}
+          {/* Recent Tests 섹션 */}
           <div>
             <h2 className="text-sm font-bold text-slate-800 mb-4">
               Recent Tests
             </h2>
-            <div className="space-y-2">
-              {history.map((h) => (
-                <div
-                  key={h.id}
-                  className="flex items-center justify-between p-4 border border-slate-50 rounded-2xl bg-white shadow-sm group"
-                >
-                  <div className="flex items-center gap-4">
-                    <span
-                      className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${h.method === "GET" ? "bg-green-500 text-white" : "bg-blue-500 text-white"}`}
-                    >
-                      {h.method}
-                    </span>
-                    <span className="text-[13px] font-medium text-slate-700">
-                      {h.url.replace("https://", "")}
-                    </span>
+
+            <div className="space-y-3">
+              {history.map((h) => {
+                const displayUrl = String(h.url ?? "")
+                  .replace(/^https?:\/\//, "")
+                  .replace(/\?.*$/, "");
+
+                const methodColor =
+                  h.method === "GET"
+                    ? "bg-green-500 text-white"
+                    : h.method === "POST"
+                      ? "bg-blue-500 text-white"
+                      : h.method === "PUT"
+                        ? "bg-indigo-500 text-white"
+                        : h.method === "DELETE" || h.method === "DEL"
+                          ? "bg-red-500 text-white"
+                          : "bg-slate-500 text-white";
+
+                return (
+                  <div
+                    key={h.id}
+                    className="
+            w-full rounded-2xl border border-slate-100 bg-white p-4 shadow-sm
+            flex items-center gap-4
+            overflow-hidden
+          "
+                  >
+                    {/* 왼쪽: Method + URL */}
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <span
+                        className={`
+                shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold
+                ${methodColor}
+              `}
+                      >
+                        {h.method}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="
+                  truncate text-[13px] font-medium text-slate-700
+                "
+                          title={h.url}
+                        >
+                          {displayUrl}
+                        </p>
+
+                        <p
+                          className="
+                  mt-1 truncate text-[11px] text-slate-400
+                "
+                          title={h.url}
+                        >
+                          {h.url}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 오른쪽: 시간 + 성공 여부 */}
+                    <div className="shrink-0 flex items-center gap-3 text-xs text-slate-400">
+                      <span className="whitespace-nowrap font-medium">
+                        {h.time}
+                      </span>
+
+                      {h.success ? (
+                        <CheckCircle2 size={16} className="text-green-500" />
+                      ) : (
+                        <XCircle size={16} className="text-red-500" />
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
-                    <span className="font-medium">{h.time}</span>
-                    {h.success ? (
-                      <CheckCircle2 size={16} className="text-green-500" />
-                    ) : (
-                      <XCircle size={16} className="text-red-500" />
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
