@@ -17,6 +17,9 @@ import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
 
+// 💡 [추가] 우리가 방금 만든 개발일지 패널 임포트!
+import DevlogPanel from "@/components/ide/DevlogPanel";
+
 // 💡 [추가] 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
 import WebPreview from "@/components/ide/WebPreview"; 
@@ -33,12 +36,6 @@ import {
   setActiveBranch,
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
-
-const DocsPanel = () => (
-  <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
-    Docs Panel
-  </div>
-);
 
 const ApiTestPanel = () => (
   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
@@ -154,7 +151,8 @@ export default function IdeMain() {
   const renderMainContent = () => {
     switch (activeActivity) {
       case "docs":
-        return <DocsPanel />;
+        // 💡 [변경] 기존의 단순 글자(DocsPanel)를 지우고, 우리가 만든 DevlogPanel 렌더링!
+        return <DevlogPanel />;
       case "api-test":
         return <ApiTestPanel />;
       case "mypage":
@@ -207,7 +205,6 @@ export default function IdeMain() {
       </div>
 
       <CreateProjectModal />
-      {/* 💡 [NEW] 플로팅 웹 미리보기 창 장착 완료! */}
       <WebPreview />
     </div>
   );

@@ -18,7 +18,10 @@ import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
 
-// 💡 [추가] 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
+// 💡 [추가] 우리가 만든 개발일지 패널 임포트!
+import DevlogPanel from "@/components/ide/DevlogPanel";
+
+// 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
 import WebPreview from "@/components/ide/WebPreview"; 
 
@@ -38,11 +41,6 @@ import {
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
 
-const DocsPanel = () => (
-  <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
-    Docs Panel
-  </div>
-);
 const ApiTestPanel = () => (
   <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
     API Test Panel
@@ -296,7 +294,8 @@ export default function TeamIdeMain() {
   const renderMainContent = () => {
     switch (activeActivity) {
       case "docs":
-        return <DocsPanel />;
+        // 💡 [핵심] 기존 DocsPanel 껍데기를 버리고 방금 만든 DevlogPanel을 반환합니다!
+        return <DevlogPanel />;
       case "api-test":
         return <ApiTestPanel />;
       case "mypage":
@@ -418,10 +417,10 @@ export default function TeamIdeMain() {
         {renderMainContent()}
       </div>
 
-      {/* 💡 [핵심] 여기에 모달이 렌더링되면 화면 전체를 덮게 됩니다! */}
+      {/* 여기에 모달이 렌더링되면 화면 전체를 덮게 됩니다! */}
       <CreateProjectModal />
       
-      {/* 💡 [NEW] 팀 워크스페이스용 플로팅 웹 미리보기 창 장착 완료! */}
+      {/* 팀 워크스페이스용 플로팅 웹 미리보기 창 장착 완료! */}
       <WebPreview />
     </div>
   );

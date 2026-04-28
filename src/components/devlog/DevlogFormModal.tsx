@@ -16,6 +16,8 @@ type Props = {
   setForm: React.Dispatch<React.SetStateAction<FormValue>>;
   onClose: () => void;
   onSubmit: () => void;
+  isStageFixed?: boolean; 
+  isProjectFixed?: boolean; // 💡 [NEW] 프로젝트 선택창 고정 옵션 추가!
 };
 
 export function DevlogFormModal({
@@ -25,6 +27,8 @@ export function DevlogFormModal({
   setForm,
   onClose,
   onSubmit,
+  isStageFixed = false, 
+  isProjectFixed = false, // 💡 [NEW] 기본값 false (대시보드에서는 자유롭게 선택 가능)
 }: Props) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 p-4">
@@ -48,6 +52,28 @@ export function DevlogFormModal({
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
+          
+          <DevlogField label="프로젝트" className="md:col-span-2">
+            <select
+              value={form.projectId}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, projectId: e.target.value }))
+              }
+              // 💡 [핵심] IDE에서 열었을 때(isProjectFixed) 선택창을 강제로 잠급니다!
+              disabled={isProjectFixed || !!editingTarget} 
+              className={`h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none ${
+                isProjectFixed || editingTarget ? "bg-slate-50 cursor-not-allowed opacity-70" : "bg-white"
+              }`}
+            >
+              {projects.length === 0 && <option value="">프로젝트 없음</option>}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </DevlogField>
+
           <DevlogField label="제목" className="md:col-span-2">
             <input
               value={form.title}
@@ -62,13 +88,16 @@ export function DevlogFormModal({
           <DevlogField label="단계">
             <select
               value={form.stage}
+              disabled={isStageFixed} 
               onChange={(e) =>
                 setForm((prev) => ({
                   ...prev,
                   stage: e.target.value as StageType,
                 }))
               }
-              className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none"
+              className={`h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none ${
+                isStageFixed ? "bg-slate-50 cursor-not-allowed opacity-70" : ""
+              }`}
             >
               <option value="planning">기획</option>
               <option value="design">설계</option>
