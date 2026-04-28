@@ -14,28 +14,28 @@ export default function ProjectsTab({
   return (
     <div className="grid gap-6">
       <Card
-        title="솔루션"
-        desc="최상위는 솔루션(Solution)이고, 그 아래에 프로젝트들이 들어갑니다."
+        title="프로젝트"
+        // desc="최상위는 프로젝트(Project)이고, 그 아래에 모듈들이 들어갑니다."
         right={
           <button
             type="button"
             className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-100"
-            onClick={() => alert("TODO: 새 솔루션 생성 플로우로 이동")}
+            onClick={() => alert("TODO: 새 프로젝트 생성 플로우로 이동")}
           >
-            새 솔루션
+            새 프로젝트
           </button>
         }
       >
         <div className="grid gap-6">
           <Section
-            title="내가 만든 솔루션"
+            title="내가 만든 프로젝트"
             items={mine}
-            empty="아직 생성한 솔루션이 없습니다."
+            empty="아직 생성한 프로젝트가 없습니다."
           />
           <Section
-            title="참여 중인 솔루션"
+            title="참여 중인 프로젝트"
             items={joined}
-            empty="참여 중인 솔루션이 없습니다."
+            empty="참여 중인 프로젝트가 없습니다."
           />
         </div>
       </Card>
@@ -125,7 +125,7 @@ function SolutionRow({ s }: { s: Solution }) {
             className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-100"
             onClick={() => setOpen((v) => !v)}
           >
-            {open ? "접기" : "프로젝트 보기"}
+            {open ? "접기" : "모듈 보기"}
           </button>
 
           <button
