@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import {
+  fetchMainMonthSchedulesApi,
   fetchScheduleProgressApi,
+  fetchWorkspaceDevlogsApi,
   getMyWorkspacesByTokenApi,
 } from "@/lib/ide/api";
 
@@ -12,6 +15,7 @@ const MAX_RECENT_PROJECTS = 4;
 
 type WorkspaceMode = "team" | "personal";
 type WorkspaceRole = "owner" | "member";
+type WorkFlowType = "schedule" | "devlog";
 
 type SummaryStat = {
   id: number;
@@ -57,6 +61,53 @@ type RecentProject = {
   role: WorkspaceRole;
   progress: number;
   lastModified: string;
+};
+
+type RawSchedule = {
+  id?: number | string;
+  title?: string;
+  startDate?: string;
+  endDate?: string;
+  date?: string;
+  stage?: string | null;
+  status?: string | null;
+  category?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+type RawDevlog = {
+  id?: number | string;
+  title?: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  stage?: string | null;
+  progress?: number | null;
+  summary?: string | null;
+};
+
+type MonthDay = {
+  key: string;
+  dayName: string;
+  dayNumber: number;
+  month: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+};
+
+type WorkFlowItem = {
+  id: string;
+  type: WorkFlowType;
+  title: string;
+  dateKey: string;
+  workspaceId: string;
+  workspaceName: string;
+  workspaceMode: WorkspaceMode;
+  stage?: string | null;
+  status?: string | null;
+  href: string;
+  sortTime: number;
 };
 
 const Icons = {
@@ -179,6 +230,119 @@ const SUMMARY_STATS_BASE: SummaryStat[] = [
   },
 ];
 
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatDateKey(date: Date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}`;
+}
+
+function normalizeDateKey(value?: string | null) {
+  if (!value) return "";
+
+  const trimmed = String(value).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+
+  if (/^\d{4}\.\d{2}\.\d{2}/.test(trimmed)) {
+    return trimmed.replace(/\./g, "-").slice(0, 10);
+  }
+
+  const parsed = new Date(trimmed);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return formatDateKey(parsed);
+}
+
+function getSortTime(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    if (!value) continue;
+
+    const normalized = String(value).replace(/\./g, "-");
+    const parsed = new Date(normalized).getTime();
+
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getMonthDays(baseDate: Date): MonthDay[] {
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+
+  const firstDate = new Date(year, month, 1);
+  const lastDate = new Date(year, month + 1, 0);
+
+  const start = new Date(firstDate);
+  const firstDay = start.getDay();
+  const diffToMonday = firstDay === 0 ? -6 : 1 - firstDay;
+  start.setDate(start.getDate() + diffToMonday);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(lastDate);
+  const lastDay = end.getDay();
+  const diffToSunday = lastDay === 0 ? 0 : 7 - lastDay;
+  end.setDate(end.getDate() + diffToSunday);
+  end.setHours(0, 0, 0, 0);
+
+  const result: MonthDay[] = [];
+  const cursor = new Date(start);
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+
+  while (cursor <= end) {
+    result.push({
+      key: formatDateKey(cursor),
+      dayName: dayNames[cursor.getDay()],
+      dayNumber: cursor.getDate(),
+      month: cursor.getMonth() + 1,
+      isCurrentMonth: cursor.getMonth() === month,
+      isToday: formatDateKey(cursor) === formatDateKey(new Date()),
+    });
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return result;
+}
+
+function getDateKeysBetween(startKey: string, endKey: string) {
+  if (!startKey) return [];
+
+  const start = new Date(startKey);
+  const end = endKey ? new Date(endKey) : new Date(startKey);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return [];
+  }
+
+  const result: string[] = [];
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    result.push(formatDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return result;
+}
+
 function parseLastModified(value: string) {
   if (!value) return 0;
 
@@ -215,9 +379,169 @@ function getProjectTech(workspace: WorkspaceListResponse) {
   return latestProject?.language || workspace.mode;
 }
 
+function getIdeHref(project: RecentProject) {
+  return project.type === "team"
+    ? `/ide/team/${project.workspaceId}`
+    : `/ide/personal/${project.workspaceId}`;
+}
+
+function getScheduleTitle(schedule: RawSchedule) {
+  return schedule.title?.trim() || "제목 없는 일정";
+}
+
+function getDevlogTitle(devlog: RawDevlog) {
+  return devlog.title?.trim() || "제목 없는 개발일지";
+}
+
+function extractDevlogs(response: unknown): RawDevlog[] {
+  const data = response as any;
+
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.devlogs)) return data.devlogs;
+  if (Array.isArray(data?.posts)) return data.posts;
+  if (Array.isArray(data?.logs)) return data.logs;
+  if (Array.isArray(data?.devlogPosts)) return data.devlogPosts;
+
+  if (Array.isArray(data?.projects)) {
+    return data.projects.flatMap((project: any) => {
+      if (Array.isArray(project?.devlogs)) return project.devlogs;
+      if (Array.isArray(project?.posts)) return project.posts;
+      if (Array.isArray(project?.logs)) return project.logs;
+      return [];
+    });
+  }
+
+  return [];
+}
+
+function buildScheduleItems(
+  workspace: WorkspaceListResponse,
+  schedules: RawSchedule[],
+  dateKeys: string[],
+): WorkFlowItem[] {
+  const dateKeySet = new Set(dateKeys);
+
+  return schedules.flatMap((schedule, index) => {
+    const startKey = normalizeDateKey(schedule.startDate || schedule.date);
+    const endKey = normalizeDateKey(schedule.endDate || schedule.startDate);
+
+    const matchedDateKeys = getDateKeysBetween(startKey, endKey).filter(
+      (dateKey) => dateKeySet.has(dateKey),
+    );
+
+    return matchedDateKeys.map((dateKey) => ({
+      id: `schedule-${workspace.id}-${schedule.id ?? index}-${dateKey}`,
+      type: "schedule" as const,
+      title: getScheduleTitle(schedule),
+      dateKey,
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      workspaceMode: workspace.mode,
+      stage: schedule.stage ?? schedule.category ?? null,
+      status: schedule.status ?? null,
+      href: `/schedule?view=${workspace.mode}&workspaceId=${workspace.id}`,
+      sortTime: getSortTime(
+        schedule.updatedAt,
+        schedule.createdAt,
+        schedule.startDate,
+        schedule.date,
+        dateKey,
+      ),
+    }));
+  });
+}
+
+function buildDevlogItems(
+  workspace: WorkspaceListResponse,
+  devlogs: RawDevlog[],
+  dateKeys: string[],
+): WorkFlowItem[] {
+  const dateKeySet = new Set(dateKeys);
+
+  return devlogs
+    .map((devlog, index) => {
+      const dateKey = normalizeDateKey(
+        devlog.date || devlog.createdAt || devlog.updatedAt,
+      );
+
+      if (!dateKey || !dateKeySet.has(dateKey)) {
+        return null;
+      }
+
+      return {
+        id: `devlog-${workspace.id}-${devlog.id ?? index}`,
+        type: "devlog" as const,
+        title: getDevlogTitle(devlog),
+        dateKey,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        workspaceMode: workspace.mode,
+        stage: devlog.stage ?? null,
+        status:
+          typeof devlog.progress === "number" ? `${devlog.progress}%` : null,
+        href: `/devlog?workspaceId=${workspace.id}`,
+        sortTime: getSortTime(
+          devlog.updatedAt,
+          devlog.createdAt,
+          devlog.date,
+          dateKey,
+        ),
+      };
+    })
+    .filter(Boolean) as WorkFlowItem[];
+}
+
+async function loadMonthlyWorkFlowItems(
+  workspaces: WorkspaceListResponse[],
+): Promise<WorkFlowItem[]> {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const monthKeys = getMonthDays(today).map((day) => day.key);
+
+  const results = await Promise.allSettled(
+    workspaces.map(async (workspace) => {
+      const [scheduleResult, devlogResult] = await Promise.allSettled([
+        fetchMainMonthSchedulesApi({
+          view: workspace.mode,
+          year,
+          month,
+          workspaceId: workspace.id,
+        }),
+        fetchWorkspaceDevlogsApi(workspace.id),
+      ]);
+
+      const schedules =
+        scheduleResult.status === "fulfilled" &&
+        Array.isArray(scheduleResult.value)
+          ? (scheduleResult.value as RawSchedule[])
+          : [];
+
+      const devlogs =
+        devlogResult.status === "fulfilled"
+          ? extractDevlogs(devlogResult.value)
+          : [];
+
+      return [
+        ...buildScheduleItems(workspace, schedules, monthKeys),
+        ...buildDevlogItems(workspace, devlogs, monthKeys),
+      ];
+    }),
+  );
+
+  return results
+    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+    .sort((a, b) => b.sortTime - a.sortTime);
+}
+
 export default function MainDashboard() {
   const [workspaces, setWorkspaces] = useState<WorkspaceListResponse[]>([]);
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+  const [workFlowItems, setWorkFlowItems] = useState<WorkFlowItem[]>([]);
+  const [selectedDateKey, setSelectedDateKey] = useState(
+    formatDateKey(new Date()),
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -237,14 +561,17 @@ export default function MainDashboard() {
           ? workspaceData
           : [];
 
-        const progressResults = await Promise.allSettled(
-          safeWorkspaces.map((workspace) =>
-            fetchScheduleProgressApi({
-              view: workspace.mode,
-              workspaceId: workspace.id,
-            }),
+        const [progressResults, monthlyWorkFlowItems] = await Promise.all([
+          Promise.allSettled(
+            safeWorkspaces.map((workspace) =>
+              fetchScheduleProgressApi({
+                view: workspace.mode,
+                workspaceId: workspace.id,
+              }),
+            ),
           ),
-        );
+          loadMonthlyWorkFlowItems(safeWorkspaces),
+        ]);
 
         const nextProgressMap: Record<string, number> = {};
 
@@ -266,8 +593,15 @@ export default function MainDashboard() {
         });
 
         if (!ignore) {
+          const latestItem = monthlyWorkFlowItems[0];
+
           setWorkspaces(safeWorkspaces);
           setProgressMap(nextProgressMap);
+          setWorkFlowItems(monthlyWorkFlowItems);
+
+          if (latestItem?.dateKey) {
+            setSelectedDateKey(latestItem.dateKey);
+          }
         }
       } catch (error) {
         if (!ignore) {
@@ -437,14 +771,309 @@ export default function MainDashboard() {
             </div>
           )}
         </section>
+
+        <MonthlyWorkFlowSection
+          isLoading={isLoading}
+          items={workFlowItems}
+          selectedDateKey={selectedDateKey}
+          onSelectDate={setSelectedDateKey}
+        />
       </div>
     </main>
   );
 }
 
-function ProjectCard({ project }: { project: RecentProject }) {
+function MonthlyWorkFlowSection({
+  isLoading,
+  items,
+  selectedDateKey,
+  onSelectDate,
+}: {
+  isLoading: boolean;
+  items: WorkFlowItem[];
+  selectedDateKey: string;
+  onSelectDate: (dateKey: string) => void;
+}) {
+  const monthDays = useMemo(() => getMonthDays(new Date()), []);
+
+  const itemsByDate = useMemo(() => {
+    return monthDays.reduce<Record<string, WorkFlowItem[]>>((acc, day) => {
+      acc[day.key] = items
+        .filter((item) => item.dateKey === day.key)
+        .sort((a, b) => b.sortTime - a.sortTime);
+      return acc;
+    }, {});
+  }, [items, monthDays]);
+
+  const selectedDay = monthDays.find((day) => day.key === selectedDateKey);
+
+  const selectedItems = [...(itemsByDate[selectedDateKey] ?? [])].sort(
+    (a, b) => b.sortTime - a.sortTime,
+  );
+
+  const schedules = selectedItems
+    .filter((item) => item.type === "schedule")
+    .sort((a, b) => b.sortTime - a.sortTime);
+
+  const devlogs = selectedItems
+    .filter((item) => item.type === "devlog")
+    .sort((a, b) => b.sortTime - a.sortTime);
+
+  const visibleSchedules = schedules.slice(0, 4);
+  const visibleDevlogs = devlogs.slice(0, 3);
+
+  const hiddenCount =
+    Math.max(schedules.length - visibleSchedules.length, 0) +
+    Math.max(devlogs.length - visibleDevlogs.length, 0);
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:border-[#5873F9]/50 hover:shadow-md transition-all group flex flex-col justify-between min-h-[210px]">
+    <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">이번 달 작업 흐름</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            이번 달 전체 워크스페이스의 일정과 개발일지를 최신순으로 확인하세요.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Link
+            href="/schedule"
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:text-[#5873F9] transition-colors"
+          >
+            일정관리
+          </Link>
+
+          <Link
+            href="/devlog"
+            className="rounded-xl bg-[#5873F9] px-3 py-2 text-xs font-semibold text-white hover:bg-[#4863E8] transition-colors"
+          >
+            개발일지
+          </Link>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="h-[420px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
+          이번 달 작업 흐름을 불러오는 중입니다.
+        </div>
+      ) : (
+        <div className="grid items-start gap-4 lg:grid-cols-[1.35fr_1fr]">
+          <div>
+            <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-bold text-gray-400">
+              {["월", "화", "수", "목", "금", "토", "일"].map((dayName) => (
+                <div key={dayName}>{dayName}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {monthDays.map((day) => {
+                const dayItems = itemsByDate[day.key] ?? [];
+                const scheduleCount = dayItems.filter(
+                  (item) => item.type === "schedule",
+                ).length;
+                const devlogCount = dayItems.filter(
+                  (item) => item.type === "devlog",
+                ).length;
+                const active = selectedDateKey === day.key;
+                const hasItems = scheduleCount + devlogCount > 0;
+
+                return (
+                  <button
+                    key={day.key}
+                    type="button"
+                    onClick={() => onSelectDate(day.key)}
+                    className={`min-h-[82px] rounded-xl border p-2 text-left transition-all ${
+                      active
+                        ? "border-[#5873F9] bg-[#F7F9FF] shadow-sm"
+                        : "border-gray-200 bg-white hover:border-[#5873F9]/50 hover:bg-gray-50"
+                    } ${day.isCurrentMonth ? "" : "opacity-40"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-sm font-black ${
+                          day.isToday ? "text-[#5873F9]" : "text-gray-900"
+                        }`}
+                      >
+                        {day.dayNumber}
+                      </span>
+
+                      {day.isToday ? (
+                        <span className="rounded-full bg-[#5873F9] px-1.5 py-0.5 text-[9px] font-bold text-white">
+                          오늘
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {hasItems ? (
+                      <div className="mt-2 space-y-1">
+                        {scheduleCount > 0 ? (
+                          <div className="flex items-center justify-between rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] font-bold text-[#5873F9]">
+                            <span>일정</span>
+                            <span>{scheduleCount}</span>
+                          </div>
+                        ) : null}
+
+                        {devlogCount > 0 ? (
+                          <div className="flex items-center justify-between rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                            <span>일지</span>
+                            <span>{devlogCount}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mt-5 h-1.5 w-1.5 rounded-full bg-gray-200" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <aside className="rounded-2xl border border-gray-200 bg-[#FBFCFF] p-4">
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-[#5873F9]">
+                선택한 날짜
+              </p>
+
+              <h3 className="mt-1 text-lg font-black text-gray-900">
+                {selectedDay
+                  ? `${selectedDay.month}월 ${selectedDay.dayNumber}일 ${selectedDay.dayName}요일`
+                  : selectedDateKey}
+              </h3>
+
+              <p className="mt-1 text-xs text-gray-400">
+                일정 {schedules.length}개 · 개발일지 {devlogs.length}개
+              </p>
+            </div>
+
+            {selectedItems.length === 0 ? (
+              <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white text-sm text-gray-400">
+                이 날짜에는 표시할 작업이 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <WorkFlowList
+                  title="일정"
+                  emptyText="등록된 일정이 없습니다."
+                  items={visibleSchedules}
+                />
+
+                <WorkFlowList
+                  title="개발일지"
+                  emptyText="작성된 개발일지가 없습니다."
+                  items={visibleDevlogs}
+                />
+
+                {hiddenCount > 0 ? (
+                  <div className="rounded-xl bg-white px-3 py-2 text-center text-xs font-semibold text-gray-500">
+                    외 {hiddenCount}개 더 있음
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WorkFlowList({
+  title,
+  emptyText,
+  items,
+}: {
+  title: string;
+  emptyText: string;
+  items: WorkFlowItem[];
+}) {
+  return (
+    <div>
+      <h4 className="mb-2 text-sm font-bold text-gray-900">{title}</h4>
+
+      {items.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-3 text-xs text-gray-400">
+          {emptyText}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="block rounded-xl border border-gray-200 bg-white px-3 py-3 transition hover:border-[#5873F9]/50 hover:bg-[#F7F9FF]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-gray-900">
+                    {item.title}
+                  </p>
+
+                  <p className="mt-1 truncate text-xs text-gray-400">
+                    {item.workspaceName}
+                  </p>
+                </div>
+
+                <span
+                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                    item.type === "schedule"
+                      ? "bg-blue-50 text-blue-600"
+                      : "bg-purple-50 text-purple-600"
+                  }`}
+                >
+                  {item.type === "schedule" ? "일정" : "일지"}
+                </span>
+              </div>
+
+              {item.stage || item.status ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {item.stage ? (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                      {item.stage}
+                    </span>
+                  ) : null}
+
+                  {item.status ? (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                      {item.status}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProjectCard({ project }: { project: RecentProject }) {
+  const router = useRouter();
+  const ideHref = getIdeHref(project);
+
+  const handleCardClick = () => {
+    router.push(ideHref);
+  };
+
+  const handleButtonClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          router.push(ideHref);
+        }
+      }}
+      className="bg-white border border-gray-200 rounded-xl p-5 hover:border-[#5873F9]/50 hover:shadow-md transition-all group flex flex-col justify-between min-h-[210px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#5873F9]/30"
+    >
       <div>
         <div className="flex justify-between items-start mb-2">
           <span className="bg-gray-100 text-gray-600 text-[11px] font-medium px-2.5 py-1 rounded-md">
@@ -490,6 +1119,7 @@ function ProjectCard({ project }: { project: RecentProject }) {
         <div className="mt-4 grid grid-cols-3 gap-2">
           <Link
             href={`/devlog?workspaceId=${project.workspaceId}`}
+            onClick={handleButtonClick}
             className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9] transition-colors"
           >
             개발일지
@@ -497,6 +1127,7 @@ function ProjectCard({ project }: { project: RecentProject }) {
 
           <Link
             href={`/schedule?view=${project.type}&workspaceId=${project.workspaceId}`}
+            onClick={handleButtonClick}
             className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9] transition-colors"
           >
             일정
@@ -504,6 +1135,7 @@ function ProjectCard({ project }: { project: RecentProject }) {
 
           <Link
             href={`/dashboard/${project.workspaceId}?mode=${project.type}`}
+            onClick={handleButtonClick}
             className="inline-flex items-center justify-center rounded-lg bg-[#5873F9] px-2 py-2 text-xs font-semibold text-white hover:bg-[#4863E8] transition-colors"
           >
             대시보드
