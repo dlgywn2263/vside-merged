@@ -10,6 +10,7 @@ const AUTH_API_BASE = `${BASE_URL}/api/users`;
 const SYSTEM_API_BASE = `${BASE_URL}/api/system`;
 const CODEMAP_API_BASE = `${BASE_URL}/api/codemap`;
 const AI_API_BASE = `${BASE_URL}/api/ai`;
+const DEVLOG_API_BASE = `${BASE_URL}/api/devlogs`;
 
 const getCurrentUserId = () =>
   typeof window !== "undefined" ? localStorage.getItem("userId") : null;
@@ -89,6 +90,7 @@ export const getMyWorkspacesApi = async (userId = getCurrentUserId()) => {
   if (!response.ok) throw new Error("워크스페이스 목록 로드 실패");
   return await response.json();
 };
+
 export const fetchScheduleProgressApi = async ({ view, workspaceId }) => {
   const response = await authFetch(
     `${SCHEDULE_API_BASE}/progress?view=${encodeURIComponent(
@@ -99,6 +101,62 @@ export const fetchScheduleProgressApi = async ({ view, workspaceId }) => {
   if (!response.ok) {
     const errMsg = await response.text();
     throw new Error(errMsg || "일정 진행률 로드 실패");
+  }
+
+  return await response.json();
+};
+
+export const fetchMainWeekSchedulesApi = async ({
+  view,
+  date,
+  workspaceId,
+}) => {
+  const response = await authFetch(
+    `${SCHEDULE_API_BASE}/weekly?view=${encodeURIComponent(
+      view,
+    )}&date=${encodeURIComponent(date)}&workspaceId=${encodeURIComponent(
+      workspaceId,
+    )}`,
+  );
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "이번 주 일정 로드 실패");
+  }
+
+  return await response.json();
+};
+
+export const fetchMainMonthSchedulesApi = async ({
+  view,
+  year,
+  month,
+  workspaceId,
+}) => {
+  const response = await authFetch(
+    `${SCHEDULE_API_BASE}/calendar?view=${encodeURIComponent(
+      view,
+    )}&year=${encodeURIComponent(year)}&month=${encodeURIComponent(
+      month,
+    )}&workspaceId=${encodeURIComponent(workspaceId)}`,
+  );
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "이번 달 일정 로드 실패");
+  }
+
+  return await response.json();
+};
+
+export const fetchWorkspaceDevlogsApi = async (workspaceId) => {
+  const response = await authFetch(
+    `${DEVLOG_API_BASE}/workspaces/${encodeURIComponent(workspaceId)}`,
+  );
+
+  if (!response.ok) {
+    const errMsg = await response.text();
+    throw new Error(errMsg || "개발일지 로드 실패");
   }
 
   return await response.json();
