@@ -7,7 +7,7 @@ export default function ProjectsPage() {
   return (
     <main className="min-h-screen bg-[#F8F9FA] ">
       <div className="mx-auto max-w-6xl px-6 py-10 space-y-6">
-        <div className="flex items-center justify-between">
+        {/* <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">AIVS</h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -21,9 +21,9 @@ export default function ProjectsPage() {
             새 프로젝트 생성
             <Plus />
           </Link>
-        </div>
+        </div> */}
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6">
+        <section className="rounded-2xl  p-6">
           <ProjectManagerList />
         </section>
       </div>
