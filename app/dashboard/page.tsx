@@ -318,8 +318,8 @@ export default function DashboardProjectSelectPage() {
                         <span
                           className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                             project.type === "team"
-                              ? "bg-blue-50 text-blue-600"
-                              : "bg-purple-50 text-purple-600"
+                              ? "bg-blue-50 text-green-600"
+                              : "bg-purple-50 text-blue-600"
                           }`}
                         >
                           {project.type === "team"
