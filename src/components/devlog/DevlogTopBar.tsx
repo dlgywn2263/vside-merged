@@ -78,7 +78,7 @@ export function DevlogTopBar({
 
         <button
           onClick={onCreate}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
           <Plus size={16} />새 개발일지
         </button>
