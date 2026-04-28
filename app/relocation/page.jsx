@@ -635,7 +635,7 @@ export default function ResourceRelocationPage() {
   };
 
   return (
-    <div className="w-screen h-screen bg-[#f3f4f6] flex flex-col font-sans overflow-hidden relative">
+    <div className="w-screen min-h-screen bg-[#f3f4f6] flex flex-col font-sans overflow-hidden relative">
       <MenuBar />
 
       {isGenerating && (
