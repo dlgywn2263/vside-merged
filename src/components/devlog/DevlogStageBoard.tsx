@@ -110,10 +110,6 @@ export function DevlogStageBoard({
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
-                      {/* <div className="text-[11px] text-slate-400">
-                        진행률 {log.progress ?? 0}%
-                      </div> */}
-
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => onEdit(log)}
