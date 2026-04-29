@@ -16,6 +16,7 @@ import ApiTesterPage from "@/components/api-test/ApiTesterPage";
 import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
+// import MyPageShell from "@/components/MyPageShell";
 
 // 💡 [추가] 우리가 방금 만든 개발일지 패널 임포트!
 import DevlogPanel from "@/components/ide/DevlogPanel";
@@ -36,6 +37,7 @@ import {
   setActiveBranch,
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
+import MyPageShell from "../mypage/MyPageShell";
 
 // const ApiTestPanel = () => (
 //   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
@@ -43,11 +45,11 @@ import {
 //   </div>
 // );
 
-const MyPagePanel = () => (
-  <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
-    My Page Panel
-  </div>
-);
+// const MyPagePanel = () => (
+//   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
+//     My Page Panel
+//   </div>
+// );
 
 export default function IdeMain() {
   const params = useParams();
@@ -156,7 +158,11 @@ export default function IdeMain() {
       case "api-test":
         return <ApiTesterPage />;
       case "mypage":
-        return <MyPagePanel />;
+        return (
+          <div className="flex-1 min-w-0 h-full overflow-y-auto bg-white">
+            <MyPageShell />
+          </div>
+        );
       case "git":
         return <GitDashboard />;
       case "editor":
