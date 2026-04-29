@@ -26,24 +26,27 @@ export const useWebRTC = (workspaceId, myUserId) => {
     const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_BASE_URL || 'ws://localhost:8080';
 
     useEffect(() => {
-        console.log("🎤 [WebRTC] 훅 트리거됨. workspaceId:", workspaceId, "myUserId:", myUserId);
-        
-        // ID가 완전히 비어있을 때만 막습니다.
-        if (!workspaceId || myUserId === null || myUserId === undefined) {
-            return;
-        }
+        if (!workspaceId || myUserId === null || myUserId === undefined) return;
         
         let isCancelled = false; 
 
         const initWebRTC = async () => {
             try {
-                // 💡 여기서 브라우저가 사용자에게 "마이크 권한 허용" 팝업을 띄웁니다!
+                // 💡 [핵심 해결] 브라우저가 소리를 뚝뚝 끊어먹지 못하게 모든 AI 필터를 강제로 끕니다! (원음 전송)
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
+                    audio: { 
+                        echoCancellation: false,   // ❌ 하울링 방지 끄기 (긴 소리, 음악 잘림 방지)
+                        noiseSuppression: false,   // ❌ 노이즈 캔슬링 끄기
+                        autoGainControl: false,    // ❌ 자동 볼륨 조절 끄기
+                        // Chrome 전용 강력 필터들도 모조리 해제
+                        googEchoCancellation: false,
+                        googAutoGainControl: false,
+                        googNoiseSuppression: false,
+                        googHighpassFilter: false
+                    }, 
                     video: false 
                 });
                 
-                console.log("✅ [WebRTC] 마이크 권한 획득 성공!");
                 if (isCancelled) {
                     stream.getTracks().forEach(track => track.stop());
                     return;
@@ -69,7 +72,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
                         setTimeout(() => {
                             if (!isCancelled) {
                                 client.publish({
-                                    destination: `/app/webrtc/${workspaceId}`,
+                                    destination: `/topic/workspace/${workspaceId}/webrtc`,
                                     body: JSON.stringify({ type: 'JOIN', senderId: myUserId, workspaceId })
                                 });
                             }
@@ -80,8 +83,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
                 client.activate();
                 stompClientRef.current = client;
             } catch (error) {
-                console.error("❌ [WebRTC] 마이크 접근 실패:", error);
-                alert("음성 채팅을 사용하려면 브라우저 주소창 왼쪽의 자물쇠 아이콘을 눌러 마이크 권한을 '허용'해주세요!");
+                console.error("❌ 마이크 접근 실패:", error);
             }
         };
 
@@ -186,7 +188,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
         const sendSignalingMessage = (type, receiverId, data) => {
             if (stompClientRef.current?.connected) {
                 stompClientRef.current.publish({
-                    destination: `/app/webrtc/${workspaceId}`,
+                    destination: `/topic/workspace/${workspaceId}/webrtc`,
                     body: JSON.stringify({ type, senderId: myUserId, receiverId, workspaceId, data })
                 });
             }
@@ -200,59 +202,67 @@ export const useWebRTC = (workspaceId, myUserId) => {
         };
     }, [workspaceId, myUserId]);
 
-    // 💡 [핵심 수정] 목소리 감지 민감도를 대폭 올렸습니다! (숨소리에도 반응할 정도로 세팅)
     const monitorLocalAudio = (stream) => {
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(console.error);
-            }
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
 
             const analyser = audioCtx.createAnalyser();
             const source = audioCtx.createMediaStreamSource(stream);
             source.connect(analyser);
             
-            analyser.fftSize = 512;
-            analyser.smoothingTimeConstant = 0.1; // 즉각적으로 반응
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.5;
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            let lastSpeakingTime = 0; 
+
+            const updateSpeakingState = (isSpeaking) => {
+                if (localSpeakingRef.current === isSpeaking) return;
+                localSpeakingRef.current = isSpeaking;
+
+                setSpeakingUsers(prev => {
+                    const next = new Set(prev);
+                    if (isSpeaking) next.add(String(myUserId));
+                    else next.delete(String(myUserId));
+                    return next;
+                });
+
+                if (stompClientRef.current?.connected) {
+                    stompClientRef.current.publish({
+                        destination: `/topic/workspace/${workspaceId}/webrtc`,
+                        body: JSON.stringify({ type: 'SPEAKING', senderId: myUserId, workspaceId, data: isSpeaking })
+                    });
+                }
+            };
 
             const checkVolume = () => {
                 if (audioCtx.state === 'closed') return;
-                if (audioCtx.state === 'suspended') audioCtx.resume();
+                if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
                 
                 analyser.getByteFrequencyData(dataArray);
                 
-                // 💡 최대 볼륨 피크를 찾습니다 (0~255)
-                const maxVolume = Math.max(...dataArray);
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                const averageVolume = sum / dataArray.length;
                 
-                // 민감도: 볼륨이 10만 넘어도 말하는 것으로 간주! (보통 평상시 백색소음은 0~5 사이입니다)
-                const isSpeakingNow = maxVolume > 10;
-
+                const isSpeakingNow = averageVolume > 5;
                 const currentlyMuted = localStreamRef.current?.getAudioTracks()[0]?.enabled === false;
-                const finalSpeakingState = isSpeakingNow && !currentlyMuted;
 
-                if (finalSpeakingState !== localSpeakingRef.current) {
-                    localSpeakingRef.current = finalSpeakingState;
-                    
-                    setSpeakingUsers(prev => {
-                        const currentList = Array.from(prev);
-                        if (finalSpeakingState) {
-                            if (!currentList.includes(String(myUserId))) currentList.push(String(myUserId));
-                        } else {
-                            const index = currentList.indexOf(String(myUserId));
-                            if (index > -1) currentList.splice(index, 1);
-                        }
-                        return new Set(currentList);
-                    });
-                    
-                    if (stompClientRef.current?.connected) {
-                        stompClientRef.current.publish({
-                            destination: `/app/webrtc/${workspaceId}`,
-                            body: JSON.stringify({ type: 'SPEAKING', senderId: myUserId, workspaceId, data: finalSpeakingState })
-                        });
+                if (currentlyMuted) {
+                    updateSpeakingState(false);
+                } else if (isSpeakingNow) {
+                    lastSpeakingTime = Date.now(); 
+                    updateSpeakingState(true);
+                } else {
+                    if (Date.now() - lastSpeakingTime > 1000) {
+                        updateSpeakingState(false);
                     }
                 }
-                requestAnimationFrame(checkVolume);
+                
+                setTimeout(checkVolume, 150); 
             };
             checkVolume();
         } catch (e) {
@@ -266,11 +276,12 @@ export const useWebRTC = (workspaceId, myUserId) => {
             if (audioTrack) {
                 audioTrack.enabled = !audioTrack.enabled;
                 setIsMuted(!audioTrack.enabled);
+                
                 if (!audioTrack.enabled) {
                     setSpeakingUsers(prev => { const n = new Set(prev); n.delete(String(myUserId)); return n; });
                     if (stompClientRef.current?.connected) {
                         stompClientRef.current.publish({
-                            destination: `/app/webrtc/${workspaceId}`,
+                            destination: `/topic/workspace/${workspaceId}/webrtc`,
                             body: JSON.stringify({ type: 'SPEAKING', senderId: myUserId, workspaceId, data: false })
                         });
                     }
@@ -295,7 +306,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
     const leaveRoom = useCallback(() => {
         if (stompClientRef.current?.connected) {
             stompClientRef.current.publish({
-                destination: `/app/webrtc/${workspaceId}`,
+                destination: `/topic/workspace/${workspaceId}/webrtc`,
                 body: JSON.stringify({ type: 'LEAVE', senderId: myUserId, workspaceId })
             });
         }

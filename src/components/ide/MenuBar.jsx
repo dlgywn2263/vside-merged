@@ -57,8 +57,7 @@ import {
 } from "@/lib/ide/api";
 import { useAuth } from "@/lib/ide/AuthContext";
 
-import VoiceChatManager from "./VoiceChatManager";
-import { useWebRTC } from "@/hooks/useWebRTC";
+import { useWebRTC } from "@/hooks/useWebRTC"; 
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
@@ -68,55 +67,52 @@ const getLanguageFromPath = (path) => {
   if (!path) return "UNKNOWN";
   const ext = path.split(".").pop().toLowerCase();
   switch (ext) {
-    case "java":
-      return "JAVA";
-    case "py":
-      return "PYTHON";
-    case "cpp":
-    case "cc":
-    case "cxx":
-      return "CPP";
-    case "c":
-      return "C";
-    case "cs":
-      return "CSHARP";
-    case "js":
-      return "JAVASCRIPT";
-    case "ts":
-      return "TYPESCRIPT";
-    case "html":
-    case "css":
-      return "HTML";
-    default:
-      return "UNKNOWN";
+    case "java": return "JAVA";
+    case "py": return "PYTHON";
+    case "cpp": case "cc": case "cxx": return "CPP";
+    case "c": return "C";
+    case "cs": return "CSHARP";
+    case "js": return "JAVASCRIPT";
+    case "ts": return "TYPESCRIPT";
+    case "html": case "css": return "HTML";
+    default: return "UNKNOWN";
   }
 };
 
 const avatarColors = [
-  "bg-blue-500",
-  "bg-green-500",
-  "bg-purple-500",
-  "bg-orange-500",
-  "bg-teal-500",
+  "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500", "bg-teal-500",
 ];
 
-// 💡 [핵심 수정 완료] VoiceChatRoom 컴포넌트
+const PeerAudio = React.memo(({ stream }) => {
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (audioEl && stream && audioEl.srcObject !== stream) {
+      audioEl.srcObject = stream;
+      audioEl.volume = 1.0;
+      audioEl.play().catch(e => console.warn("오디오 자동재생 차단됨:", e));
+    }
+  }, [stream]);
+
+  return <audio ref={audioRef} autoPlay playsInline style={{ display: "none" }} />;
+});
+PeerAudio.displayName = "PeerAudio";
+
 const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
   const dispatch = useDispatch();
   const { workspaceId } = useSelector((state) => state.fileSystem);
   const { isVoiceConnected } = useSelector((state) => state.ui);
 
-  // 💡 [안전장치] myUserId가 undefined로 넘어오면 절대 안 뻗게 임시 ID를 강제로 발급합니다!
   const [safeUserId] = useState(() => {
     if (myUserId) return myUserId;
     if (typeof window !== "undefined") {
       const stored = JSON.parse(localStorage.getItem("user") || "{}");
       if (stored?.id) return stored.id;
     }
-    return Math.floor(Math.random() * 1000000); // 로딩 전 찰나의 순간을 위한 임시 난수 ID
+    return Math.floor(Math.random() * 1000000); 
   });
   
-  // 이제 WebRTC 엔진에 무조건 유효한 ID가 들어갑니다!
   const { peers, speakingUsers, isMuted, toggleMute } = useWebRTC(
     isVoiceConnected ? workspaceId : null,
     isVoiceConnected ? safeUserId : null
@@ -150,6 +146,10 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
             {isVoiceConnected ? "음성 서버 연결됨" : "연결이 끊겨있습니다"}
           </span>
         </div>
+        {/* 💡 닫기(숨기기) 버튼 추가 */}
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors" title="창 숨기기">
+          <VscClose size={20} />
+        </button>
       </div>
       
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-4 content-start">
@@ -171,13 +171,15 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
         </div>
 
         {isVoiceConnected &&
-          Object.keys(peers).map((peerId) => {
+          Object.entries(peers).map(([peerId, stream]) => {
             const member = teamMembers.find((m) => String(m.userId) === String(peerId));
             const nickname = member ? member.nickname : `팀원${peerId}`;
             const isSpeaking = speakingUsers.has(String(peerId));
 
             return (
               <div key={peerId} className="flex flex-col items-center gap-2 animate-fade-in">
+                <PeerAudio stream={stream} />
+
                 <div className={`w-16 h-16 bg-gray-500 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200
                   ${isSpeaking ? "ring-4 ring-green-400 ring-offset-2 ring-offset-[#2B2D31]" : ""}
                 `}>
@@ -613,7 +615,7 @@ export default function MenuBar({ mode = "personal" }) {
     switch (itemName) {
       case "새 파일":
         if (!isTerminalVisible) dispatch(toggleTerminal());
-        dispatch(writeToTerminal("[System] 새 파일을 생성합니다.\n"));
+        dispatch(writeToTerminal("[System] 새 파일 생성 준비 중입니다.\n"));
         break;
       case "파일 열기...":
       case "폴더 열기...":
@@ -947,8 +949,6 @@ export default function MenuBar({ mode = "personal" }) {
 
   return (
     <>
-      <VoiceChatManager />
-
       <div>
         {!isRelocationPage && (
           <div
@@ -1564,24 +1564,27 @@ export default function MenuBar({ mode = "personal" }) {
         </div>
       )}
 
-      {isVoiceChatModalOpen && mode === "team" && (
+      {/* 💡 [핵심 해결 2] 모달창을 숨기기만 하고 삭제(Unmount)하지 않도록 수정했습니다! */}
+      <div
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center transition-all duration-300 ${
+          isVoiceChatModalOpen && mode === "team" ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+        }`}
+        onClick={() => setIsVoiceChatModalOpen(false)}
+      >
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center animate-fade-in"
-          onClick={() => setIsVoiceChatModalOpen(false)}
+          className={`bg-[#2B2D31] rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] w-[600px] overflow-hidden flex flex-col transition-transform duration-300 ${
+            isVoiceChatModalOpen ? "scale-100" : "scale-95"
+          }`}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="bg-[#2B2D31] rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] w-[600px] overflow-hidden flex flex-col animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VoiceChatRoom
-              workspaceId={workspaceId}
-              myUserId={user?.id}
-              teamMembers={teamMembers}
-              onClose={() => setIsVoiceChatModalOpen(false)}
-            />
-          </div>
+          {/* 모달이 숨겨져도 컴포넌트가 살아있어서 통화와 음소거 상태가 유지됩니다! */}
+          <VoiceChatRoom
+            myUserId={user?.id}
+            teamMembers={teamMembers}
+            onClose={() => setIsVoiceChatModalOpen(false)}
+          />
         </div>
-      )}
+      </div>
     </>
   );
 }
