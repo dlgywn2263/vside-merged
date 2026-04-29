@@ -1,4 +1,3 @@
-// src/hooks/useWebRTC.js
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -18,22 +17,33 @@ export const useWebRTC = (workspaceId, myUserId) => {
     const iceQueueRef = useRef({}); 
 
     const rtcConfig = {
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
     };
 
     const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_BASE_URL || 'ws://localhost:8080';
 
     useEffect(() => {
-        if (!workspaceId || !myUserId) return;
+        console.log("🎤 [WebRTC] 훅 트리거됨. workspaceId:", workspaceId, "myUserId:", myUserId);
+        
+        // ID가 완전히 비어있을 때만 막습니다.
+        if (!workspaceId || myUserId === null || myUserId === undefined) {
+            return;
+        }
+        
         let isCancelled = false; 
 
         const initWebRTC = async () => {
             try {
+                // 💡 여기서 브라우저가 사용자에게 "마이크 권한 허용" 팝업을 띄웁니다!
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
                     video: false 
                 });
                 
+                console.log("✅ [WebRTC] 마이크 권한 획득 성공!");
                 if (isCancelled) {
                     stream.getTracks().forEach(track => track.stop());
                     return;
@@ -51,6 +61,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
                             return;
                         }
                         setIsConnected(true);
+                        
                         client.subscribe(`/topic/workspace/${workspaceId}/webrtc`, (message) => {
                             handleSignalingMessage(JSON.parse(message.body));
                         });
@@ -69,13 +80,13 @@ export const useWebRTC = (workspaceId, myUserId) => {
                 client.activate();
                 stompClientRef.current = client;
             } catch (error) {
-                console.error("❌ 마이크 접근 실패:", error);
+                console.error("❌ [WebRTC] 마이크 접근 실패:", error);
+                alert("음성 채팅을 사용하려면 브라우저 주소창 왼쪽의 자물쇠 아이콘을 눌러 마이크 권한을 '허용'해주세요!");
             }
         };
 
         const flushIceQueue = async (userId, pc) => {
             if (iceQueueRef.current[userId] && iceQueueRef.current[userId].length > 0) {
-                console.log(`⏳ [WebRTC] 유저${userId}의 밀린 ICE 데이터 ${iceQueueRef.current[userId].length}개 처리 시작!`);
                 for (const iceData of iceQueueRef.current[userId]) {
                     await pc.addIceCandidate(new RTCIceCandidate(iceData)).catch(e => console.error("ICE 추가 실패:", e));
                 }
@@ -164,16 +175,11 @@ export const useWebRTC = (workspaceId, myUserId) => {
             }
 
             pc.ontrack = (event) => {
-                console.log(`🎵 유저${remoteUserId}의 오디오 수신 성공!`);
                 setPeers(prev => ({ ...prev, [remoteUserId]: event.streams[0] }));
             };
 
             pc.onicecandidate = (event) => {
                 if (event.candidate) sendSignalingMessage('ICE', remoteUserId, event.candidate);
-            };
-
-            pc.onconnectionstatechange = () => {
-                console.log(`🔌 유저${remoteUserId} 와의 P2P 연결 상태:`, pc.connectionState);
             };
         };
 
@@ -192,55 +198,45 @@ export const useWebRTC = (workspaceId, myUserId) => {
             isCancelled = true;
             leaveRoom();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workspaceId, myUserId]);
 
+    // 💡 [핵심 수정] 목소리 감지 민감도를 대폭 올렸습니다! (숨소리에도 반응할 정도로 세팅)
     const monitorLocalAudio = (stream) => {
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(console.error);
+            }
+
             const analyser = audioCtx.createAnalyser();
             const source = audioCtx.createMediaStreamSource(stream);
             source.connect(analyser);
             
-            analyser.fftSize = 256;
-            analyser.smoothingTimeConstant = 0.4;
-
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.1; // 즉각적으로 반응
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            const unlockAudio = () => {
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume().catch(()=>{});
-                }
-                window.removeEventListener('click', unlockAudio, { capture: true });
-                window.removeEventListener('keydown', unlockAudio, { capture: true });
-            };
-            window.addEventListener('click', unlockAudio, { capture: true });
-            window.addEventListener('keydown', unlockAudio, { capture: true });
 
             const checkVolume = () => {
                 if (audioCtx.state === 'closed') return;
-                if (audioCtx.state === 'suspended') {
-                    requestAnimationFrame(checkVolume);
-                    return;
-                }
+                if (audioCtx.state === 'suspended') audioCtx.resume();
                 
-                analyser.getByteTimeDomainData(dataArray);
-                let sumSquares = 0;
-                for (let i = 0; i < dataArray.length; i++) {
-                    let norm = (dataArray[i] / 128.0) - 1.0;
-                    sumSquares += norm * norm;
-                }
-                let rms = Math.sqrt(sumSquares / dataArray.length);
-                let volume = rms * 100; 
+                analyser.getByteFrequencyData(dataArray);
+                
+                // 💡 최대 볼륨 피크를 찾습니다 (0~255)
+                const maxVolume = Math.max(...dataArray);
+                
+                // 민감도: 볼륨이 10만 넘어도 말하는 것으로 간주! (보통 평상시 백색소음은 0~5 사이입니다)
+                const isSpeakingNow = maxVolume > 10;
 
-                let isSpeakingNow = volume > 0.5;
+                const currentlyMuted = localStreamRef.current?.getAudioTracks()[0]?.enabled === false;
+                const finalSpeakingState = isSpeakingNow && !currentlyMuted;
 
-                if (isSpeakingNow !== localSpeakingRef.current) {
-                    localSpeakingRef.current = isSpeakingNow;
+                if (finalSpeakingState !== localSpeakingRef.current) {
+                    localSpeakingRef.current = finalSpeakingState;
                     
                     setSpeakingUsers(prev => {
                         const currentList = Array.from(prev);
-                        if (isSpeakingNow) {
+                        if (finalSpeakingState) {
                             if (!currentList.includes(String(myUserId))) currentList.push(String(myUserId));
                         } else {
                             const index = currentList.indexOf(String(myUserId));
@@ -252,7 +248,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
                     if (stompClientRef.current?.connected) {
                         stompClientRef.current.publish({
                             destination: `/app/webrtc/${workspaceId}`,
-                            body: JSON.stringify({ type: 'SPEAKING', senderId: myUserId, workspaceId, data: isSpeakingNow })
+                            body: JSON.stringify({ type: 'SPEAKING', senderId: myUserId, workspaceId, data: finalSpeakingState })
                         });
                     }
                 }

@@ -20,7 +20,6 @@ import {
   toggleSidebar,
   setCodeMapMode,
   setVoiceConnected,
-  // 💡 [NEW] 서버 실행 상태 관리를 위한 임포트
   setRunning,
 } from "@/store/slices/uiSlice";
 import { DebugSocket } from "@/lib/ide/debugSocket";
@@ -38,12 +37,10 @@ import {
   VscTrash,
   VscLock,
   VscRocket,
-  VscSparkle,
   VscBeaker,
   VscMute,
   VscMicFilled,
   VscCallOutgoing,
-  // 💡 [NEW] 실행, 중지 아이콘 추가
   VscPlay,
   VscDebugStop,
 } from "react-icons/vsc";
@@ -61,6 +58,7 @@ import {
 import { useAuth } from "@/lib/ide/AuthContext";
 
 import VoiceChatManager from "./VoiceChatManager";
+import { useWebRTC } from "@/hooks/useWebRTC";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
@@ -86,7 +84,6 @@ const getLanguageFromPath = (path) => {
       return "JAVASCRIPT";
     case "ts":
       return "TYPESCRIPT";
-    // 💡 [버그 해결] html과 css 확장자를 HTML 타입으로 매핑합니다!
     case "html":
     case "css":
       return "HTML";
@@ -103,42 +100,66 @@ const avatarColors = [
   "bg-teal-500",
 ];
 
+// 💡 [핵심 수정 완료] VoiceChatRoom 컴포넌트
 const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
   const dispatch = useDispatch();
+  const { workspaceId } = useSelector((state) => state.fileSystem);
   const { isVoiceConnected } = useSelector((state) => state.ui);
-  const [isMutedLocal, setIsMutedLocal] = useState(false);
 
-  const handleConnectToggle = () =>
-    dispatch(setVoiceConnected(!isVoiceConnected));
-  const myMember = teamMembers.find(
-    (m) => String(m.userId) === String(myUserId),
+  // 💡 [안전장치] myUserId가 undefined로 넘어오면 절대 안 뻗게 임시 ID를 강제로 발급합니다!
+  const [safeUserId] = useState(() => {
+    if (myUserId) return myUserId;
+    if (typeof window !== "undefined") {
+      const stored = JSON.parse(localStorage.getItem("user") || "{}");
+      if (stored?.id) return stored.id;
+    }
+    return Math.floor(Math.random() * 1000000); // 로딩 전 찰나의 순간을 위한 임시 난수 ID
+  });
+  
+  // 이제 WebRTC 엔진에 무조건 유효한 ID가 들어갑니다!
+  const { peers, speakingUsers, isMuted, toggleMute } = useWebRTC(
+    isVoiceConnected ? workspaceId : null,
+    isVoiceConnected ? safeUserId : null
   );
-  const myNickname = myMember ? myMember.nickname : "나";
+
+  const handleConnectToggle = () => dispatch(setVoiceConnected(!isVoiceConnected));
+  
+  const myMember = teamMembers.find((m) => String(m.userId) === String(safeUserId));
+  let myNickname = "나";
+  if (myMember?.nickname) {
+    myNickname = myMember.nickname;
+  } else {
+    try {
+      const stored = JSON.parse(localStorage.getItem("user") || "{}");
+      if (stored?.nickname) myNickname = stored.nickname;
+      else if (stored?.email) myNickname = stored.email.split("@")[0];
+    } catch(e) {}
+  }
+
+  const amISpeaking = speakingUsers.has(String(safeUserId));
 
   return (
     <div className="flex flex-col h-[480px]">
       <div className="px-6 py-4 flex justify-between items-center border-b border-[#1E1F22]/50 bg-[#2B2D31]">
         <div className="flex items-center gap-2">
           <div className="flex relative w-3 h-3">
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-50 ${isVoiceConnected ? "bg-emerald-400" : "bg-gray-500"}`}
-            ></span>
-            <span
-              className={`relative inline-flex rounded-full h-3 w-3 ${isVoiceConnected ? "bg-emerald-500" : "bg-gray-500"}`}
-            ></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-50 ${isVoiceConnected ? "bg-emerald-400" : "bg-gray-500"}`}></span>
+            <span className={`relative inline-flex rounded-full h-3 w-3 ${isVoiceConnected ? "bg-emerald-500" : "bg-gray-500"}`}></span>
           </div>
           <span className="text-xs font-bold text-gray-200">
             {isVoiceConnected ? "음성 서버 연결됨" : "연결이 끊겨있습니다"}
           </span>
         </div>
       </div>
+      
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-4 content-start">
         <div className="flex flex-col items-center gap-2">
-          <div
-            className={`relative w-16 h-16 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200 ${isMutedLocal || !isVoiceConnected ? "bg-gray-600 opacity-60" : "bg-indigo-500"}`}
-          >
+          <div className={`relative w-16 h-16 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200 
+            ${isMuted || !isVoiceConnected ? "bg-gray-600 opacity-60" : "bg-indigo-500"}
+            ${amISpeaking ? "ring-4 ring-green-400 ring-offset-2 ring-offset-[#2B2D31]" : ""}
+          `}>
             {myNickname[0]}
-            {(isMutedLocal || !isVoiceConnected) && (
+            {(isMuted || !isVoiceConnected) && (
               <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-1 border-2 border-[#2B2D31]">
                 <VscMute size={12} className="text-white" />
               </div>
@@ -148,41 +169,42 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
             {myNickname} (나)
           </span>
         </div>
+
         {isVoiceConnected &&
-          teamMembers
-            .filter((m) => String(m.userId) !== String(myUserId))
-            .map((member) => (
-              <div
-                key={member.userId}
-                className="flex flex-col items-center gap-2 animate-fade-in"
-              >
-                <div className="w-16 h-16 bg-gray-500 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200">
-                  {member.nickname[0]}
+          Object.keys(peers).map((peerId) => {
+            const member = teamMembers.find((m) => String(m.userId) === String(peerId));
+            const nickname = member ? member.nickname : `팀원${peerId}`;
+            const isSpeaking = speakingUsers.has(String(peerId));
+
+            return (
+              <div key={peerId} className="flex flex-col items-center gap-2 animate-fade-in">
+                <div className={`w-16 h-16 bg-gray-500 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200
+                  ${isSpeaking ? "ring-4 ring-green-400 ring-offset-2 ring-offset-[#2B2D31]" : ""}
+                `}>
+                  {nickname[0]}
                 </div>
                 <span className="text-[12px] font-bold text-gray-300 bg-[#1E1F22] px-2 py-0.5 rounded-md truncate max-w-full">
-                  {member.nickname}
+                  {nickname}
                 </span>
               </div>
-            ))}
+            );
+          })}
       </div>
+      
       <div className="bg-[#232428] px-6 py-5 flex justify-center items-center gap-6 rounded-b-2xl">
         <button
-          onClick={() => setIsMutedLocal(!isMutedLocal)}
-          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-md active:scale-90 ${isMutedLocal ? "bg-red-500 text-white" : "bg-[#383A40] hover:bg-[#474A52] text-gray-200"}`}
-          title={isMutedLocal ? "마이크 켜기" : "마이크 끄기"}
+          onClick={toggleMute}
+          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-md active:scale-90 ${isMuted ? "bg-red-500 text-white" : "bg-[#383A40] hover:bg-[#474A52] text-gray-200"}`}
+          title={isMuted ? "마이크 켜기" : "마이크 끄기"}
         >
-          {isMutedLocal ? <VscMute size={24} /> : <VscMicFilled size={24} />}
+          {isMuted ? <VscMute size={24} /> : <VscMicFilled size={24} />}
         </button>
         <button
           onClick={handleConnectToggle}
           className={`w-14 h-14 rounded-full text-white flex items-center justify-center transition-all shadow-md active:scale-90 ${isVoiceConnected ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"}`}
           title={isVoiceConnected ? "연결 끊기" : "채널 접속하기"}
         >
-          {isVoiceConnected ? (
-            <VscCallOutgoing size={24} />
-          ) : (
-            <VscMicFilled size={24} />
-          )}
+          {isVoiceConnected ? <VscCallOutgoing size={24} /> : <VscMicFilled size={24} />}
         </button>
       </div>
     </div>
@@ -206,7 +228,6 @@ export default function MenuBar({ mode = "personal" }) {
     tree,
   } = useSelector((state) => state.fileSystem);
 
-  // 💡 [NEW] isRunning, isDebugMode 상태 추출 추가
   const {
     isTerminalVisible,
     breakpoints,
@@ -433,7 +454,6 @@ export default function MenuBar({ mode = "personal" }) {
     }
   };
 
-  // 💡 [NEW] 서버 강제 중지 로직
   const handleQuickStop = () => {
     dispatch(setRunning(false));
     dispatch(setDebugMode(false));
@@ -446,7 +466,6 @@ export default function MenuBar({ mode = "personal" }) {
     );
   };
 
-  // 💡 [NEW] 빠른 실행 로직 (기존 메뉴 로직 분리)
   const handleQuickRun = async () => {
     if (!activeFileId || !workspaceId || !activeProject)
       return alert("실행할 파일을 에디터에 열어주세요!");
@@ -500,7 +519,7 @@ export default function MenuBar({ mode = "personal" }) {
         `[System] ${language} 환경에서 [${templateType}] 모드로 실행을 준비합니다...\r\n`,
       ),
     );
-    dispatch(setRunning(true)); // 💡 실행 버튼 비활성화 상태로 변경
+    dispatch(setRunning(true)); 
 
     const runPayload = {
       type: "RUN",
@@ -522,13 +541,13 @@ export default function MenuBar({ mode = "personal" }) {
             "\r\n[Error] 실행 중 웹소켓 에러가 발생했습니다.\r\n",
           ),
         );
-        dispatch(setRunning(false)); // 에러 시 버튼 다시 활성화
+        dispatch(setRunning(false)); 
       },
       () => {
         dispatch(
           writeToTerminal("\r\n[System] 실행이 완전히 종료되었습니다.\r\n"),
         );
-        dispatch(setRunning(false)); // 종료 시 버튼 다시 활성화
+        dispatch(setRunning(false)); 
       },
     );
   };
@@ -697,7 +716,6 @@ export default function MenuBar({ mode = "personal" }) {
         await startDebugSession();
         break;
 
-      // 💡 [NEW] 메뉴 클릭 시에도 빠른 실행/중지 함수를 재활용
       case "디버깅 없이 실행":
         await handleQuickRun();
         break;
@@ -746,7 +764,7 @@ export default function MenuBar({ mode = "personal" }) {
               getLanguageFromPath(activeFileId) === "JAVA"
                 ? ".jar"
                 : getLanguageFromPath(activeFileId) === "C" ||
-                    getLanguageFromPath(activeFileId) === "CPP"
+                  getLanguageFromPath(activeFileId) === "CPP"
                   ? ".exe"
                   : "";
             let filename = `${activeProject}_build_result${defaultExtension}`;
@@ -1002,7 +1020,6 @@ export default function MenuBar({ mode = "personal" }) {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* 💡 [NEW] 빠른 실행 및 중지 버튼 UI 장착 완료! */}
               <div className="flex items-center bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden h-7 mr-1">
                 <button
                   onClick={handleQuickRun}
