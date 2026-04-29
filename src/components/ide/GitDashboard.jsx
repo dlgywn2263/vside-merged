@@ -1,4 +1,4 @@
-// 경로: src/components/GitDashboard.jsx
+// 경로: src/components/ide/GitDashboard.jsx
 
 import React, { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
@@ -21,10 +21,9 @@ import {
   VscGithubInverted,
   VscWarning,
   VscClose,
-  VscTrash, // 💡 [추가] 휴지통 아이콘
+  VscTrash,
 } from "react-icons/vsc";
 
-// 💡 [추가] clearVirtualTree 가져오기
 import {
   setActiveProject,
   setActiveBranch,
@@ -46,7 +45,7 @@ import {
   mergeCommitApi,
   updateGitUrlApi,
   abortMergeApi,
-  deleteBranchApi, // 💡 [추가] 삭제 API 가져오기
+  deleteBranchApi,
 } from "@/lib/ide/api";
 import { renderGraph } from "@/lib/ide/gitGraphHelper";
 
@@ -76,11 +75,9 @@ export default function GitDashboard() {
   const authorName = "노민주";
   const authorEmail = "minju@webide.com";
 
-  // 커밋 히스토리용 우클릭 메뉴
   const [contextMenu, setContextMenu] = useState(null);
   const contextMenuRef = useRef(null);
 
-  // 💡 [NEW] 브랜치 목록용 우클릭 메뉴 상태
   const [branchContextMenu, setBranchContextMenu] = useState(null);
   const branchContextMenuRef = useRef(null);
 
@@ -182,17 +179,13 @@ export default function GitDashboard() {
   const handleBranchChange = (branchName) => {
     if (branchName !== activeBranch) {
       dispatch(closeAllFiles());
-      dispatch(clearVirtualTree()); // 💡 변경 시 가상 뷰 해제
+      dispatch(clearVirtualTree()); 
       dispatch(setActiveBranch(branchName));
     }
   };
 
-  // =========================================================================
-  // 💡 [NEW] 브랜치 우클릭 및 삭제 로직
-  // =========================================================================
   const handleBranchRightClick = (e, branchName) => {
     e.preventDefault();
-    // 마스터 브랜치는 우클릭 삭제 메뉴 안 띄움
     if (branchName === "master") return;
     setBranchContextMenu({ x: e.pageX, y: e.pageY, branch: branchName });
   };
@@ -213,11 +206,9 @@ export default function GitDashboard() {
       setIsLoading(true);
       await deleteBranchApi(workspaceId, activeProject, branchName);
 
-      // 삭제 후 로컬 브랜치 목록 갱신
       setBranchList((prev) => prev.filter((b) => b !== branchName));
       alert(`'${branchName}' 브랜치가 삭제되었습니다.`);
 
-      // 삭제한 브랜치가 현재 켜져 있는 브랜치라면 마스터로 피신!
       if (activeBranch === branchName) {
         dispatch(closeAllFiles());
         dispatch(clearVirtualTree());
@@ -229,7 +220,6 @@ export default function GitDashboard() {
       setIsLoading(false);
     }
   };
-  // =========================================================================
 
   const handleStage = async (filePattern) => {
     try {
@@ -247,6 +237,7 @@ export default function GitDashboard() {
       setIsLoading(false);
     }
   };
+  
   const handleUnstage = async (filePattern) => {
     try {
       setIsLoading(true);
@@ -428,13 +419,37 @@ export default function GitDashboard() {
             `현재 브랜치(${activeBranch || "master"})에 이 커밋(${targetHash})을 병합하시겠습니까?`,
           )
         ) {
-          await mergeCommitApi(
-            workspaceId,
-            activeProject,
-            activeBranch || "master",
-            targetHash,
-          );
-          alert("✅ 병합 완료!");
+          try {
+            // 💡 [핵심 수정] 병합 API 호출 후 백엔드가 에러를 던지지 않더라도 강제로 상태를 찔러봅니다!
+            const mergeResult = await mergeCommitApi(
+              workspaceId,
+              activeProject,
+              activeBranch || "master",
+              targetHash,
+            );
+
+            // 최신 상태 바로 가져오기
+            const statusData = await fetchGitStatusApi(
+              workspaceId,
+              activeProject,
+              activeBranch || "master"
+            );
+
+            // 백엔드가 넘겨준 결과 텍스트에 conflict 단어가 있거나, 상태 데이터에 충돌 파일이 있다면!
+            const isConflictText = typeof mergeResult === 'string' && mergeResult.toLowerCase().includes('conflict');
+            const hasConflictedFiles = statusData.conflicted && statusData.conflicted.length > 0;
+
+            if (statusData.isMerging || hasConflictedFiles || isConflictText) {
+              alert("⚠️ 병합 중 충돌(Conflict)이 발생했습니다!\n파일 상태(File Status) 탭에서 충돌을 해결해주세요.");
+              setActiveView("status"); // 💡 File Status 탭으로 화면 즉시 전환!
+            } else {
+              alert("✅ 병합 완료!");
+            }
+          } catch (mergeError) {
+            // 진짜 500 에러 등이 터졌을 경우
+            alert("⚠️ 병합 중 충돌(Conflict)이 발생했거나 오류가 있습니다.\n파일 상태(File Status) 탭에서 충돌을 해결해주세요.");
+            setActiveView("status");
+          }
         }
       } else if (action === "reset") {
         if (
@@ -527,7 +542,7 @@ export default function GitDashboard() {
         </div>
       )}
 
-      {/* 💡 [NEW] 브랜치 전용 우클릭 휴지통 메뉴 */}
+      {/* 브랜치 전용 우클릭 휴지통 메뉴 */}
       {branchContextMenu && (
         <div
           ref={branchContextMenuRef}
@@ -689,7 +704,6 @@ export default function GitDashboard() {
               </span>
             </div>
             <div className="mt-1 flex flex-col gap-0.5">
-              {/* 💡 [NEW] 브랜치 렌더링 영역 (우클릭 이벤트 연결) */}
               {branchList.map((branch) => (
                 <div
                   key={branch}
@@ -794,10 +808,8 @@ export default function GitDashboard() {
                     병합 충돌(Merge Conflict)이 발생했습니다!
                   </h3>
                   <p className="text-xs text-red-600 leading-relaxed">
-                    아래 <b>'Conflicted Files'</b> 목록에 있는 파일들을 좌측
-                    탐색기에서 열어 <code>&lt;&lt;&lt;&lt;&lt;&lt;</code> 와{" "}
-                    <code>&gt;&gt;&gt;&gt;&gt;&gt;</code> 로 표시된 충돌 영역을
-                    직접 수정하세요.
+                    아래 <b>'Conflicted Files'</b> 목록에 있는 파일들을 좌측 탐색기에서 열면
+                    에디터에 충돌 해결 버튼이 나타납니다.
                     <br />
                     수정이 완료되면 해당 파일의 <b>Resolve & Stage</b> 버튼을
                     누르고 커밋하여 병합을 완료할 수 있습니다.

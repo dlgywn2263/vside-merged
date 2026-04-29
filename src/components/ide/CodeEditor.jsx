@@ -1,3 +1,5 @@
+// 경로: src/components/ide/CodeEditor.jsx
+
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
@@ -45,30 +47,32 @@ class CustomWebSocket extends WebSocket {
   }
 }
 
-const applyConflictEdit = (monaco, uri, conflict, type) => {
-  const model = monaco.editor.getModel(uri);
+// 💡 [핵심 구현] 충돌된 코드를 병합(수락)해 주는 함수 (executeEdits를 사용해 실행취소(Ctrl+Z)도 지원합니다!)
+const applyConflictEdit = (monacoInstance, editor, conflict, type) => {
+  const model = editor.getModel();
   if (!model) return;
 
   let newText = "";
-  const currentRange = new monaco.Range(
-    conflict.start + 1,
-    1,
-    conflict.mid - 1,
-    model.getLineMaxColumn(conflict.mid - 1) || 1,
-  );
-  const incomingRange = new monaco.Range(
-    conflict.mid + 1,
-    1,
-    conflict.end - 1,
-    model.getLineMaxColumn(conflict.end - 1) || 1,
-  );
-
-  const currentText =
-    conflict.mid - conflict.start > 1
-      ? model.getValueInRange(currentRange)
-      : "";
-  const incomingText =
-    conflict.end - conflict.mid > 1 ? model.getValueInRange(incomingRange) : "";
+  let currentText = "";
+  
+  // 현재 변경사항 텍스트 추출 (<<<<<<< 아래부터 ======= 위까지)
+  if (conflict.mid - conflict.start > 1) {
+    const curRange = new monacoInstance.Range(
+      conflict.start + 1, 1, 
+      conflict.mid - 1, model.getLineMaxColumn(conflict.mid - 1) || 1
+    );
+    currentText = model.getValueInRange(curRange);
+  }
+  
+  // 수신 변경사항 텍스트 추출 (======= 아래부터 >>>>>>> 위까지)
+  let incomingText = "";
+  if (conflict.end - conflict.mid > 1) {
+    const incRange = new monacoInstance.Range(
+      conflict.mid + 1, 1, 
+      conflict.end - 1, model.getLineMaxColumn(conflict.end - 1) || 1
+    );
+    incomingText = model.getValueInRange(incRange);
+  }
 
   if (type === "current") newText = currentText;
   else if (type === "incoming") newText = incomingText;
@@ -78,18 +82,18 @@ const applyConflictEdit = (monaco, uri, conflict, type) => {
     newText += incomingText;
   }
 
-  const fullRange = new monaco.Range(
-    conflict.start,
-    1,
-    conflict.end,
-    model.getLineMaxColumn(conflict.end) || 1,
+  // 통째로 갈아치울 충돌 전체 범위
+  const fullRange = new monacoInstance.Range(
+    conflict.start, 1, 
+    conflict.end, model.getLineMaxColumn(conflict.end) || 1
   );
 
-  model.pushEditOperations(
-    [],
-    [{ range: fullRange, text: newText }],
-    () => null,
-  );
+  // 에디터에 수정한 내용을 적용!
+  editor.executeEdits("conflict-resolver", [{
+    range: fullRange,
+    text: newText,
+    forceMoveMarkers: true
+  }]);
 };
 
 export default function CodeEditor() {
@@ -459,6 +463,57 @@ export default function CodeEditor() {
   const handleEditorDidMount = (editor, monacoInstance) => {
     editorRef.current = editor;
     setIsEditorReady(true);
+
+    // 💡 [핵심 구현] 에디터에 충돌 해결 버튼(CodeLens)을 띄워주는 로직
+    const cmdCurrent = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "current"));
+    const cmdIncoming = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "incoming"));
+    const cmdBoth = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "both"));
+
+    const codeLensProvider = monacoInstance.languages.registerCodeLensProvider("*", {
+      provideCodeLenses: function (model, token) {
+        const lenses = [];
+        const lines = model.getValue().split('\n');
+        let currentConflict = null;
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.startsWith("<<<<<<<")) {
+            currentConflict = { start: i + 1, mid: null, end: null };
+          } else if (line.startsWith("=======") && currentConflict) {
+            currentConflict.mid = i + 1;
+          } else if (line.startsWith(">>>>>>>") && currentConflict) {
+            currentConflict.end = i + 1;
+            
+            // 충돌 블록을 찾았을 때 3개의 버튼 렌즈를 달아줍니다.
+            const range = new monacoInstance.Range(currentConflict.start, 1, currentConflict.start, 1);
+            
+            lenses.push({
+              range,
+              command: { id: cmdCurrent, title: "✅ 현재 변경 사항 수락 (Current)", arguments: [currentConflict] }
+            });
+            lenses.push({
+              range,
+              command: { id: cmdIncoming, title: "📥 수신 변경 사항 수락 (Incoming)", arguments: [currentConflict] }
+            });
+            lenses.push({
+              range,
+              command: { id: cmdBoth, title: "🔄 두 변경 사항 모두 수락 (Both)", arguments: [currentConflict] }
+            });
+            
+            currentConflict = null;
+          }
+        }
+        return { lenses, dispose: () => {} };
+      },
+      resolveCodeLens: function (model, codeLens, token) {
+        return codeLens;
+      }
+    });
+
+    // 에디터 종료 시 메모리 릭 방지를 위해 지워줍니다.
+    editor.onDidDispose(() => {
+      codeLensProvider.dispose();
+    });
 
     editor.onDidChangeCursorSelection((e) => {
       const selection = e.selection;
@@ -904,103 +959,6 @@ export default function CodeEditor() {
     const disposable = editor.onDidChangeModelContent(updateDecorations);
     return () => disposable.dispose();
   }, [breakpoints, debugLine, activeFileId, monaco, fileContents]);
-
-  useEffect(() => {
-    if (!monaco) return;
-
-    const provider = monaco.languages.registerInlineCompletionsProvider("*", {
-      provideInlineCompletions: (model, position, context, token) => {
-        return new Promise((resolve) => {
-          let settled = false;
-
-          const finish = (result) => {
-            if (settled) return;
-            settled = true;
-            resolve(result);
-          };
-
-          const timer = setTimeout(async () => {
-            if (token.isCancellationRequested) {
-              finish({ items: [] });
-              return;
-            }
-
-            const prefix = model.getValueInRange(
-              new monaco.Range(1, 1, position.lineNumber, position.column),
-            );
-
-            const suffix = model.getValueInRange(
-              new monaco.Range(
-                position.lineNumber,
-                position.column,
-                model.getLineCount(),
-                model.getLineMaxColumn(model.getLineCount()),
-              ),
-            );
-
-            if (prefix.trim().length < 5) {
-              finish({ items: [] });
-              return;
-            }
-
-            try {
-              const suggestion = await fetchAiAutocompleteApi({
-                prefix,
-                suffix,
-              });
-
-              if (token.isCancellationRequested) {
-                finish({ items: [] });
-                return;
-              }
-
-              if (suggestion && suggestion.trim() !== "") {
-                finish({
-                  items: [
-                    {
-                      insertText: suggestion,
-                      range: new monaco.Range(
-                        position.lineNumber,
-                        position.column,
-                        position.lineNumber,
-                        position.column,
-                      ),
-                    },
-                  ],
-                });
-              } else {
-                finish({ items: [] });
-              }
-            } catch (error) {
-              if (
-                token.isCancellationRequested ||
-                error?.name === "AbortError" ||
-                error?.type === "cancellation" ||
-                error?.message?.includes("canceled") ||
-                error?.msg?.includes("canceled")
-              ) {
-                finish({ items: [] });
-                return;
-              }
-
-              console.error("autocomplete error:", error);
-              finish({ items: [] });
-            }
-          }, 1500);
-
-          token.onCancellationRequested(() => {
-            clearTimeout(timer);
-            finish({ items: [] });
-          });
-        });
-      },
-      freeInlineCompletions: () => {},
-      handleItemDidShow: () => {},
-      disposeInlineCompletions: () => {},
-    });
-
-    return () => provider.dispose();
-  }, [monaco]);
 
   const isMapTab =
     activeFileId === "Architecture Map" ||
