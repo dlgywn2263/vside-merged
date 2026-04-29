@@ -59,14 +59,15 @@ export default function CreateProjectModal() {
     const chosenTemplate = TEMPLATES.find((t) => t.id === selectedTemplateId);
 
     try {
-      await createProjectInWorkspaceApi(
-        workspaceId,
-        formData.name,
-        chosenTemplate.lang,
-        formData.description,
-        formData.gitUrl,
-        chosenTemplate.type
-      );
+      // 💡 [수정 완료] 이제 객체 형태로 감싸서 파라미터가 누락되거나 순서가 꼬이지 않게 보냅니다!
+      await createProjectInWorkspaceApi({
+        workspaceId: workspaceId,
+        projectName: formData.name,
+        language: chosenTemplate.lang,
+        description: formData.description,
+        gitUrl: formData.gitUrl,
+        templateType: chosenTemplate.type,
+      });
 
       dispatch(writeToTerminal(`[System] '${formData.name}' 프로젝트가 [${chosenTemplate.name}] 템플릿으로 생성되었습니다.\n`));
 
@@ -88,10 +89,8 @@ export default function CreateProjectModal() {
   };
 
   return (
-    // 💡 화면 전체를 100% 덮는 컨테이너 설정 (z-[10000] & fixed inset-0)
     <div className="fixed inset-0 z-[10000] bg-[#fbfbfc] flex flex-col font-sans animate-fade-in">
       
-      {/* 화면 전체를 덮는 모달의 상단 헤더 바 */}
       <header className="h-16 bg-[#1e1e1e] flex items-center justify-between px-6 shrink-0 shadow-md">
         <div className="flex items-center gap-3">
           <span className="font-black text-white tracking-widest text-lg">VSIDE</span>
@@ -106,7 +105,6 @@ export default function CreateProjectModal() {
         </button>
       </header>
 
-      {/* 대시보드 형태의 중앙 컨텐츠 영역 */}
       <main className="flex-1 overflow-y-auto flex flex-col items-center pt-10 pb-20 px-4 custom-scrollbar">
         <div className="w-full max-w-[800px] bg-white border border-gray-200 rounded-2xl shadow-xl flex flex-col overflow-hidden min-h-[600px]">
           

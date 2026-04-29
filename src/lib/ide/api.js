@@ -238,14 +238,13 @@ export const getMyWorkspacesByTokenApi = async () => {
   return await response.json();
 };
 
-// 💡 [핵심 변경 포인트 1] 프론트에서 백엔드로 templateType 파라미터를 추가 전송합니다!
 export const createProjectApi = async ({
   workspaceId,
   projectName,
   language,
   description = "",
   gitUrl = "",
-  templateType = "CONSOLE", // 기본값은 콘솔로 설정하여 하위 호환성 유지
+  templateType = "CONSOLE", 
 }) => {
   const response = await authFetch(`${API_BASE}/project`, {
     method: "POST",
@@ -255,7 +254,7 @@ export const createProjectApi = async ({
       language,
       description,
       gitUrl,
-      templateType, // 백엔드의 CreateProjectRequest DTO로 쏙 들어갑니다!
+      templateType, 
     }),
   });
 
@@ -267,22 +266,22 @@ export const createProjectApi = async ({
   return await response.text();
 };
 
-// 💡 [핵심 변경 포인트 2] 이 함수를 호출할 때도 templateType을 넘길 수 있게 열어줍니다.
-export const createProjectInWorkspaceApi = async (
+// 💡 [핵심 변경] 파라미터를 객체({}) 형태로 묶어서 안전하게 받도록 수정했습니다!
+export const createProjectInWorkspaceApi = async ({
   workspaceId,
   projectName,
   language,
   description = "",
   gitUrl = "",
   templateType = "CONSOLE",
-) => {
+}) => {
   return createProjectApi({
     workspaceId,
     projectName,
     language,
     description,
     gitUrl,
-    templateType, // 방금 고친 createProjectApi로 토스!
+    templateType, 
   });
 };
 

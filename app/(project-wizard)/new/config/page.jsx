@@ -72,13 +72,24 @@ export default function Page() {
         );
       }
 
+      // 💡 [핵심 추가] 이전 페이지(language)에서 저장해둔 템플릿 타입을 꺼내옵니다!
+      const storedTemplateType = typeof window !== "undefined" 
+        ? localStorage.getItem("wizard_template_type") || "CONSOLE" 
+        : "CONSOLE";
+
       await createProjectApi({
         workspaceId,
         projectName: name,
         description,
         language,
         gitUrl,
+        templateType: storedTemplateType, // 💡 꺼내온 템플릿 타입을 API로 쏴줍니다!
       });
+
+      // 💡 [클린업] 성공적으로 만들었으니 임시 보관했던 템플릿 타입은 청소해줍니다.
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("wizard_template_type");
+      }
 
       // reset() 여기서 하지 말 것
       if (mode === "personal") {
