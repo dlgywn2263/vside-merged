@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDispatch } from "react-redux"; 
 import WizardShell from "@/components/new/WizardShell";
 import { useWorkspaceWizard } from "@/store/workspaceWizardStore";
+import {
+  setWorkspaceId,
+  setProjectList,
+  setWorkspaceTree,
+  setActiveProject,
+} from "@/store/slices/fileSystemSlice"; 
+
 import {
   createWorkspaceApi,
   inviteWorkspaceMemberApi,
@@ -12,20 +20,26 @@ import {
 
 export default function Page() {
   const router = useRouter();
+  const dispatch = useDispatch(); 
   const [isCreating, setIsCreating] = useState(false);
-  const [path, setPath] = useState("C:\\WebIDE\\workspaces");
   const [gitUrl, setGitUrl] = useState("");
 
   const mode = useWorkspaceWizard((s) => s.mode);
   const language = useWorkspaceWizard((s) => s.language);
+  
+  // 💡 1단계에서 받아온 껍데기(워크스페이스) 정보
+  const projectName = useWorkspaceWizard((s) => s.projectName);
+  const projectDescription = useWorkspaceWizard((s) => s.projectDescription);
+  
+  // 💡 3단계에서 입력할 알맹이(템플릿/내부 프로젝트) 정보
+  const templateName = useWorkspaceWizard((s) => s.templateName);
+  const setTemplateName = useWorkspaceWizard((s) => s.setTemplateName);
+  const templateDescription = useWorkspaceWizard((s) => s.templateDescription);
+  const setTemplateDescription = useWorkspaceWizard((s) => s.setTemplateDescription);
 
-  const name = useWorkspaceWizard((s) => s.name);
-  const description = useWorkspaceWizard((s) => s.description);
   const teamMembers = useWorkspaceWizard((s) => s.teamMembers);
-
-  const setName = useWorkspaceWizard((s) => s.setName);
-  const setDescription = useWorkspaceWizard((s) => s.setDescription);
-  const reset = useWorkspaceWizard((s) => s.reset);
+  const path = useWorkspaceWizard((s) => s.path);
+  const setPath = useWorkspaceWizard((s) => s.setPath);
 
   useEffect(() => {
     if (!mode) {
@@ -41,18 +55,19 @@ export default function Page() {
   const goBack = () => router.push("/new/language");
 
   const goCreate = async () => {
-    if (!mode || !language || !name.trim() || !path.trim()) return;
+    if (!mode || !language || !projectName.trim() || !templateName.trim() || !path.trim()) return;
     if (isCreating) return;
 
     try {
       setIsCreating(true);
 
+      // 💡 1. 백엔드의 Workspace 생성 (화면의 projectName 매칭)
       const createdWorkspace = await createWorkspaceApi({
         mode,
-        name,
-        description,
-        path,
-        teamName: mode === "team" ? name : null,
+        name: projectName,
+        description: projectDescription,
+        path, 
+        teamName: mode === "team" ? projectName : null,
       });
 
       const workspaceId =
@@ -72,26 +87,30 @@ export default function Page() {
         );
       }
 
-      // 💡 [핵심 추가] 이전 페이지(language)에서 저장해둔 템플릿 타입을 꺼내옵니다!
       const storedTemplateType = typeof window !== "undefined" 
         ? localStorage.getItem("wizard_template_type") || "CONSOLE" 
         : "CONSOLE";
 
+      // 💡 2. 백엔드의 Project 생성 (화면의 templateName 매칭)
       await createProjectApi({
         workspaceId,
-        projectName: name,
-        description,
+        projectName: templateName, 
+        description: templateDescription,
         language,
         gitUrl,
-        templateType: storedTemplateType, // 💡 꺼내온 템플릿 타입을 API로 쏴줍니다!
+        templateType: storedTemplateType, 
       });
 
-      // 💡 [클린업] 성공적으로 만들었으니 임시 보관했던 템플릿 타입은 청소해줍니다.
       if (typeof window !== "undefined") {
         localStorage.removeItem("wizard_template_type");
       }
 
-      // reset() 여기서 하지 말 것
+      // 💡 에디터 초기화
+      dispatch(setWorkspaceId(workspaceId));
+      dispatch(setProjectList([])); 
+      dispatch(setWorkspaceTree(null)); 
+      dispatch(setActiveProject(templateName)); // 에디터는 방금 생성한 템플릿(내부 프로젝트)을 엽니다!
+
       if (mode === "personal") {
         router.push(`/ide/personal/${workspaceId}`);
       } else {
@@ -108,6 +127,7 @@ export default function Page() {
       setIsCreating(false);
     }
   };
+  
   if (!mode || !language) return null;
 
   return (
@@ -122,8 +142,8 @@ export default function Page() {
             <div className="text-sm text-gray-600 mb-2">프로젝트 이름(J)</div>
             <input
               className="w-full bg-gray-100 rounded-lg px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={templateName} // 💡 templateName과 바인딩
+              onChange={(e) => setTemplateName(e.target.value)}
               placeholder="프로젝트 이름을 입력하세요"
             />
           </label>
@@ -132,14 +152,14 @@ export default function Page() {
             <div className="text-sm text-gray-600 mb-2">프로젝트 설명</div>
             <input
               className="w-full bg-gray-100 rounded-lg px-3 py-2"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              value={templateDescription} // 💡 templateDescription과 바인딩
+              onChange={(e) => setTemplateDescription(e.target.value)}
               placeholder="프로젝트 설명을 입력하세요"
             />
           </label>
 
           <label className="block mb-4">
-            <div className="text-sm text-gray-600 mb-2">워크스페이스 경로</div>
+            <div className="text-sm text-gray-600 mb-2">위치(L)</div>
             <input
               className="w-full bg-gray-100 rounded-lg px-3 py-2"
               value={path}
@@ -172,9 +192,9 @@ export default function Page() {
 
             <button
               onClick={goCreate}
-              disabled={isCreating || !name.trim() || !path.trim()}
+              disabled={isCreating || !projectName.trim() || !templateName.trim() || !path.trim()}
               className={`px-5 py-2 rounded-lg bg-gray-300 text-gray-700 hover:bg-black hover:text-white ${
-                isCreating || !name.trim() || !path.trim()
+                isCreating || !projectName.trim() || !templateName.trim() || !path.trim()
                   ? "opacity-50 cursor-not-allowed hover:bg-gray-300 hover:text-gray-700"
                   : ""
               }`}

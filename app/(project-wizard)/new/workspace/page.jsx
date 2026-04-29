@@ -12,11 +12,15 @@ export default function Page() {
   const mode = useWorkspaceWizard((s) => s.mode);
   const setMode = useWorkspaceWizard((s) => s.setMode);
 
-  const name = useWorkspaceWizard((s) => s.name);
-  const setName = useWorkspaceWizard((s) => s.setName);
+  // 💡 1단계 바인딩: projectName
+  const projectName = useWorkspaceWizard((s) => s.projectName);
+  const setProjectName = useWorkspaceWizard((s) => s.setProjectName);
 
-  const description = useWorkspaceWizard((s) => s.description);
-  const setDescription = useWorkspaceWizard((s) => s.setDescription);
+  const projectDescription = useWorkspaceWizard((s) => s.projectDescription);
+  const setProjectDescription = useWorkspaceWizard((s) => s.setProjectDescription);
+
+  const path = useWorkspaceWizard((s) => s.path);
+  const setPath = useWorkspaceWizard((s) => s.setPath);
 
   const teamMembers = useWorkspaceWizard((s) => s.teamMembers);
   const addTeamMember = useWorkspaceWizard((s) => s.addTeamMember);
@@ -69,8 +73,8 @@ export default function Page() {
             <div className="text-sm text-gray-600 mb-2">프로젝트 이름(J)</div>
             <input
               className="w-full bg-gray-100 rounded-lg px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
               placeholder="프로젝트 이름을 입력하세요"
             />
           </label>
@@ -79,8 +83,8 @@ export default function Page() {
             <div className="text-sm text-gray-600 mb-2">프로젝트 설명</div>
             <input
               className="w-full bg-gray-100 rounded-lg px-3 py-2"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              value={projectDescription}
+              onChange={(e) => setProjectDescription(e.target.value)}
               placeholder="프로젝트 설명을 입력하세요"
             />
           </label>
@@ -90,7 +94,9 @@ export default function Page() {
             <div className="flex gap-2">
               <input
                 className="flex-1 bg-gray-100 rounded-lg px-3 py-2"
-                defaultValue="C:\\Users\\user\\source\\repos"
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                placeholder="C:\WebIDE\workspaces"
               />
               <button className="px-3 py-2 rounded-lg bg-gray-50" type="button">
                 <Folder color="gray" size={18} />

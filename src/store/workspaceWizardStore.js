@@ -2,9 +2,17 @@ import { create } from "zustand";
 
 const initialState = {
   mode: null, // "personal" | "team"
-  name: "",
-  description: "",
+  
+  // 💡 1단계: 화면의 "프로젝트 생성" (실제로는 워크스페이스)
+  projectName: "",
+  projectDescription: "",
+  
+  // 💡 3단계: 화면의 "새 프로젝트 구성" (실제로는 내부 템플릿 프로젝트)
+  templateName: "",
+  templateDescription: "",
+  
   language: "",
+  path: "C:\\WebIDE\\workspaces", 
   teamMembers: [],
   projectKey: null,
 };
@@ -13,9 +21,16 @@ export const useWorkspaceWizard = create((set) => ({
   ...initialState,
 
   setMode: (mode) => set({ mode }),
-  setName: (name) => set({ name }),
-  setDescription: (description) => set({ description }),
+  
+  // 💡 상태 변경 함수명도 변경 완료
+  setProjectName: (projectName) => set({ projectName }),
+  setProjectDescription: (projectDescription) => set({ projectDescription }),
+  
+  setTemplateName: (templateName) => set({ templateName }),
+  setTemplateDescription: (templateDescription) => set({ templateDescription }),
+
   setLanguage: (language) => set({ language }),
+  setPath: (path) => set({ path }), 
   setProjectKey: (projectKey) => set({ projectKey }),
 
   addTeamMember: (email) =>

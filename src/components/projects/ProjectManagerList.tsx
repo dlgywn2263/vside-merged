@@ -295,6 +295,36 @@ export function ProjectManagerList({ onCreateProject }: Props) {
     }
   }
 
+  // 💡 [핵심 추가] 워크스페이스(프로젝트) 삭제 API 호출 함수
+  async function handleDeleteWorkspace(workspaceId: string) {
+    if (!window.confirm("정말 이 프로젝트를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspaceId)}`, {
+        method: "DELETE",
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "프로젝트 삭제에 실패했습니다.");
+      }
+
+      alert("프로젝트가 성공적으로 삭제되었습니다.");
+      // 💡 화면에서 즉시 제거
+      setWorkspaces((prev) => prev.filter((w) => w.id !== workspaceId));
+      setOpenMenuId(null);
+      setSettingsOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "프로젝트 삭제 중 오류가 발생했습니다.");
+    }
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -569,8 +599,8 @@ export function ProjectManagerList({ onCreateProject }: Props) {
                               type="button"
                               className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
                               onClick={() => {
-                                setOpenMenuId(null);
-                                console.log("delete workspace:", w.id);
+                                // 💡 [수정 완료] 콘솔 로그 대신 실제 삭제 함수 호출
+                                handleDeleteWorkspace(w.id);
                               }}
                             >
                               <Trash2 size={16} className="text-red-600" />
@@ -606,10 +636,10 @@ export function ProjectManagerList({ onCreateProject }: Props) {
           setSettingsOpen(false);
         }}
         onDelete={() => {
-          console.log("delete workspace:", selected?.id);
-          setSettingsOpen(false);
-          setInviteOpen(false);
-          setReturnToSettingsAfterInvite(false);
+          // 💡 [수정 완료] 설정 모달에서도 실제 삭제 함수 호출
+          if (selected?.id) {
+            handleDeleteWorkspace(selected.id);
+          }
         }}
       />
 
