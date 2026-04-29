@@ -17,11 +17,7 @@ import ApiTesterPage from "@/components/api-test/ApiTesterPage";
 import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
-
-// 💡 [추가] 우리가 만든 개발일지 패널 임포트!
 import DevlogPanel from "@/components/ide/DevlogPanel";
-
-// 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
 import WebPreview from "@/components/ide/WebPreview";
 
@@ -41,11 +37,6 @@ import {
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
 
-// const ApiTesterPage = () => (
-//   <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
-//     API Test Panel
-//   </div>
-// );
 const MyPagePanel = () => (
   <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
     My Page Panel
@@ -67,15 +58,42 @@ function CollaborationPanel({ workspaceId }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, chatMode]);
 
-  useEffect(() => {
-    if (!workspaceId || !user || !user.id) return;
+  // 💡 [핵심 추가] 내 이름을 억지로라도 찾아내는 똑똑한 함수
+  const getMyChatName = () => {
+    if (myProfile?.nickname) return myProfile.nickname;
+    if (user?.nickname) return user.nickname;
+    if (user?.email) return user.email.split("@")[0];
+    try {
+      if (typeof window !== "undefined") {
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        if (storedUser?.nickname) return storedUser.nickname;
+        if (storedUser?.email) return storedUser.email.split("@")[0];
+      }
+    } catch (e) {}
+    return "팀원";
+  };
 
-    getUserProfileApi(user.id).then(setMyProfile).catch(console.error);
+  const getMyUserId = () => {
+    if (user?.id) return user.id;
+    try {
+      if (typeof window !== "undefined") {
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        if (storedUser?.id) return storedUser.id;
+      }
+    } catch (e) {}
+    return 0; // 익명 ID
+  };
+
+  useEffect(() => {
+    const myId = getMyUserId();
+    if (!workspaceId || !myId) return;
+
+    getUserProfileApi(myId).then(setMyProfile).catch(console.error);
     getWorkspaceMembersApi(workspaceId)
       .then(setTeamMembers)
       .catch(console.error);
 
-    fetchChatHistoryApi(workspaceId, user.id)
+    fetchChatHistoryApi(workspaceId, myId)
       .then((history) => {
         const formatted = history.map((msg) => ({
           id: msg.id,
@@ -87,14 +105,14 @@ function CollaborationPanel({ workspaceId }) {
             hour: "2-digit",
             minute: "2-digit",
           }),
-          isMe: String(msg.senderId) === String(user.id),
+          isMe: String(msg.senderId) === String(myId),
           type: msg.type,
         }));
         setMessages(formatted);
       })
       .catch((err) => console.error("이전 채팅 불러오기 실패:", err));
 
-    ChatSocket.connect(workspaceId, user.id, (newMessage) => {
+    ChatSocket.connect(workspaceId, myId, (newMessage) => {
       setMessages((prev) => {
         if (prev.find((m) => m.id === newMessage.id)) return prev;
 
@@ -110,7 +128,7 @@ function CollaborationPanel({ workspaceId }) {
               hour: "2-digit",
               minute: "2-digit",
             }),
-            isMe: String(newMessage.senderId) === String(user.id),
+            isMe: String(newMessage.senderId) === String(myId),
             type: newMessage.type,
           },
         ];
@@ -120,21 +138,19 @@ function CollaborationPanel({ workspaceId }) {
     return () => {
       ChatSocket.disconnect();
     };
-  }, [workspaceId, user?.id]);
+  }, [workspaceId, user]); // user가 바뀔 때마다 재실행
 
   const handleSend = () => {
-    if (!chatInput.trim() || !workspaceId || !user) return;
+    const myId = getMyUserId();
+    // 💡 [핵심 수정] user 객체가 없어도 myId나 chatInput이 있으면 통과시킵니다!
+    if (!chatInput.trim() || !workspaceId || !myId) return;
 
-    const actualName =
-      myProfile?.nickname ||
-      user.nickname ||
-      (user.email ? user.email.split("@")[0] : "팀원");
-
+    const actualName = getMyChatName();
     const receiver = chatMode === "ALL" ? null : Number(chatMode);
 
     const messageData = {
       workspaceId,
-      senderId: user.id,
+      senderId: myId,
       senderName: actualName,
       receiverId: receiver,
       content: chatInput,
@@ -142,7 +158,7 @@ function CollaborationPanel({ workspaceId }) {
     };
 
     ChatSocket.sendMessage(messageData);
-    setChatInput("");
+    setChatInput(""); // 전송 후 입력창 비우기
   };
 
   const displayMessages = messages.filter((msg) => {
@@ -151,7 +167,7 @@ function CollaborationPanel({ workspaceId }) {
     }
 
     const targetId = String(chatMode);
-    const myId = String(user.id);
+    const myId = String(getMyUserId());
     const mSender = String(msg.senderId);
     const mReceiver = String(msg.receiverId);
 
@@ -215,7 +231,7 @@ function CollaborationPanel({ workspaceId }) {
           >
             <option value="ALL">📢 모두에게 (Public)</option>
             {teamMembers
-              .filter((m) => String(m.userId) !== String(user?.id))
+              .filter((m) => String(m.userId) !== String(getMyUserId()))
               .map((member) => (
                 <option key={member.userId} value={member.userId}>
                   👤 {member.nickname} 님에게 (DM)
@@ -228,7 +244,12 @@ function CollaborationPanel({ workspaceId }) {
           <input
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { // shift+enter 줄바꿈 방지
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             className="flex-1 bg-transparent border-none outline-none text-[13px] placeholder-gray-400"
             placeholder={
               chatMode === "ALL"
@@ -294,7 +315,6 @@ export default function TeamIdeMain() {
   const renderMainContent = () => {
     switch (activeActivity) {
       case "docs":
-        // 💡 [핵심] 기존 DocsPanel 껍데기를 버리고 방금 만든 DevlogPanel을 반환합니다!
         return <DevlogPanel />;
       case "api-test":
         return <ApiTesterPage />;
@@ -417,10 +437,7 @@ export default function TeamIdeMain() {
         {renderMainContent()}
       </div>
 
-      {/* 여기에 모달이 렌더링되면 화면 전체를 덮게 됩니다! */}
       <CreateProjectModal />
-
-      {/* 팀 워크스페이스용 플로팅 웹 미리보기 창 장착 완료! */}
       <WebPreview />
     </div>
   );

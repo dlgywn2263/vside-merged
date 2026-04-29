@@ -1,5 +1,3 @@
-// 경로: src/components/ide/CodeEditor.jsx
-
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
@@ -47,7 +45,7 @@ class CustomWebSocket extends WebSocket {
   }
 }
 
-// 💡 [핵심 구현] 충돌된 코드를 병합(수락)해 주는 함수 (executeEdits를 사용해 실행취소(Ctrl+Z)도 지원합니다!)
+// 충돌 코드를 병합해 주는 함수
 const applyConflictEdit = (monacoInstance, editor, conflict, type) => {
   const model = editor.getModel();
   if (!model) return;
@@ -55,7 +53,6 @@ const applyConflictEdit = (monacoInstance, editor, conflict, type) => {
   let newText = "";
   let currentText = "";
   
-  // 현재 변경사항 텍스트 추출 (<<<<<<< 아래부터 ======= 위까지)
   if (conflict.mid - conflict.start > 1) {
     const curRange = new monacoInstance.Range(
       conflict.start + 1, 1, 
@@ -64,7 +61,6 @@ const applyConflictEdit = (monacoInstance, editor, conflict, type) => {
     currentText = model.getValueInRange(curRange);
   }
   
-  // 수신 변경사항 텍스트 추출 (======= 아래부터 >>>>>>> 위까지)
   let incomingText = "";
   if (conflict.end - conflict.mid > 1) {
     const incRange = new monacoInstance.Range(
@@ -82,13 +78,11 @@ const applyConflictEdit = (monacoInstance, editor, conflict, type) => {
     newText += incomingText;
   }
 
-  // 통째로 갈아치울 충돌 전체 범위
   const fullRange = new monacoInstance.Range(
     conflict.start, 1, 
     conflict.end, model.getLineMaxColumn(conflict.end) || 1
   );
 
-  // 에디터에 수정한 내용을 적용!
   editor.executeEdits("conflict-resolver", [{
     range: fullRange,
     text: newText,
@@ -146,6 +140,27 @@ export default function CodeEditor() {
 
   const isTeamMode = pathname?.includes("/team");
 
+  // 💡 [핵심 추가] 내 이름을 아주 빠르고 정확하게 찾아오는 해결사 함수!
+  const getMyDisplayName = () => {
+    // 1. API로 가져온 닉네임이 있다면 1순위
+    if (fetchedNickname) return fetchedNickname;
+    // 2. AuthContext의 닉네임이 있다면 2순위
+    if (user?.nickname) return user.nickname;
+    // 3. 닉네임이 없으면 이메일 아이디 앞부분 사용 (ex: aaa@gmail.com -> aaa)
+    if (user?.email) return user.email.split("@")[0];
+
+    // 4. 에디터가 너무 빨리 켜져서 user가 null일 때를 대비한 최후의 보루 (로컬 스토리지 즉시 탐색)
+    try {
+      if (typeof window !== "undefined") {
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        if (storedUser?.nickname) return storedUser.nickname;
+        if (storedUser?.email) return storedUser.email.split("@")[0];
+      }
+    } catch (e) {}
+
+    return "익명 개발자"; // 진짜 아무것도 없을 때만
+  };
+
   const cleanupCollaboration = () => {
     if (bindingRef.current) {
       bindingRef.current.destroy();
@@ -198,8 +213,9 @@ export default function CodeEditor() {
         .toString(16)
         .padStart(6, "0");
 
+    // 💡 [수정] 위에서 만든 똑똑한 함수를 사용해 이름을 등록합니다.
     awareness.setLocalStateField("user", {
-      name: fetchedNickname || user?.nickname || "익명 개발자",
+      name: getMyDisplayName(),
       color: myColor,
     });
 
@@ -298,18 +314,21 @@ export default function CodeEditor() {
       .catch(console.error);
   }, [user]);
 
+  // 💡 [핵심 수정] 유저 정보가 뒤늦게 도착했을 때 즉시 이름을 덮어씌워주는 감시자!
   useEffect(() => {
-    const finalName = fetchedNickname || user?.nickname;
-    if (providerRef.current && providerRef.current.awareness && finalName) {
+    if (providerRef.current && providerRef.current.awareness) {
       const awareness = providerRef.current.awareness;
       const currentState = awareness.getLocalState();
+      const currentName = getMyDisplayName();
 
-      awareness.setLocalStateField("user", {
-        name: finalName,
-        color: currentState?.user?.color || "#ff9900",
-      });
+      if (currentName !== "익명 개발자" && currentState?.user?.name !== currentName) {
+        awareness.setLocalStateField("user", {
+          name: currentName,
+          color: currentState?.user?.color || "#ff9900",
+        });
+      }
     }
-  }, [fetchedNickname, user?.nickname]);
+  }, [fetchedNickname, user]); // user 객체가 변할 때마다 감지해서 쏜다!
 
   const isContentLoaded = fileContents[activeFileId] !== undefined;
 
@@ -464,7 +483,7 @@ export default function CodeEditor() {
     editorRef.current = editor;
     setIsEditorReady(true);
 
-    // 💡 [핵심 구현] 에디터에 충돌 해결 버튼(CodeLens)을 띄워주는 로직
+    // 충돌 해결 버튼 (CodeLens) 설정
     const cmdCurrent = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "current"));
     const cmdIncoming = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "incoming"));
     const cmdBoth = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "both"));
@@ -484,7 +503,6 @@ export default function CodeEditor() {
           } else if (line.startsWith(">>>>>>>") && currentConflict) {
             currentConflict.end = i + 1;
             
-            // 충돌 블록을 찾았을 때 3개의 버튼 렌즈를 달아줍니다.
             const range = new monacoInstance.Range(currentConflict.start, 1, currentConflict.start, 1);
             
             lenses.push({
@@ -510,7 +528,6 @@ export default function CodeEditor() {
       }
     });
 
-    // 에디터 종료 시 메모리 릭 방지를 위해 지워줍니다.
     editor.onDidDispose(() => {
       codeLensProvider.dispose();
     });
