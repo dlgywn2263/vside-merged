@@ -24,7 +24,7 @@ export default function FeatureShowcase() {
           "영향 범위를 빠르게 파악해서 디버깅 시간 감소",
           "팀원이 합류해도 프로젝트 흐름을 바로 이해",
         ],
-        imgSrc: "/feature_codemap.png",
+        imgSrc: "/codemap.png",
       },
       {
         key: "tester",
@@ -35,7 +35,7 @@ export default function FeatureShowcase() {
           "응답 결과를 실시간으로 확인하며 디버깅 속도 향상",
           "개발 흐름을 끊지 않는 인라인 테스트 환경 제공",
         ],
-        imgSrc: "/feature_git.png",
+        imgSrc: "/apitest.png",
       },
       {
         key: "api",
@@ -65,7 +65,7 @@ export default function FeatureShowcase() {
               기능을 누르면 큰 프리뷰로 바로 확인
             </h2>
             <p className="mt-3 text-gray-600 leading-relaxed">
-              VSIDE의 주요 기능들을 클릭해서 어떤 모습인지 바로 확인해보세요.
+              Devw의 주요 기능들을 클릭해서 어떤 모습인지 바로 확인해보세요.
             </p>
           </div>
         </Reveal>

@@ -25,7 +25,7 @@ export default function EditorShowcase() {
           "언어별 LSP 기반 자동완성/진단을 기본 제공",
           "AI 도우미가 에러/현재 파일 컨텍스트 기반 해결 흐름 제안",
         ],
-        imgSrc: "/anapo_Main.jpg", // ✅ public/anapo_Main.jpg
+        imgSrc: "/personalide.png", // ✅ public/personalide.png
       },
       {
         key: "team",
@@ -36,7 +36,7 @@ export default function EditorShowcase() {
           "팀원 커서/선택/현재 보고 있는 파일을 실시간 공유",
           "드라이버/내비게이터 역할로 페어 프로그래밍에 최적화",
         ],
-        imgSrc: "/anapo_Team.jpg", // ✅ public/anapo_Team.jpg
+        imgSrc: "/teamide.png", // ✅ public/teamide.png
       },
     ],
     [],

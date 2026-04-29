@@ -27,7 +27,7 @@ export default function WorkflowShowcase() {
               "브랜치 전략 템플릿으로 실수 줄이기",
               "PR/리뷰 전 체크리스트로 품질 관리",
             ]}
-            imgSrc="/workflow_deploy.png"
+            imgSrc="/git.png"
             reverse={false}
           />
 
@@ -39,7 +39,7 @@ export default function WorkflowShowcase() {
               "버그 해결 과정을 타임라인으로 정리",
               "배포 내역과 릴리즈 노트 자동 생성",
             ]}
-            imgSrc="/workflow_devlog.png"
+            imgSrc="/devlog.png"
             reverse
           />
 
@@ -51,7 +51,7 @@ export default function WorkflowShowcase() {
               "담당자/우선순위로 역할 분담 명확화",
               "마감일 알림으로 일정 누락 방지",
             ]}
-            imgSrc="/workflow_schedule.png"
+            imgSrc="/schedule.png"
             reverse={false}
           />
         </div>
