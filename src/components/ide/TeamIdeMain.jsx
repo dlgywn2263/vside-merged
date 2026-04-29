@@ -13,7 +13,7 @@ import BottomPanel from "@/components/ide/BottomPanel";
 import FileTabs from "@/components/ide/FileTabs";
 import DebugPanel from "@/components/ide/DebugPanel";
 import AgentPanel from "@/components/ide/AgentPanel";
-
+import ApiTesterPage from "@/components/api-test/ApiTesterPage";
 import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
@@ -23,7 +23,7 @@ import DevlogPanel from "@/components/ide/DevlogPanel";
 
 // 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
-import WebPreview from "@/components/ide/WebPreview"; 
+import WebPreview from "@/components/ide/WebPreview";
 
 import {
   fetchWorkspaceProjectsApi,
@@ -41,11 +41,11 @@ import {
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
 
-const ApiTestPanel = () => (
-  <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
-    API Test Panel
-  </div>
-);
+// const ApiTesterPage = () => (
+//   <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
+//     API Test Panel
+//   </div>
+// );
 const MyPagePanel = () => (
   <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
     My Page Panel
@@ -297,7 +297,7 @@ export default function TeamIdeMain() {
         // 💡 [핵심] 기존 DocsPanel 껍데기를 버리고 방금 만든 DevlogPanel을 반환합니다!
         return <DevlogPanel />;
       case "api-test":
-        return <ApiTestPanel />;
+        return <ApiTesterPage />;
       case "mypage":
         return <MyPagePanel />;
       case "git":
@@ -419,7 +419,7 @@ export default function TeamIdeMain() {
 
       {/* 여기에 모달이 렌더링되면 화면 전체를 덮게 됩니다! */}
       <CreateProjectModal />
-      
+
       {/* 팀 워크스페이스용 플로팅 웹 미리보기 창 장착 완료! */}
       <WebPreview />
     </div>

@@ -12,7 +12,7 @@ import BottomPanel from "@/components/ide/BottomPanel";
 import FileTabs from "@/components/ide/FileTabs";
 import DebugPanel from "@/components/ide/DebugPanel";
 import AgentPanel from "@/components/ide/AgentPanel";
-
+import ApiTesterPage from "@/components/api-test/ApiTesterPage";
 import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
@@ -22,7 +22,7 @@ import DevlogPanel from "@/components/ide/DevlogPanel";
 
 // 💡 [추가] 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
-import WebPreview from "@/components/ide/WebPreview"; 
+import WebPreview from "@/components/ide/WebPreview";
 
 import { fetchWorkspaceProjectsApi, fetchVirtualViewsApi } from "@/lib/ide/api";
 
@@ -37,11 +37,11 @@ import {
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
 
-const ApiTestPanel = () => (
-  <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
-    API Test Panel
-  </div>
-);
+// const ApiTestPanel = () => (
+//   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
+//     API Test Panel
+//   </div>
+// );
 
 const MyPagePanel = () => (
   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
@@ -154,7 +154,7 @@ export default function IdeMain() {
         // 💡 [변경] 기존의 단순 글자(DocsPanel)를 지우고, 우리가 만든 DevlogPanel 렌더링!
         return <DevlogPanel />;
       case "api-test":
-        return <ApiTestPanel />;
+        return <ApiTesterPage />;
       case "mypage":
         return <MyPagePanel />;
       case "git":
