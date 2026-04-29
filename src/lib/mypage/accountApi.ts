@@ -2,69 +2,126 @@ const API_BASE = "http://localhost:8080";
 
 function getToken() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("accessToken");
+
+  const candidates = ["accessToken", "token", "jwt", "authToken"];
+
+  for (const key of candidates) {
+    const value = localStorage.getItem(key);
+
+    if (value && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
 }
 
 async function authFetch(url: string, options: RequestInit = {}) {
-  const token = getToken();
+  try {
+    const token = getToken();
 
-  const response = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers ?? {}),
-    },
-  });
+    const response = await fetch(`${API_BASE}${url}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers ?? {}),
+      },
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
     const text = await response.text();
 
-    let message = "요청 처리 중 오류가 발생했습니다.";
+    if (!response.ok) {
+      let message = "요청 처리 중 오류가 발생했습니다.";
 
-    try {
-      const json = JSON.parse(text);
-      message = json.message ?? json.error ?? message;
-    } catch {
-      if (text) message = text;
+      try {
+        const json = JSON.parse(text);
+        message = json.message ?? json.error ?? message;
+      } catch {
+        if (text) message = text;
+      }
+
+      console.error("[account api] request failed:", {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        message,
+      });
+
+      throw new Error(message);
     }
 
-    throw new Error(message);
-  }
+    if (!text) return null;
 
-  const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  } catch (error) {
+    console.error("[account api] authFetch error:", error);
 
-  if (!text) return null;
+    if (error instanceof Error) {
+      throw error;
+    }
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
+    throw new Error("알 수 없는 오류가 발생했습니다.");
   }
 }
 
 export async function changeMyEmailApi(email: string) {
-  return authFetch("/api/users/me/email", {
-    method: "PATCH",
-    body: JSON.stringify({ email }),
-  });
+  try {
+    return await authFetch("/api/users/me/email", {
+      method: "PATCH",
+      body: JSON.stringify({ email }),
+    });
+  } catch (error) {
+    console.error("[account api] changeMyEmailApi failed:", error);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error("이메일 변경에 실패했습니다.");
+  }
 }
 
 export async function changeMyPasswordApi(
   currentPassword: string,
   newPassword: string,
 ) {
-  return authFetch("/api/users/me/password", {
-    method: "PATCH",
-    body: JSON.stringify({
-      currentPassword,
-      newPassword,
-    }),
-  });
+  try {
+    return await authFetch("/api/users/me/password", {
+      method: "PATCH",
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+      }),
+    });
+  } catch (error) {
+    console.error("[account api] changeMyPasswordApi failed:", error);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error("비밀번호 변경에 실패했습니다.");
+  }
 }
 
 export async function deleteMyAccountApi() {
-  return authFetch("/api/users/me", {
-    method: "DELETE",
-  });
+  try {
+    return await authFetch("/api/users/me", {
+      method: "DELETE",
+    });
+  } catch (error) {
+    console.error("[account api] deleteMyAccountApi failed:", error);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error("회원 탈퇴에 실패했습니다.");
+  }
 }

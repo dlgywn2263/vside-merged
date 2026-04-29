@@ -45,8 +45,9 @@ async function authFetch(path: string, options: RequestInit = {}) {
 
   if (!token) {
     debugTokenState();
+
     throw new Error(
-      "로그인 토큰을 찾을 수 없습니다. localStorage에 token/accessToken/jwt/authToken 중 하나가 저장되어 있어야 합니다.",
+      "[authFetch] 로그인 토큰이 없습니다. 로그인 후 다시 시도하세요.",
     );
   }
 
@@ -68,7 +69,16 @@ async function authFetch(path: string, options: RequestInit = {}) {
   const text = await res.text();
 
   if (!res.ok) {
-    throw new Error(text || "요청에 실패했습니다.");
+    console.error("[mypage api] request failed:", {
+      path,
+      status: res.status,
+      statusText: res.statusText,
+      body: text,
+    });
+
+    throw new Error(
+      text || `[authFetch] 요청 실패: ${res.status} ${res.statusText}`,
+    );
   }
 
   if (!text) return null;

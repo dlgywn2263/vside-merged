@@ -10,6 +10,34 @@ import {
   deleteMyAccountApi,
 } from "@/lib/mypage/accountApi";
 
+type UpdateUserResponse = {
+  id?: number | string;
+  email?: string;
+  nickname?: string;
+  profileImageUrl?: string | null;
+  createdAt?: string;
+};
+
+function isUpdateUserResponse(value: unknown): value is UpdateUserResponse {
+  return typeof value === "object" && value !== null;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function clearAuthStorage() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("jwt");
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("userId");
+}
+
 export default function AccountTab({
   user,
   onSaveUser,
@@ -31,36 +59,47 @@ export default function AccountTab({
     setEmailDraft(user.email);
   }, [user.email]);
 
-  const emailChanged = emailDraft.trim() !== user.email;
+  const emailChanged = emailDraft.trim() !== user.email.trim();
 
   const canChangeEmail = useMemo(() => {
-    if (!emailDraft.trim()) return false;
-    if (!/^\S+@\S+\.\S+$/.test(emailDraft.trim())) return false;
-    return emailChanged && !emailLoading;
+    const trimmedEmail = emailDraft.trim();
+
+    if (!trimmedEmail) return false;
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) return false;
+    if (!emailChanged) return false;
+    if (emailLoading) return false;
+
+    return true;
   }, [emailDraft, emailChanged, emailLoading]);
 
   const changeEmail = async () => {
-    if (!canChangeEmail) return;
+    if (!canChangeEmail || emailLoading) return;
 
     try {
       setEmailLoading(true);
 
-      const updatedUser = await changeMyEmailApi(emailDraft.trim());
+      const result = await changeMyEmailApi(emailDraft.trim());
 
-      onSaveUser({
+      if (!isUpdateUserResponse(result)) {
+        throw new Error("이메일 변경 응답 형식이 올바르지 않습니다.");
+      }
+
+      const nextUser: User = {
         ...user,
-        email: updatedUser.email,
-        nickname: updatedUser.nickname,
-        profileImageUrl: updatedUser.profileImageUrl,
-        createdAt: updatedUser.createdAt,
-      });
+        email: result.email ?? emailDraft.trim(),
+        nickname: result.nickname ?? user.nickname,
+        profileImageUrl: result.profileImageUrl ?? user.profileImageUrl ?? null,
+        createdAt: result.createdAt ?? user.createdAt,
+      };
+
+      onSaveUser(nextUser);
+      setEmailDraft(nextUser.email);
 
       alert("이메일이 변경되었습니다.");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "이메일 변경에 실패했습니다.";
+      console.error("[AccountTab] 이메일 변경 실패:", error);
 
-      alert(message);
+      alert(getErrorMessage(error, "이메일 변경에 실패했습니다."));
     } finally {
       setEmailLoading(false);
     }
@@ -71,35 +110,35 @@ export default function AccountTab({
     if (newPw.length < 8) return false;
     if (newPw !== confirmPw) return false;
     if (passwordLoading) return false;
+
     return true;
   }, [currentPw, newPw, confirmPw, passwordLoading]);
 
   const changePassword = async () => {
-    if (!pwOk) return;
+    if (!pwOk || passwordLoading) return;
 
     try {
       setPasswordLoading(true);
 
       await changeMyPasswordApi(currentPw, newPw);
 
-      alert("비밀번호가 변경되었습니다.");
-
       setCurrentPw("");
       setNewPw("");
       setConfirmPw("");
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "비밀번호 변경에 실패했습니다.";
 
-      alert(message);
+      alert("비밀번호가 변경되었습니다.");
+    } catch (error) {
+      console.error("[AccountTab] 비밀번호 변경 실패:", error);
+
+      alert(getErrorMessage(error, "비밀번호 변경에 실패했습니다."));
     } finally {
       setPasswordLoading(false);
     }
   };
 
   const deleteAccount = async () => {
+    if (deleteLoading) return;
+
     const ok = window.confirm(
       "정말 계정을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.",
     );
@@ -111,16 +150,15 @@ export default function AccountTab({
 
       await deleteMyAccountApi();
 
-      localStorage.removeItem("token");
+      clearAuthStorage();
 
       alert("회원 탈퇴가 완료되었습니다.");
 
       window.location.href = "/";
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "계정 삭제에 실패했습니다.";
+      console.error("[AccountTab] 계정 삭제 실패:", error);
 
-      alert(message);
+      alert(getErrorMessage(error, "계정 삭제에 실패했습니다."));
     } finally {
       setDeleteLoading(false);
     }
@@ -253,6 +291,7 @@ export default function AccountTab({
           <div className="text-sm font-bold text-red-700">
             계정을 삭제하면 복구할 수 없습니다.
           </div>
+
           <div className="mt-3">
             <button
               type="button"
@@ -268,6 +307,7 @@ export default function AccountTab({
               {deleteLoading ? "삭제 중..." : "계정 삭제"}
             </button>
           </div>
+
           <div className="mt-2 text-xs text-red-700">
             삭제 후에는 현재 계정으로 다시 로그인할 수 없습니다.
           </div>
