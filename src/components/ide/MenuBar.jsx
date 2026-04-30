@@ -83,17 +83,44 @@ const avatarColors = [
   "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500", "bg-teal-500",
 ];
 
-const PeerAudio = React.memo(({ stream }) => {
+const PeerAudio = React.memo(({ stream, volume = 1.0 }) => {
   const audioRef = useRef(null);
+  const gainNodeRef = useRef(null);
 
   useEffect(() => {
     const audioEl = audioRef.current;
     if (audioEl && stream && audioEl.srcObject !== stream) {
       audioEl.srcObject = stream;
-      audioEl.volume = 1.0;
+      audioEl.muted = true;
       audioEl.play().catch(e => console.warn("오디오 자동재생 차단됨:", e));
+
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const gainNode = audioCtx.createGain();
+        
+        gainNode.gain.value = volume;
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        gainNodeRef.current = gainNode;
+      } catch (err) {
+        console.error("증폭기 연결 실패 (기본 재생으로 대체):", err);
+        audioEl.muted = false;
+        audioEl.volume = Math.min(volume, 1.0); 
+      }
     }
   }, [stream]);
+
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.setTargetAtTime(volume, gainNodeRef.current.context.currentTime, 0.1);
+    } else if (audioRef.current) {
+      audioRef.current.volume = Math.min(volume, 1.0);
+    }
+  }, [volume]);
 
   return <audio ref={audioRef} autoPlay playsInline style={{ display: "none" }} />;
 });
@@ -113,10 +140,13 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
     return Math.floor(Math.random() * 1000000); 
   });
   
-  const { peers, speakingUsers, isMuted, toggleMute } = useWebRTC(
+  const { peers, speakingUsers, isMuted, toggleMute, micVolume, changeMicVolume } = useWebRTC(
     isVoiceConnected ? workspaceId : null,
     isVoiceConnected ? safeUserId : null
   );
+
+  const [peerVolumes, setPeerVolumes] = useState({});
+  const handlePeerVolume = (peerId, vol) => setPeerVolumes(prev => ({...prev, [peerId]: vol}));
 
   const handleConnectToggle = () => dispatch(setVoiceConnected(!isVoiceConnected));
   
@@ -135,7 +165,7 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
   const amISpeaking = speakingUsers.has(String(safeUserId));
 
   return (
-    <div className="flex flex-col h-[480px]">
+    <div className="flex flex-col h-[520px]">
       <div className="px-6 py-4 flex justify-between items-center border-b border-[#1E1F22]/50 bg-[#2B2D31]">
         <div className="flex items-center gap-2">
           <div className="flex relative w-3 h-3">
@@ -146,14 +176,14 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
             {isVoiceConnected ? "음성 서버 연결됨" : "연결이 끊겨있습니다"}
           </span>
         </div>
-        {/* 💡 닫기(숨기기) 버튼 추가 */}
         <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors" title="창 숨기기">
           <VscClose size={20} />
         </button>
       </div>
       
-      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-4 content-start">
-        <div className="flex flex-col items-center gap-2">
+      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-6 content-start">
+        {/* 내 프로필 & 내 마이크 증폭 슬라이더 */}
+        <div className="flex flex-col items-center gap-2 w-full">
           <div className={`relative w-16 h-16 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200 
             ${isMuted || !isVoiceConnected ? "bg-gray-600 opacity-60" : "bg-indigo-500"}
             ${amISpeaking ? "ring-4 ring-green-400 ring-offset-2 ring-offset-[#2B2D31]" : ""}
@@ -168,17 +198,35 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
           <span className="text-[12px] font-bold text-gray-300 bg-[#1E1F22] px-2 py-0.5 rounded-md truncate max-w-full">
             {myNickname} (나)
           </span>
+          {isVoiceConnected && (
+            <div className="flex flex-col items-center w-full mt-1 px-1">
+              {/* 💡 [핵심 해결] 마이크 증폭 리미트 해제: 최대 1500% (15배) 까지 올릴 수 있습니다! */}
+              <input
+                type="range"
+                min="0.1" max="15.0" step="0.5"
+                value={micVolume || 1.0}
+                onChange={(e) => changeMicVolume(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-[#1E1F22] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                title="내 마이크 증폭 (최대 1500%)"
+              />
+              <span className="text-[9px] text-gray-500 font-bold mt-1 tracking-wider">
+                마이크 {Math.round((micVolume || 1) * 100)}%
+              </span>
+            </div>
+          )}
         </div>
 
+        {/* 팀원 프로필 & 개별 볼륨 조절 슬라이더 */}
         {isVoiceConnected &&
           Object.entries(peers).map(([peerId, stream]) => {
             const member = teamMembers.find((m) => String(m.userId) === String(peerId));
             const nickname = member ? member.nickname : `팀원${peerId}`;
             const isSpeaking = speakingUsers.has(String(peerId));
+            const vol = peerVolumes[peerId] ?? 1.0;
 
             return (
-              <div key={peerId} className="flex flex-col items-center gap-2 animate-fade-in">
-                <PeerAudio stream={stream} />
+              <div key={peerId} className="flex flex-col items-center gap-2 animate-fade-in w-full">
+                <PeerAudio stream={stream} volume={vol} />
 
                 <div className={`w-16 h-16 bg-gray-500 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200
                   ${isSpeaking ? "ring-4 ring-green-400 ring-offset-2 ring-offset-[#2B2D31]" : ""}
@@ -188,6 +236,21 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
                 <span className="text-[12px] font-bold text-gray-300 bg-[#1E1F22] px-2 py-0.5 rounded-md truncate max-w-full">
                   {nickname}
                 </span>
+                
+                <div className="flex flex-col items-center w-full mt-1 px-1">
+                  {/* 💡 [핵심 해결] 상대방 볼륨 리미트 해제: 최대 1000% (10배) 까지 올릴 수 있습니다! */}
+                  <input
+                    type="range"
+                    min="0" max="10.0" step="0.5"
+                    value={vol}
+                    onChange={(e) => handlePeerVolume(peerId, parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-[#1E1F22] rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    title="상대방 소리 조절 (최대 1000%)"
+                  />
+                  <span className="text-[9px] text-gray-500 font-bold mt-1 tracking-wider">
+                    소리 {Math.round(vol * 100)}%
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -615,7 +678,7 @@ export default function MenuBar({ mode = "personal" }) {
     switch (itemName) {
       case "새 파일":
         if (!isTerminalVisible) dispatch(toggleTerminal());
-        dispatch(writeToTerminal("[System] 새 파일 생성 준비 중입니다.\n"));
+        dispatch(writeToTerminal("[System] 새 파일을 생성합니다.\n"));
         break;
       case "파일 열기...":
       case "폴더 열기...":
@@ -1564,7 +1627,6 @@ export default function MenuBar({ mode = "personal" }) {
         </div>
       )}
 
-      {/* 💡 [핵심 해결 2] 모달창을 숨기기만 하고 삭제(Unmount)하지 않도록 수정했습니다! */}
       <div
         className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center transition-all duration-300 ${
           isVoiceChatModalOpen && mode === "team" ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
@@ -1577,7 +1639,6 @@ export default function MenuBar({ mode = "personal" }) {
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 모달이 숨겨져도 컴포넌트가 살아있어서 통화와 음소거 상태가 유지됩니다! */}
           <VoiceChatRoom
             myUserId={user?.id}
             teamMembers={teamMembers}

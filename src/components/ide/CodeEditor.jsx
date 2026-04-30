@@ -45,7 +45,6 @@ class CustomWebSocket extends WebSocket {
   }
 }
 
-// 충돌 코드를 병합해 주는 함수
 const applyConflictEdit = (monacoInstance, editor, conflict, type) => {
   const model = editor.getModel();
   if (!model) return;
@@ -140,16 +139,11 @@ export default function CodeEditor() {
 
   const isTeamMode = pathname?.includes("/team");
 
-  // 💡 [핵심 추가] 내 이름을 아주 빠르고 정확하게 찾아오는 해결사 함수!
   const getMyDisplayName = () => {
-    // 1. API로 가져온 닉네임이 있다면 1순위
     if (fetchedNickname) return fetchedNickname;
-    // 2. AuthContext의 닉네임이 있다면 2순위
     if (user?.nickname) return user.nickname;
-    // 3. 닉네임이 없으면 이메일 아이디 앞부분 사용 (ex: aaa@gmail.com -> aaa)
     if (user?.email) return user.email.split("@")[0];
 
-    // 4. 에디터가 너무 빨리 켜져서 user가 null일 때를 대비한 최후의 보루 (로컬 스토리지 즉시 탐색)
     try {
       if (typeof window !== "undefined") {
         const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
@@ -158,21 +152,39 @@ export default function CodeEditor() {
       }
     } catch (e) {}
 
-    return "익명 개발자"; // 진짜 아무것도 없을 때만
+    return "익명 개발자"; 
   };
 
+  // 💡 [핵심 해결] Yjs의 가짜 에러(console.error)가 Next.js 에러 창을 띄우지 못하게 임시 차단합니다.
   const cleanupCollaboration = () => {
-    if (bindingRef.current) {
-      bindingRef.current.destroy();
-      bindingRef.current = null;
-    }
-    if (providerRef.current) {
-      providerRef.current.disconnect();
-      providerRef.current = null;
-    }
-    if (ydocRef.current) {
-      ydocRef.current.destroy();
-      ydocRef.current = null;
+    const originalConsoleError = console.error;
+
+    // 잠시 동안 console.error를 가로채서 Yjs 에러만 필터링합니다.
+    console.error = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('[yjs] Tried to remove event handler')) {
+        return; // 무시하고 버림
+      }
+      originalConsoleError.apply(console, args);
+    };
+
+    try {
+      if (bindingRef.current) {
+        bindingRef.current.destroy();
+        bindingRef.current = null;
+      }
+      if (providerRef.current) {
+        providerRef.current.disconnect();
+        providerRef.current = null;
+      }
+      if (ydocRef.current) {
+        ydocRef.current.destroy();
+        ydocRef.current = null;
+      }
+    } catch (e) {
+      // 일반 에러 무시
+    } finally {
+      // 작업이 끝나면 귀를 다시 열어줍니다. (원상 복구)
+      console.error = originalConsoleError;
     }
   };
 
@@ -213,7 +225,6 @@ export default function CodeEditor() {
         .toString(16)
         .padStart(6, "0");
 
-    // 💡 [수정] 위에서 만든 똑똑한 함수를 사용해 이름을 등록합니다.
     awareness.setLocalStateField("user", {
       name: getMyDisplayName(),
       color: myColor,
@@ -314,7 +325,6 @@ export default function CodeEditor() {
       .catch(console.error);
   }, [user]);
 
-  // 💡 [핵심 수정] 유저 정보가 뒤늦게 도착했을 때 즉시 이름을 덮어씌워주는 감시자!
   useEffect(() => {
     if (providerRef.current && providerRef.current.awareness) {
       const awareness = providerRef.current.awareness;
@@ -328,7 +338,7 @@ export default function CodeEditor() {
         });
       }
     }
-  }, [fetchedNickname, user]); // user 객체가 변할 때마다 감지해서 쏜다!
+  }, [fetchedNickname, user]); 
 
   const isContentLoaded = fileContents[activeFileId] !== undefined;
 
@@ -483,7 +493,6 @@ export default function CodeEditor() {
     editorRef.current = editor;
     setIsEditorReady(true);
 
-    // 충돌 해결 버튼 (CodeLens) 설정
     const cmdCurrent = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "current"));
     const cmdIncoming = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "incoming"));
     const cmdBoth = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "both"));

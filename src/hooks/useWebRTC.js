@@ -8,8 +8,12 @@ export const useWebRTC = (workspaceId, myUserId) => {
     const [isMuted, setIsMuted] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [speakingUsers, setSpeakingUsers] = useState(new Set()); 
+    const [micVolume, setMicVolumeState] = useState(1.0);
 
+    const rawStreamRef = useRef(null);
     const localStreamRef = useRef(null);
+    const gainNodeRef = useRef(null);
+    const audioCtxRef = useRef(null); // 💡 [핵심 해결] 메모리 청소를 위해 컨텍스트 저장
     const peerConnectionsRef = useRef({});
     const stompClientRef = useRef(null);
     const localSpeakingRef = useRef(false);
@@ -32,28 +36,50 @@ export const useWebRTC = (workspaceId, myUserId) => {
 
         const initWebRTC = async () => {
             try {
-                // 💡 [핵심 해결] 브라우저가 소리를 뚝뚝 끊어먹지 못하게 모든 AI 필터를 강제로 끕니다! (원음 전송)
-                const stream = await navigator.mediaDevices.getUserMedia({ 
+                const rawStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: { 
-                        echoCancellation: false,   // ❌ 하울링 방지 끄기 (긴 소리, 음악 잘림 방지)
-                        noiseSuppression: false,   // ❌ 노이즈 캔슬링 끄기
-                        autoGainControl: false,    // ❌ 자동 볼륨 조절 끄기
-                        // Chrome 전용 강력 필터들도 모조리 해제
+                        echoCancellation: false,   
+                        noiseSuppression: false,   
+                        autoGainControl: false,    
+                        googAutoGainControl: false, 
                         googEchoCancellation: false,
-                        googAutoGainControl: false,
                         googNoiseSuppression: false,
-                        googHighpassFilter: false
+                        googHighpassFilter: false,
+                        sampleRate: 48000,
+                        channelCount: 1
                     }, 
                     video: false 
                 });
                 
                 if (isCancelled) {
-                    stream.getTracks().forEach(track => track.stop());
+                    rawStream.getTracks().forEach(track => track.stop());
                     return;
                 }
 
-                localStreamRef.current = stream;
-                monitorLocalAudio(stream);
+                rawStreamRef.current = rawStream;
+
+                // 💡 [안전장치 추가]
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtxRef.current = audioCtx;
+                
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume().catch(e => console.warn("오디오 컨텍스트 켜기 차단됨:", e));
+                }
+
+                const source = audioCtx.createMediaStreamSource(rawStream);
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.value = 1.0; 
+                gainNodeRef.current = gainNode;
+
+                const destination = audioCtx.createMediaStreamDestination();
+
+                source.connect(gainNode);
+                gainNode.connect(destination);
+
+                const processedStream = destination.stream;
+                localStreamRef.current = processedStream;
+
+                monitorLocalAudio(audioCtx, gainNode);
 
                 const client = new Client({
                     brokerURL: `${WS_BASE_URL}/ws/chat`,
@@ -202,14 +228,10 @@ export const useWebRTC = (workspaceId, myUserId) => {
         };
     }, [workspaceId, myUserId]);
 
-    const monitorLocalAudio = (stream) => {
+    const monitorLocalAudio = (audioCtx, sourceNode) => {
         try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
-
             const analyser = audioCtx.createAnalyser();
-            const source = audioCtx.createMediaStreamSource(stream);
-            source.connect(analyser);
+            sourceNode.connect(analyser);
             
             analyser.fftSize = 256;
             analyser.smoothingTimeConstant = 0.5;
@@ -249,7 +271,7 @@ export const useWebRTC = (workspaceId, myUserId) => {
                 const averageVolume = sum / dataArray.length;
                 
                 const isSpeakingNow = averageVolume > 5;
-                const currentlyMuted = localStreamRef.current?.getAudioTracks()[0]?.enabled === false;
+                const currentlyMuted = rawStreamRef.current?.getAudioTracks()[0]?.enabled === false;
 
                 if (currentlyMuted) {
                     updateSpeakingState(false);
@@ -270,9 +292,21 @@ export const useWebRTC = (workspaceId, myUserId) => {
         }
     };
 
+    const changeMicVolume = useCallback((volume) => {
+        try {
+            const safeVolume = isNaN(volume) ? 1.0 : volume; // 💡 [안전장치]
+            if (gainNodeRef.current && gainNodeRef.current.context.state !== 'closed') {
+                gainNodeRef.current.gain.setTargetAtTime(safeVolume, gainNodeRef.current.context.currentTime, 0.1);
+                setMicVolumeState(safeVolume);
+            }
+        } catch (e) {
+            console.error("마이크 볼륨 조절 에러:", e);
+        }
+    }, []);
+
     const toggleMute = useCallback(() => {
-        if (localStreamRef.current) {
-            const audioTrack = localStreamRef.current.getAudioTracks()[0];
+        if (rawStreamRef.current) {
+            const audioTrack = rawStreamRef.current.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.enabled = !audioTrack.enabled;
                 setIsMuted(!audioTrack.enabled);
@@ -313,9 +347,15 @@ export const useWebRTC = (workspaceId, myUserId) => {
         Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
         peerConnectionsRef.current = {};
         
+        if (rawStreamRef.current) rawStreamRef.current.getTracks().forEach(track => track.stop());
         if (localStreamRef.current) localStreamRef.current.getTracks().forEach(track => track.stop());
         if (stompClientRef.current) stompClientRef.current.deactivate();
+
+        // 💡 [핵심 해결] 통화를 끊을 때 메모리에 쌓인 오디오 컨텍스트 찌꺼기를 완벽히 파괴합니다!
+        if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+            audioCtxRef.current.close().catch(()=>{});
+        }
     }, [workspaceId, myUserId]);
 
-    return { peers, isConnected, isMuted, toggleMute, speakingUsers, leaveRoom };
+    return { peers, isConnected, isMuted, toggleMute, speakingUsers, leaveRoom, micVolume, changeMicVolume };
 };
