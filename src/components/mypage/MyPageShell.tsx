@@ -34,8 +34,8 @@ import {
 const TABS: TabItem[] = [
   { key: "profile", label: "프로필", icon: UserRound, group: "기본" },
   { key: "account", label: "계정", icon: ShieldCheck, group: "기본" },
-  { key: "projects", label: "프로젝트", icon: Folder, group: "기본" },
-  { key: "teams", label: "팀", icon: UsersRound, group: "기본" },
+  { key: "projects", label: "개인 프로젝트", icon: Folder, group: "기본" },
+  { key: "teams", label: "팀 프로젝트", icon: UsersRound, group: "기본" },
   { key: "settings", label: "환경설정", icon: Settings, group: "기본" },
   {
     key: "identity",

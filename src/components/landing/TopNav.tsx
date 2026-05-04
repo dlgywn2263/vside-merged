@@ -122,8 +122,8 @@ export default function TopNav() {
     { href: "/dashboard", label: "대시보드" },
     { href: "/projects", label: "AIVS" },
     { href: "/relocation", label: "재배치" },
-    { href: "/schedule", label: "일정관리" },
-    { href: "/devlog", label: "개발일지" },
+    { href: "/schedules", label: "일정관리" },
+    { href: "/devlogs", label: "개발일지" },
     { href: "/my", label: "마이페이지" },
   ];
 
