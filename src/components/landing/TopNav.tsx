@@ -119,11 +119,11 @@ export default function TopNav() {
   };
 
   const NAV_ITEMS = [
-    { href: "/dashboard", label: "대시보드" },
     { href: "/projects", label: "AIVS" },
     { href: "/relocation", label: "재배치" },
     { href: "/schedules", label: "일정관리" },
     { href: "/devlogs", label: "개발일지" },
+
     { href: "/my", label: "마이페이지" },
   ];
 
@@ -132,7 +132,7 @@ export default function TopNav() {
       <div className="mx-auto max-w-6xl px-6 py-2 flex items-center justify-between text-xl">
         {/* 로고 */}
         <Link href="/" className="font-black tracking-tight">
-          Devw
+          WEVAIS
         </Link>
 
         {/* 데스크톱 네비 */}
