@@ -44,7 +44,6 @@ const CustomNode = ({ data }) => {
 
   const r = (data.role || "").toLowerCase();
 
-  // 💡 역할(Role)별 컬러링 로직
   if (r === "main") {
     displayRole = "ENTRY POINT";
     roleColor = "text-red-500";
@@ -181,7 +180,6 @@ export default function CodeMap() {
 
   const isMapTab = activeFileId === "Architecture Map" || activeFileId === "CodeMap" || activeFileId?.includes("codemap");
 
-  // 💡 [핵심] 현재 활성화된 언어(템플릿) 추론
   const currentProjectData = projectList?.find((p) => p.name === activeProject) || {};
   let currentLang = currentProjectData.templateType || currentProjectData.language || "JAVA";
   const projLower = (activeProject || "").toLowerCase();
@@ -280,7 +278,6 @@ export default function CodeMap() {
       backendNodes.forEach((node) => {
         const r = (node.role || "").toLowerCase();
         
-        // 특수 노드 최우선 분류 (리액트, 파이썬)
         if (node.type === "REACT_COMPONENT") {
           grouped.react.push(node);
           return;
@@ -529,8 +526,16 @@ export default function CodeMap() {
     if (!genName.trim() || !genDataType.trim()) return alert("입력 오류!");
     try {
       setIsLoading(true);
+      
+      let targetFilePath = selectedNode.id;
+      if (!targetFilePath.includes(".")) {
+          if (currentLang === "REACT") targetFilePath += ".jsx";
+          else if (currentLang === "PYTHON") targetFilePath += ".py";
+          else targetFilePath += ".java"; 
+      }
+
       const payload = {
-        className: selectedNode.label,
+        className: targetFilePath,
         targetType: genTargetType,
         accessModifier: genAccessModifier,
         dataType: genDataType,
@@ -752,93 +757,6 @@ export default function CodeMap() {
               <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-end gap-2">
                 <button onClick={() => setIsGenerateModalOpen(false)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-lg">취소</button>
                 <button onClick={handleGenerateSubmit} disabled={!genName.trim() || isLoading} className="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg flex items-center gap-1">주입하기</button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* 💡 동적 템플릿 맞춤 새 컴포넌트 모달 */}
-        {isModalOpen && createPortal(
-          <div className="fixed inset-0 bg-black/40 z-[9999] flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-[400px] flex flex-col overflow-hidden animate-fade-in-up">
-              <div className="bg-gray-50 px-5 py-3 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
-                  {currentLang === "REACT" ? <DiReact className="text-cyan-500" size={20} /> : currentLang === "PYTHON" ? <DiPython className="text-blue-500" size={20} /> : <VscSymbolClass className="text-blue-600" size={18} />}
-                  새 컴포넌트 생성
-                </h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500"><VscClose size={20} /></button>
-              </div>
-              <div className="p-6 flex flex-col gap-5">
-                <div>
-                  <label className="block text-[12px] font-bold text-gray-600 mb-1.5">이름 (확장자 제외)</label>
-                  <input type="text" value={newCompName} onChange={(e) => setNewCompName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:border-blue-500 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-bold text-gray-600 mb-1.5">컴포넌트 타입</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {currentLang === "REACT" ? (
-                      <label className="border border-cyan-500 bg-cyan-50 text-cyan-700 rounded-lg p-2 flex items-center gap-2 cursor-pointer"><input type="radio" checked readOnly className="hidden" /><span className="text-xs font-bold">REACT COMPONENT</span></label>
-                    ) : currentLang === "PYTHON" ? (
-                      <label className="border border-blue-500 bg-blue-50 text-blue-700 rounded-lg p-2 flex items-center gap-2 cursor-pointer"><input type="radio" checked readOnly className="hidden" /><span className="text-xs font-bold">PYTHON CLASS</span></label>
-                    ) : (
-                      ["CLASS", "INTERFACE", "ABSTRACT", "EXCEPTION"].map((t) => (
-                        <label key={t} className={`border rounded-lg p-2 flex items-center gap-2 cursor-pointer ${newCompType === t ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:bg-gray-50"}`}>
-                          <input type="radio" name="compType" value={t} checked={newCompType === t} onChange={() => setNewCompType(t)} className="hidden" />
-                          <span className="text-xs font-bold">{t}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-end gap-2">
-                <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-lg">취소</button>
-                <button onClick={handleCreateComponentSubmit} disabled={!newCompName.trim() || isLoading} className="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg">생성</button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* 관계 주입 모달 */}
-        {pendingRelation && createPortal(
-          <div className="fixed inset-0 bg-black/40 z-[9999] flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-[420px] flex flex-col overflow-hidden animate-fade-in-up">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 flex justify-between items-center text-white">
-                <h3 className="font-extrabold flex items-center gap-2"><VscLink size={18} /> 객체지향 관계 주입</h3>
-                <button onClick={() => setPendingRelation(null)} className="text-blue-100 hover:text-white"><VscClose size={20} /></button>
-              </div>
-              <div className="p-6 flex flex-col gap-4">
-                <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
-                  <div className="flex flex-col text-center">
-                    <span className="text-[10px] text-gray-500 font-bold mb-1">Source (주입받을 곳)</span>
-                    <span className="text-sm font-mono font-bold text-blue-700">{pendingRelation.source.split("/").pop().replace(".java", "")}</span>
-                  </div>
-                  <VscLink size={20} className="text-gray-400 rotate-45" />
-                  <div className="flex flex-col text-center">
-                    <span className="text-[10px] text-gray-500 font-bold mb-1">Target (주입할 객체)</span>
-                    <span className="text-sm font-mono font-bold text-indigo-700">{pendingRelation.target.split("/").pop().replace(".java", "")}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[12px] font-bold text-gray-600 mb-2">어떤 관계로 연결하시겠습니까?</label>
-                  <div className="flex flex-col gap-2">
-                    {[{v: "EXTENDS", t: "상속", d: "Source가 Target을 상속받습니다."}, {v: "IMPLEMENTS", t: "구현", d: "Source가 Target 인터페이스를 구현합니다."}, {v: "COMPOSITION", t: "참조/합성", d: "Source 내부에 Target 객체를 변수로 선언합니다."}].map(r => (
-                      <label key={r.v} className={`border rounded-lg p-3 flex flex-col cursor-pointer ${relationType === r.v ? "border-blue-500 bg-blue-50 shadow-sm" : "border-gray-200 hover:bg-gray-50"}`}>
-                        <div className="flex items-center gap-2">
-                          <input type="radio" checked={relationType === r.v} onChange={() => setRelationType(r.v)} className="hidden" />
-                          <span className="font-bold text-blue-700 text-sm">{r.t} ({r.v})</span>
-                        </div>
-                        <span className="text-[11px] text-gray-500 mt-1 pl-1">{r.d}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-end gap-2">
-                <button onClick={() => setPendingRelation(null)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-lg">취소</button>
-                <button onClick={handleRelationSubmit} disabled={isLoading} className="px-5 py-2 text-sm font-bold text-white bg-gray-900 hover:bg-black rounded-lg flex items-center gap-1">{isLoading ? <VscRefresh className="animate-spin" /> : <VscLink />} 주입하기</button>
               </div>
             </div>
           </div>,

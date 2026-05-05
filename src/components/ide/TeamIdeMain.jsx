@@ -58,7 +58,6 @@ function CollaborationPanel({ workspaceId }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, chatMode]);
 
-  // 💡 [핵심 추가] 내 이름을 억지로라도 찾아내는 똑똑한 함수
   const getMyChatName = () => {
     if (myProfile?.nickname) return myProfile.nickname;
     if (user?.nickname) return user.nickname;
@@ -138,11 +137,10 @@ function CollaborationPanel({ workspaceId }) {
     return () => {
       ChatSocket.disconnect();
     };
-  }, [workspaceId, user]); // user가 바뀔 때마다 재실행
+  }, [workspaceId, user]); 
 
   const handleSend = () => {
     const myId = getMyUserId();
-    // 💡 [핵심 수정] user 객체가 없어도 myId나 chatInput이 있으면 통과시킵니다!
     if (!chatInput.trim() || !workspaceId || !myId) return;
 
     const actualName = getMyChatName();
@@ -158,7 +156,7 @@ function CollaborationPanel({ workspaceId }) {
     };
 
     ChatSocket.sendMessage(messageData);
-    setChatInput(""); // 전송 후 입력창 비우기
+    setChatInput(""); 
   };
 
   const displayMessages = messages.filter((msg) => {
@@ -245,7 +243,7 @@ function CollaborationPanel({ workspaceId }) {
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { // shift+enter 줄바꿈 방지
+              if (e.key === "Enter" && !e.shiftKey) { 
                 e.preventDefault();
                 handleSend();
               }
@@ -425,7 +423,7 @@ export default function TeamIdeMain() {
 
   return (
     <div
-      className={`h-screen w-screen flex flex-col text-[#333] overflow-hidden font-sans transition-colors duration-700 ${
+      className={`w-full h-[calc(100vh-64px)] flex flex-col text-[#333] overflow-hidden font-sans transition-colors duration-700 ${
         isSandboxMode ? "bg-slate-900" : "bg-white"
       }`}
     >

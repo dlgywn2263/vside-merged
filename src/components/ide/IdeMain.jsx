@@ -16,12 +16,7 @@ import ApiTesterPage from "@/components/api-test/ApiTesterPage";
 import CommandPalette from "@/components/ide/CommandPalette";
 import GitDashboard from "@/components/ide/GitDashboard";
 import CodeMap from "@/components/ide/CodeMap";
-// import MyPageShell from "@/components/MyPageShell";
-
-// 💡 [추가] 우리가 방금 만든 개발일지 패널 임포트!
 import DevlogPanel from "@/components/ide/DevlogPanel";
-
-// 💡 [추가] 전체 화면을 덮을 페이지형 모달 및 웹 미리보기 창 임포트
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
 import WebPreview from "@/components/ide/WebPreview";
 
@@ -38,18 +33,6 @@ import {
   closeAllFiles,
 } from "@/store/slices/fileSystemSlice";
 import MyPageShell from "../mypage/MyPageShell";
-
-// const ApiTestPanel = () => (
-//   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
-//     API Test Panel
-//   </div>
-// );
-
-// const MyPagePanel = () => (
-//   <div className="flex-1 flex items-center justify-center text-gray-500 bg-white font-bold">
-//     My Page Panel
-//   </div>
-// );
 
 export default function IdeMain() {
   const params = useParams();
@@ -153,7 +136,6 @@ export default function IdeMain() {
   const renderMainContent = () => {
     switch (activeActivity) {
       case "docs":
-        // 💡 [변경] 기존의 단순 글자(DocsPanel)를 지우고, 우리가 만든 DevlogPanel 렌더링!
         return <DevlogPanel />;
       case "api-test":
         return <ApiTesterPage />;
@@ -202,7 +184,7 @@ export default function IdeMain() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white text-[#333] overflow-hidden font-sans relative">
+    <div className="w-full h-[calc(100vh-64px)] flex flex-col bg-white text-[#333] overflow-hidden font-sans relative">
       <CommandPalette />
       <MenuBar mode="personal" />
       <div className="flex-1 flex overflow-hidden">

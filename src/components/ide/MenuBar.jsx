@@ -86,6 +86,7 @@ const avatarColors = [
 const PeerAudio = React.memo(({ stream, volume = 1.0 }) => {
   const audioRef = useRef(null);
   const gainNodeRef = useRef(null);
+  const audioCtxRef = useRef(null);
 
   useEffect(() => {
     const audioEl = audioRef.current;
@@ -96,29 +97,44 @@ const PeerAudio = React.memo(({ stream, volume = 1.0 }) => {
 
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        audioCtxRef.current = audioCtx; 
+
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(e => console.warn("AudioContext 차단:", e));
+        }
 
         const source = audioCtx.createMediaStreamSource(stream);
         const gainNode = audioCtx.createGain();
         
-        gainNode.gain.value = volume;
+        gainNode.gain.value = isNaN(volume) ? 1.0 : volume; 
         source.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         
         gainNodeRef.current = gainNode;
       } catch (err) {
-        console.error("증폭기 연결 실패 (기본 재생으로 대체):", err);
+        console.error("증폭기 연결 실패:", err);
         audioEl.muted = false;
-        audioEl.volume = Math.min(volume, 1.0); 
+        audioEl.volume = Math.max(0, Math.min(volume, 1.0)); 
       }
     }
+
+    return () => {
+        if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+            audioCtxRef.current.close().catch(()=>{});
+        }
+    };
   }, [stream]);
 
   useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.setTargetAtTime(volume, gainNodeRef.current.context.currentTime, 0.1);
-    } else if (audioRef.current) {
-      audioRef.current.volume = Math.min(volume, 1.0);
+    try {
+        const safeVol = isNaN(volume) ? 1.0 : volume;
+        if (gainNodeRef.current && gainNodeRef.current.context.state !== 'closed') {
+          gainNodeRef.current.gain.setTargetAtTime(safeVol, gainNodeRef.current.context.currentTime, 0.1);
+        } else if (audioRef.current) {
+          audioRef.current.volume = Math.max(0, Math.min(safeVol, 1.0));
+        }
+    } catch (e) {
+        console.error("볼륨 조절 에러:", e);
     }
   }, [volume]);
 
@@ -146,7 +162,10 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
   );
 
   const [peerVolumes, setPeerVolumes] = useState({});
-  const handlePeerVolume = (peerId, vol) => setPeerVolumes(prev => ({...prev, [peerId]: vol}));
+  const handlePeerVolume = (peerId, vol) => {
+      const safeVol = isNaN(vol) ? 1.0 : vol;
+      setPeerVolumes(prev => ({...prev, [peerId]: safeVol}));
+  };
 
   const handleConnectToggle = () => dispatch(setVoiceConnected(!isVoiceConnected));
   
@@ -182,7 +201,6 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
       </div>
       
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-6 content-start">
-        {/* 내 프로필 & 내 마이크 증폭 슬라이더 */}
         <div className="flex flex-col items-center gap-2 w-full">
           <div className={`relative w-16 h-16 rounded-full flex items-center justify-center text-xl font-black text-white shadow-lg transition-all duration-200 
             ${isMuted || !isVoiceConnected ? "bg-gray-600 opacity-60" : "bg-indigo-500"}
@@ -200,7 +218,6 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
           </span>
           {isVoiceConnected && (
             <div className="flex flex-col items-center w-full mt-1 px-1">
-              {/* 💡 [핵심 해결] 마이크 증폭 리미트 해제: 최대 1500% (15배) 까지 올릴 수 있습니다! */}
               <input
                 type="range"
                 min="0.1" max="15.0" step="0.5"
@@ -216,7 +233,6 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
           )}
         </div>
 
-        {/* 팀원 프로필 & 개별 볼륨 조절 슬라이더 */}
         {isVoiceConnected &&
           Object.entries(peers).map(([peerId, stream]) => {
             const member = teamMembers.find((m) => String(m.userId) === String(peerId));
@@ -238,7 +254,6 @@ const VoiceChatRoom = ({ myUserId, teamMembers, onClose }) => {
                 </span>
                 
                 <div className="flex flex-col items-center w-full mt-1 px-1">
-                  {/* 💡 [핵심 해결] 상대방 볼륨 리미트 해제: 최대 1000% (10배) 까지 올릴 수 있습니다! */}
                   <input
                     type="range"
                     min="0" max="10.0" step="0.5"
@@ -504,11 +519,12 @@ export default function MenuBar({ mode = "personal" }) {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  // 💡 [핵심 수정] 객체 형태({ workspaceId, email })로 제대로 감싸서 보냅니다!
   const handleSendInvite = async () => {
     if (!inviteEmail.trim()) return alert("초대할 이메일 주소를 입력해주세요.");
     try {
       setIsInviting(true);
-      await inviteWorkspaceMemberApi(workspaceId, inviteEmail);
+      await inviteWorkspaceMemberApi({ workspaceId, email: inviteEmail }); 
       alert(`✨ ${inviteEmail} 님에게 초대장을 발송했습니다!`);
       setInviteEmail("");
       setIsInviteModalOpen(false);
