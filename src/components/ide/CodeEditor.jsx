@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
-import { VscCheck, VscClose, VscSparkle, VscLoading } from "react-icons/vsc";
+import { VscCheck, VscClose, VscSparkle, VscLoading, VscLock } from "react-icons/vsc";
 
 import {
   updateFileContent,
@@ -32,13 +32,16 @@ import {
 
 import { useAuth } from "@/lib/ide/AuthContext";
 
+const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE_URL || "ws://localhost:8080";
+
 class CustomWebSocket extends WebSocket {
   constructor(url, protocols) {
     const parsedUrl = new URL(url);
     const pathParts = parsedUrl.pathname.split("/ws/collab/");
     const roomName =
       pathParts.length > 1 ? decodeURIComponent(pathParts[1]) : "default-room";
-    const safeUrl = `ws://localhost:8080/ws/collab?room=${encodeURIComponent(
+    
+    const safeUrl = `${WS_BASE}/ws/collab?room=${encodeURIComponent(
       roomName,
     )}`;
     super(safeUrl, protocols);
@@ -96,7 +99,12 @@ export default function CodeEditor() {
   const { user } = useAuth();
 
   const editorRef = useRef(null);
+  const monacoRef = useRef(null); // 💡 [핵심] Monaco 진짜 객체 보관용
   const decorationsRef = useRef([]);
+  
+  // 💡 [잠금 로직] 직접 접근용 Ref 보관
+  const lockedLinesRef = useRef({});
+  const lockDecosRef = useRef([]);
 
   const [fontSize, setFontSize] = useState(14);
   const [showAiInput, setShowAiInput] = useState(false);
@@ -104,6 +112,9 @@ export default function CodeEditor() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [fetchedNickname, setFetchedNickname] = useState("");
+
+  const [lockWarning, setLockWarning] = useState({ show: false, msg: "" });
+  const warningTimeoutRef = useRef(null);
 
   const aiInputRef = useRef(null);
 
@@ -115,6 +126,11 @@ export default function CodeEditor() {
     activeBranch,
     aiSuggestion,
   } = useSelector((state) => state.fileSystem);
+
+  const fileContentsRef = useRef(fileContents);
+  useEffect(() => {
+    fileContentsRef.current = fileContents;
+  }, [fileContents]);
 
   const { editorCmd, debugLine, breakpoints } = useSelector(
     (state) => state.ui,
@@ -138,6 +154,32 @@ export default function CodeEditor() {
   const bindingRef = useRef(null);
 
   const isTeamMode = pathname?.includes("/team");
+  const isTeamModeRef = useRef(isTeamMode);
+  useEffect(() => {
+    isTeamModeRef.current = isTeamMode;
+  }, [isTeamMode]);
+
+  const showWarningToast = (msg) => {
+    if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
+    setLockWarning({ show: true, msg });
+    warningTimeoutRef.current = setTimeout(() => {
+      setLockWarning({ show: false, msg: "" });
+    }, 2500);
+  };
+
+  useEffect(() => {
+    const handleUnhandledRejection = (event) => {
+      if (
+        event.reason &&
+        event.reason.type === "cancelation" &&
+        event.reason.msg === "operation is manually canceled"
+      ) {
+        event.preventDefault(); 
+      }
+    };
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+  }, []);
 
   const getMyDisplayName = () => {
     if (fetchedNickname) return fetchedNickname;
@@ -155,24 +197,31 @@ export default function CodeEditor() {
     return "익명 개발자"; 
   };
 
-  // 💡 [핵심 해결] Yjs의 가짜 에러(console.error)가 Next.js 에러 창을 띄우지 못하게 임시 차단합니다.
   const cleanupCollaboration = () => {
     const originalConsoleError = console.error;
-
-    // 잠시 동안 console.error를 가로채서 Yjs 에러만 필터링합니다.
     console.error = (...args) => {
       if (typeof args[0] === 'string' && args[0].includes('[yjs] Tried to remove event handler')) {
-        return; // 무시하고 버림
+        return; 
       }
       originalConsoleError.apply(console, args);
     };
 
     try {
+      if (editorRef.current && lockDecosRef.current.length > 0) {
+        editorRef.current.deltaDecorations(lockDecosRef.current, []);
+        lockDecosRef.current = [];
+      }
+      lockedLinesRef.current = {};
+
       if (bindingRef.current) {
         bindingRef.current.destroy();
         bindingRef.current = null;
       }
       if (providerRef.current) {
+        if (providerRef.current.awareness) {
+          // 💡 퇴장 시 내 커서 상태 깔끔하게 지우기 (유령 방지)
+          providerRef.current.awareness.setLocalState(null);
+        }
         providerRef.current.disconnect();
         providerRef.current = null;
       }
@@ -181,9 +230,7 @@ export default function CodeEditor() {
         ydocRef.current = null;
       }
     } catch (e) {
-      // 일반 에러 무시
     } finally {
-      // 작업이 끝나면 귀를 다시 열어줍니다. (원상 복구)
       console.error = originalConsoleError;
     }
   };
@@ -192,23 +239,12 @@ export default function CodeEditor() {
     cleanupCollaboration();
     if (!activeFileId || !workspaceId || !activeProject) return;
 
-    const model = editor.getModel();
-    if (!model) return;
-
-    const initialContent = fileContents[activeFileId] || "";
-    if (model.getValue() !== initialContent) {
-      model.setValue(initialContent);
-    }
-
-    const roomName = `${workspaceId}:${activeProject}:${
-      activeBranch || "master"
-    }:${activeFileId}`;
-
+    const roomName = `${workspaceId}:${activeProject}:${activeBranch || "master"}:${activeFileId}`;
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
 
     const provider = new WebsocketProvider(
-      "ws://localhost:8080/ws/collab",
+      `${WS_BASE}/ws/collab`,
       roomName,
       ydoc,
       {
@@ -219,16 +255,50 @@ export default function CodeEditor() {
     providerRef.current = provider;
 
     const awareness = provider.awareness;
-    const myColor =
-      "#" +
-      Math.floor(Math.random() * 16777215)
-        .toString(16)
-        .padStart(6, "0");
+    const myColor = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
 
+    // 초기 위치 방송
+    const initialPos = editor.getPosition();
     awareness.setLocalStateField("user", {
       name: getMyDisplayName(),
       color: myColor,
+      currentLine: initialPos ? initialPos.lineNumber : 1,
     });
+
+    // 커서 이동 시 내 위치 방송
+    editor.onDidChangeCursorPosition((e) => {
+      if (!isTeamModeRef.current) return;
+      const line = e.position.lineNumber;
+      const currentState = awareness.getLocalState();
+      if (currentState?.user && currentState.user.currentLine !== line) {
+        awareness.setLocalStateField("user", {
+          ...currentState.user,
+          currentLine: line,
+        });
+      }
+    });
+
+    // 💡 [핵심] 잠금 영역(빨간줄) 화면에 그리기
+    const updateLockDecorations = () => {
+      // monacoRef.current가 있어야 완벽한 객체 생성이 가능합니다!
+      if (!editorRef.current || !monacoRef.current) return;
+      
+      const decos = [];
+      Object.entries(lockedLinesRef.current).forEach(([lineStr, lockerName]) => {
+        const line = Number(lineStr);
+        decos.push({
+          // 💡 순수 자바스크립트 객체 대신 무조건 진짜 monaco.Range 객체 사용!
+          range: new monacoRef.current.Range(line, 1, line, 1),
+          options: {
+            isWholeLine: true,
+            className: "locked-line-bg",
+            linesDecorationsClassName: "locked-line-margin",
+            hoverMessage: { value: `🚫 **${lockerName}**님이 이 줄을 수정 중입니다.` },
+          },
+        });
+      });
+      lockDecosRef.current = editorRef.current.deltaDecorations(lockDecosRef.current, decos);
+    };
 
     awareness.on("change", () => {
       const styleId = "yjs-dynamic-cursors";
@@ -241,6 +311,8 @@ export default function CodeEditor() {
       }
 
       const styles = [];
+      const newLockedLines = {}; 
+
       awareness.getStates().forEach((state, clientId) => {
         if (state.user && state.user.name && state.user.color) {
           styles.push(`
@@ -272,73 +344,54 @@ export default function CodeEditor() {
               background-color: ${state.user.color}44 !important;
             }
           `);
+
+          // 나 이외의 다른 사람이 점유한 줄을 락으로 등록
+          if (clientId !== awareness.clientID && state.user.currentLine) {
+            newLockedLines[state.user.currentLine] = state.user.name;
+          }
         }
       });
-
       styleEl.innerHTML = styles.join("\n");
+      
+      lockedLinesRef.current = newLockedLines;
+      updateLockDecorations();
     });
 
+    const model = editor.getModel();
     const yText = ydoc.getText("monaco");
+    const initialContent = fileContentsRef.current[activeFileId] || "";
 
-    const safeBind = () => {
+    const doBind = () => {
       if (bindingRef.current) return;
-
       if (yText.length === 0) {
-        if (provider.awareness.getStates().size <= 1) {
-          yText.insert(0, model.getValue());
+        const clients = Array.from(awareness.getStates().keys()).sort();
+        const isLeader = clients.length === 0 || clients[0] === awareness.clientID;
+        if (isLeader && initialContent !== "") {
+          yText.insert(0, initialContent);
         }
-      } else if (model.getValue() !== yText.toString()) {
-        model.setValue(yText.toString());
+      } else {
+        if (model.getValue() !== yText.toString()) {
+          model.setValue(yText.toString());
+        }
       }
-
-      bindingRef.current = new MonacoBinding(
-        yText,
-        model,
-        new Set([editor]),
-        awareness,
-      );
+      bindingRef.current = new MonacoBinding(yText, model, new Set([editor]), awareness);
     };
 
     if (provider.synced) {
-      safeBind();
+      doBind();
     } else {
-      provider.once("synced", safeBind);
-      provider.once("sync", safeBind);
+      provider.once('sync', doBind);
     }
-
-    setTimeout(() => {
-      if (!bindingRef.current) {
-        safeBind();
-      }
-    }, 1500);
   };
 
   useEffect(() => {
     if (!user?.id) return;
-
     getUserProfileApi(user.id)
       .then((profile) => {
-        if (profile?.nickname) {
-          setFetchedNickname(profile.nickname);
-        }
+        if (profile?.nickname) setFetchedNickname(profile.nickname);
       })
       .catch(console.error);
   }, [user]);
-
-  useEffect(() => {
-    if (providerRef.current && providerRef.current.awareness) {
-      const awareness = providerRef.current.awareness;
-      const currentState = awareness.getLocalState();
-      const currentName = getMyDisplayName();
-
-      if (currentName !== "익명 개발자" && currentState?.user?.name !== currentName) {
-        awareness.setLocalStateField("user", {
-          name: currentName,
-          color: currentState?.user?.color || "#ff9900",
-        });
-      }
-    }
-  }, [fetchedNickname, user]); 
 
   const isContentLoaded = fileContents[activeFileId] !== undefined;
 
@@ -379,35 +432,22 @@ export default function CodeEditor() {
     const ext = filename.split(".").pop();
 
     switch (ext) {
-      case "java":
-        return "java";
-      case "py":
-        return "python";
-      case "js":
-      case "jsx":
-        return "javascript";
-      case "ts":
-      case "tsx":
-        return "typescript";
-      case "html":
-        return "html";
-      case "css":
-        return "css";
-      case "cpp":
-        return "cpp";
-      case "c":
-        return "c";
-      case "cs":
-        return "csharp";
-      case "json":
-        return "json";
-      default:
-        return "plaintext";
+      case "java": return "java";
+      case "py": return "python";
+      case "js": case "jsx": return "javascript";
+      case "ts": case "tsx": return "typescript";
+      case "html": return "html";
+      case "css": return "css";
+      case "cpp": return "cpp";
+      case "c": return "c";
+      case "cs": return "csharp";
+      case "json": return "json";
+      default: return "plaintext";
     }
   };
 
   const handleEditorChange = (value) => {
-    if (activeFileId) {
+    if (!isTeamModeRef.current && activeFileId) {
       dispatch(updateFileContent({ filePath: activeFileId, content: value }));
     }
   };
@@ -449,10 +489,11 @@ export default function CodeEditor() {
 
   const handleAiSubmit = () => {
     if (!aiQuery.trim() || !activeFileId) return;
+    const currentCode = editorRef.current ? editorRef.current.getValue() : (fileContents[activeFileId] || "");
     executeAiAction(
       aiQuery +
         "\n\n(명령어: explanation 필드의 설명은 반드시 핵심만 1~2줄로 아주 짧고 간결하게 작성해.)",
-      fileContents[activeFileId] || "",
+      currentCode
     );
   };
 
@@ -491,7 +532,48 @@ export default function CodeEditor() {
 
   const handleEditorDidMount = (editor, monacoInstance) => {
     editorRef.current = editor;
+    monacoRef.current = monacoInstance; // 💡 [핵심] Monaco 객체 보관 완료!
     setIsEditorReady(true);
+
+    // 💡 [잠금 로직] 타이핑 완벽 차단
+    editor.onKeyDown((e) => {
+      if (!isTeamModeRef.current) return;
+
+      const selection = editor.getSelection();
+      if (!selection) return;
+
+      let isLocked = false;
+      let lockerName = "";
+
+      for (let i = selection.startLineNumber; i <= selection.endLineNumber; i++) {
+        if (lockedLinesRef.current[i]) {
+          isLocked = true;
+          lockerName = lockedLinesRef.current[i];
+          break;
+        }
+      }
+
+      if (isLocked) {
+        const m = monacoInstance.KeyCode;
+        const allowedKeys = [
+          m.LeftArrow, m.RightArrow, m.UpArrow, m.DownArrow,
+          m.Home, m.End, m.PageUp, m.PageDown,
+          m.Ctrl, m.Alt, m.Shift, m.Meta, m.Escape,
+          m.F1, m.F2, m.F3, m.F4, m.F5, m.F6, m.F7, m.F8, m.F9, m.F10, m.F11, m.F12,
+          m.Insert
+        ];
+        
+        const isCopy = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyC;
+        const isFind = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyF;
+        const isSelectAll = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyA;
+
+        if (!allowedKeys.includes(e.keyCode) && !isCopy && !isFind && !isSelectAll) {
+          e.preventDefault();
+          e.stopPropagation();
+          showWarningToast(`🚫 ${lockerName}님이 작업 중인 줄입니다!`);
+        }
+      }
+    });
 
     const cmdCurrent = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "current"));
     const cmdIncoming = editor.addCommand(0, (_, conflict) => applyConflictEdit(monacoInstance, editor, conflict, "incoming"));
@@ -751,12 +833,12 @@ export default function CodeEditor() {
                 error?.name === "AbortError" ||
                 error?.type === "cancellation" ||
                 error?.message?.includes("canceled") ||
-                error?.msg?.includes("canceled")
+                error?.msg?.includes("canceled") ||
+                error?.type === "cancelation"
               ) {
                 finish({ items: [] });
                 return;
               }
-
               console.error("autocomplete error:", error);
               finish({ items: [] });
             }
@@ -778,120 +860,33 @@ export default function CodeEditor() {
     editor.focus();
 
     switch (editorCmd) {
-      case "undo":
-        editor.trigger("keyboard", "undo", null);
-        break;
-      case "redo":
-        editor.trigger("keyboard", "redo", null);
-        break;
-      case "cut":
-        editor.trigger("keyboard", "editor.action.clipboardCutAction", null);
-        break;
-      case "copy":
-        editor.trigger("keyboard", "editor.action.clipboardCopyAction", null);
-        break;
-      case "paste":
-        editor.trigger("keyboard", "editor.action.clipboardPasteAction", null);
-        break;
-      case "find":
-        editor.trigger("keyboard", "actions.find", null);
-        break;
-      case "replace":
-        editor.trigger(
-          "keyboard",
-          "editor.action.startFindReplaceAction",
-          null,
-        );
-        break;
-      case "zoom_in":
-        setFontSize((prev) => prev + 2);
-        break;
-      case "zoom_out":
-        setFontSize((prev) => Math.max(8, prev - 2));
-        break;
-      case "go_to_line":
-        editor.trigger("keyboard", "editor.action.gotoLine", null);
-        break;
-      case "go_to_definition":
-        editor.trigger("keyboard", "editor.action.revealDefinition", null);
-        break;
-      case "go_to_references":
-        editor.trigger(
-          "keyboard",
-          "editor.action.referenceSearch.trigger",
-          null,
-        );
-        break;
-      case "autocomplete":
-        editor.trigger("keyboard", "editor.action.triggerSuggest", null);
-        break;
-      case "format":
-        editor.trigger("keyboard", "editor.action.formatDocument", null);
-        break;
-      case "rename":
-        editor.trigger("keyboard", "editor.action.rename", null);
-        break;
-      case "refactor":
-        editor.trigger("keyboard", "editor.action.refactor", null);
-        break;
+      case "undo": editor.trigger("keyboard", "undo", null); break;
+      case "redo": editor.trigger("keyboard", "redo", null); break;
+      case "cut": editor.trigger("keyboard", "editor.action.clipboardCutAction", null); break;
+      case "copy": editor.trigger("keyboard", "editor.action.clipboardCopyAction", null); break;
+      case "paste": editor.trigger("keyboard", "editor.action.clipboardPasteAction", null); break;
+      case "find": editor.trigger("keyboard", "actions.find", null); break;
+      case "replace": editor.trigger("keyboard", "editor.action.startFindReplaceAction", null); break;
+      case "zoom_in": setFontSize((prev) => prev + 2); break;
+      case "zoom_out": setFontSize((prev) => Math.max(8, prev - 2)); break;
+      case "go_to_line": editor.trigger("keyboard", "editor.action.gotoLine", null); break;
+      case "go_to_definition": editor.trigger("keyboard", "editor.action.revealDefinition", null); break;
+      case "go_to_references": editor.trigger("keyboard", "editor.action.referenceSearch.trigger", null); break;
+      case "autocomplete": editor.trigger("keyboard", "editor.action.triggerSuggest", null); break;
+      case "format": editor.trigger("keyboard", "editor.action.formatDocument", null); break;
+      case "rename": editor.trigger("keyboard", "editor.action.rename", null); break;
+      case "refactor": editor.trigger("keyboard", "editor.action.refactor", null); break;
       case "toggle_breakpoint": {
         const position = editor.getPosition();
         if (position && activeFileId) {
-          dispatch(
-            toggleBreakpoint({ path: activeFileId, line: position.lineNumber }),
-          );
+          dispatch(toggleBreakpoint({ path: activeFileId, line: position.lineNumber }));
         }
         break;
       }
-      default:
-        break;
+      default: break;
     }
-
     dispatch(triggerEditorCmd(null));
   }, [editorCmd, dispatch, activeFileId]);
-
-  useEffect(() => {
-    const styleId = "monaco-debug-styles";
-
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement("style");
-      style.id = styleId;
-      style.innerHTML = `
-        .debug-current-line { background-color: rgba(255, 230, 0, 0.3) !important; border-left: 3px solid #eab308; }
-        .debug-breakpoint-glyph { background: #ef4444; width: 10px !important; height: 10px !important; border-radius: 50%; margin-left: 6px; margin-top: 5px; cursor: pointer; z-index: 10; }
-        .conflict-current-bg { background-color: rgba(60, 179, 113, 0.2) !important; }
-        .conflict-current-margin { border-left: 4px solid #3cb371 !important; }
-        .conflict-incoming-bg { background-color: rgba(65, 105, 225, 0.2) !important; }
-        .conflict-incoming-margin { border-left: 4px solid #4169e1 !important; }
-        .yRemoteSelection { background-color: rgba(250, 129, 0, 0.2) !important; }
-        .yRemoteSelectionHead {
-          position: absolute !important;
-          border-left: 2px solid orange !important;
-          box-sizing: border-box !important;
-          height: 100% !important;
-          z-index: 99 !important;
-          display: inline-block !important;
-        }
-        .yRemoteSelectionHead::after {
-          position: absolute !important;
-          content: ' ' !important;
-          top: -20px !important;
-          left: -2px !important;
-          background-color: orange !important;
-          color: white !important;
-          font-size: 11px !important;
-          font-weight: bold !important;
-          padding: 2px 6px !important;
-          border-radius: 4px !important;
-          border-bottom-left-radius: 0 !important;
-          white-space: nowrap !important;
-          z-index: 100 !important;
-          pointer-events: none !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, []);
 
   useEffect(() => {
     if (!editorRef.current || !monaco || !activeFileId) return;
@@ -903,8 +898,7 @@ export default function CodeEditor() {
     const updateDecorations = () => {
       const newDecorations = [];
       const currentFileBreakpoints = breakpoints.filter(
-        (bp) =>
-          activeFileId.endsWith(bp.path) || bp.path.endsWith(activeFileId),
+        (bp) => activeFileId.endsWith(bp.path) || bp.path.endsWith(activeFileId),
       );
 
       currentFileBreakpoints.forEach((bp) => {
@@ -920,8 +914,7 @@ export default function CodeEditor() {
 
       if (
         debugLine &&
-        (activeFileId.endsWith(debugLine.path) ||
-          debugLine.path.endsWith(activeFileId))
+        (activeFileId.endsWith(debugLine.path) || debugLine.path.endsWith(activeFileId))
       ) {
         newDecorations.push({
           range: new monaco.Range(debugLine.line, 1, debugLine.line, 1),
@@ -943,12 +936,7 @@ export default function CodeEditor() {
             currentConflict.end = i + 1;
 
             newDecorations.push({
-              range: new monaco.Range(
-                currentConflict.start,
-                1,
-                currentConflict.mid,
-                1,
-              ),
+              range: new monaco.Range(currentConflict.start, 1, currentConflict.mid, 1),
               options: {
                 isWholeLine: true,
                 className: "conflict-current-bg",
@@ -957,12 +945,7 @@ export default function CodeEditor() {
             });
 
             newDecorations.push({
-              range: new monaco.Range(
-                currentConflict.mid,
-                1,
-                currentConflict.end,
-                1,
-              ),
+              range: new monaco.Range(currentConflict.mid, 1, currentConflict.end, 1),
               options: {
                 isWholeLine: true,
                 className: "conflict-incoming-bg",
@@ -1012,6 +995,36 @@ export default function CodeEditor() {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-white flex flex-col">
+      
+      {/* 💡 [핵심] 잠금 디자인 및 글로벌 CSS 무조건 적용! */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* 디버깅 & 충돌 마커 */
+        .debug-current-line { background-color: rgba(255, 230, 0, 0.3) !important; border-left: 3px solid #eab308; }
+        .debug-breakpoint-glyph { background: #ef4444; width: 10px !important; height: 10px !important; border-radius: 50%; margin-left: 6px; margin-top: 5px; cursor: pointer; z-index: 10; }
+        .conflict-current-bg { background-color: rgba(60, 179, 113, 0.2) !important; }
+        .conflict-current-margin { border-left: 4px solid #3cb371 !important; }
+        .conflict-incoming-bg { background-color: rgba(65, 105, 225, 0.2) !important; }
+        .conflict-incoming-margin { border-left: 4px solid #4169e1 !important; }
+
+        /* 💡 락(Lock) 걸린 영역 시각 디자인 완벽 강제 적용 */
+        .locked-line-bg { 
+          background-color: rgba(255, 0, 0, 0.15) !important; 
+        }
+        .locked-line-margin {
+          border-left: 5px solid #ff0000 !important;
+          background-color: rgba(255, 0, 0, 0.15) !important;
+          z-index: 50 !important;
+        }
+      `}} />
+
+      {/* 💡 [튕김 UI] 타이핑 차단 시 강력한 토스트 팝업 */}
+      {lockWarning.show && (
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[99999] bg-red-600/95 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(255,0,0,0.4)] font-extrabold text-[14px] flex items-center gap-2 animate-bounce border border-red-400">
+          <VscLock size={18} />
+          {lockWarning.msg}
+        </div>
+      )}
+
       {isDiffMode && (
         <div className="bg-indigo-50/90 border-b border-indigo-200 flex items-center justify-between p-3 shrink-0 shadow-sm z-10 backdrop-blur-sm min-h-[50px]">
           <div className="flex items-start gap-2 flex-1 min-w-0 mr-4">
