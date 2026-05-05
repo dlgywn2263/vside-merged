@@ -1,46 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowRight } from "lucide-react";
 import {
-  fetchMainMonthSchedulesApi,
-  fetchScheduleProgressApi,
-  fetchWorkspaceDevlogsApi,
-  getMyWorkspacesByTokenApi,
-} from "@/lib/ide/api";
+  ArrowRight,
+  BookOpenText,
+  CalendarDays,
+  Code2,
+  LayoutDashboard,
+  Plus,
+  RefreshCw,
+  Search,
+  UserRound,
+  Users,
+} from "lucide-react";
 
-const MAX_RECENT_PROJECTS = 4;
+const API_BASE = "http://localhost:8080";
 
-type WorkspaceMode = "team" | "personal";
-type WorkspaceRole = "owner" | "member";
-type WorkFlowType = "schedule" | "devlog";
+type ProjectType = "personal" | "team";
 
-type SummaryStat = {
-  id: number;
-  title: string;
-  label: string;
-  icon: keyof typeof Icons;
-  count?: number;
-};
-
-type ProjectSummaryResponse = {
+type WorkspaceProject = {
   id: string;
   name: string;
   language: string;
   updatedAt: string;
 };
 
-type WorkspaceListResponse = {
+type WorkspaceItem = {
   id: string;
   name: string;
-  mode: WorkspaceMode;
-  role: WorkspaceRole;
+  mode: ProjectType;
   updatedAt: string;
-  description: string | null;
-  teamName: string | null;
-  projects: ProjectSummaryResponse[];
+  description?: string | null;
+  teamName?: string | null;
+  projects: WorkspaceProject[];
 };
 
 type ScheduleProgressResponse = {
@@ -52,1095 +45,593 @@ type ScheduleProgressResponse = {
   progress: number;
 };
 
-type RecentProject = {
+type DashboardCardItem = {
   id: string;
-  workspaceId: string;
   title: string;
+  description: string;
   tech: string;
-  type: WorkspaceMode;
-  role: WorkspaceRole;
+  type: ProjectType;
   progress: number;
+  memberCount?: number;
   lastModified: string;
 };
 
-type RawSchedule = {
-  id?: number | string;
-  title?: string;
-  startDate?: string;
-  endDate?: string;
-  date?: string;
-  stage?: string | null;
-  status?: string | null;
-  category?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-};
+const FILTERS = [
+  { key: "all", label: "전체" },
+  { key: "team", label: "팀" },
+  { key: "personal", label: "개인" },
+] as const;
 
-type RawDevlog = {
-  id?: number | string;
-  title?: string;
-  date?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  stage?: string | null;
-  progress?: number | null;
-  summary?: string | null;
-};
+type FilterType = (typeof FILTERS)[number]["key"];
 
-type MonthDay = {
-  key: string;
-  dayName: string;
-  dayNumber: number;
-  month: number;
-  isCurrentMonth: boolean;
-  isToday: boolean;
-};
-
-type WorkFlowItem = {
-  id: string;
-  type: WorkFlowType;
-  title: string;
-  dateKey: string;
-  workspaceId: string;
-  workspaceName: string;
-  workspaceMode: WorkspaceMode;
-  stage?: string | null;
-  status?: string | null;
-  href: string;
-  sortTime: number;
-};
-
-const Icons = {
-  user: () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  ),
-
-  users: () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-
-  calendar: () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
-
-  bell: () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  ),
-
-  plus: () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  ),
-};
-
-const SUMMARY_STATS_BASE: SummaryStat[] = [
-  {
-    id: 1,
-    title: "개인 프로젝트",
-    label: "내 워크스페이스",
-    icon: "user",
-  },
-  {
-    id: 2,
-    title: "팀 프로젝트",
-    label: "내 워크스페이스",
-    icon: "users",
-  },
-  {
-    id: 3,
-    title: "예정 일정",
-    count: 4,
-    label: "7일 내",
-    icon: "calendar",
-  },
-  {
-    id: 4,
-    title: "미확인 알림",
-    count: 3,
-    label: "우선 확인 필요",
-    icon: "bell",
-  },
-];
-
-function pad(value: number) {
-  return String(value).padStart(2, "0");
+/* =========================
+   페이지 이동 경로
+   실제 route가 다르면 여기만 수정
+========================= */
+function getDashboardHref(project: DashboardCardItem) {
+  return `/main/${project.id}?mode=${project.type}`;
 }
 
-function formatDateKey(date: Date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}`;
+function getIdeHref(
+  project: DashboardCardItem,
+  workspaceId?: string,
+  mode?: ProjectType,
+) {
+  return mode === "team"
+    ? `/ide/team/${project.id}`
+    : `/ide/personal/${project.id}`;
 }
 
-function normalizeDateKey(value?: string | null) {
-  if (!value) return "";
+function getScheduleHref(
+  project: DashboardCardItem,
 
-  const trimmed = String(value).trim();
-
-  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
-    return trimmed.slice(0, 10);
-  }
-
-  if (/^\d{4}\.\d{2}\.\d{2}/.test(trimmed)) {
-    return trimmed.replace(/\./g, "-").slice(0, 10);
-  }
-
-  const parsed = new Date(trimmed);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-
-  return formatDateKey(parsed);
+  mode?: ProjectType,
+) {
+  return `/schedules?view=${mode}&workspaceId=${project.id}`;
 }
 
-function getSortTime(...values: Array<string | null | undefined>) {
-  for (const value of values) {
-    if (!value) continue;
+function getDevlogHref(
+  project: DashboardCardItem,
 
-    const normalized = String(value).replace(/\./g, "-");
-    const parsed = new Date(normalized).getTime();
-
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  return 0;
+  mode?: ProjectType,
+) {
+  return `/devlogs?workspaceId=${project.id}&mode=${project.type}`;
 }
 
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
+function getStoredUserId(): string | null {
+  if (typeof window === "undefined") return null;
 
-function getMonthDays(baseDate: Date): MonthDay[] {
-  const year = baseDate.getFullYear();
-  const month = baseDate.getMonth();
+  try {
+    const rawUser = localStorage.getItem("user");
 
-  const firstDate = new Date(year, month, 1);
-  const lastDate = new Date(year, month + 1, 0);
+    if (rawUser) {
+      const parsedUser = JSON.parse(rawUser);
+      const userId = parsedUser?.id;
 
-  const start = new Date(firstDate);
-  const firstDay = start.getDay();
-  const diffToMonday = firstDay === 0 ? -6 : 1 - firstDay;
-  start.setDate(start.getDate() + diffToMonday);
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(lastDate);
-  const lastDay = end.getDay();
-  const diffToSunday = lastDay === 0 ? 0 : 7 - lastDay;
-  end.setDate(end.getDate() + diffToSunday);
-  end.setHours(0, 0, 0, 0);
-
-  const result: MonthDay[] = [];
-  const cursor = new Date(start);
-  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
-
-  while (cursor <= end) {
-    result.push({
-      key: formatDateKey(cursor),
-      dayName: dayNames[cursor.getDay()],
-      dayNumber: cursor.getDate(),
-      month: cursor.getMonth() + 1,
-      isCurrentMonth: cursor.getMonth() === month,
-      isToday: formatDateKey(cursor) === formatDateKey(new Date()),
-    });
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return result;
-}
-
-function getDateKeysBetween(startKey: string, endKey: string) {
-  if (!startKey) return [];
-
-  const start = new Date(startKey);
-  const end = endKey ? new Date(endKey) : new Date(startKey);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return [];
-  }
-
-  const result: string[] = [];
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    result.push(formatDateKey(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return result;
-}
-
-function parseLastModified(value: string) {
-  if (!value) return 0;
-
-  if (value.includes("시간 전")) {
-    const hours = Number(value.replace("시간 전", "").trim()) || 0;
-    return Date.now() - hours * 60 * 60 * 1000;
-  }
-
-  if (value.includes("분 전")) {
-    const minutes = Number(value.replace("분 전", "").trim()) || 0;
-    return Date.now() - minutes * 60 * 1000;
-  }
-
-  if (value.includes("일 전")) {
-    const days = Number(value.replace("일 전", "").trim()) || 0;
-    return Date.now() - days * 24 * 60 * 60 * 1000;
-  }
-
-  const normalized = value.replace(/\./g, "-");
-  const parsed = new Date(normalized).getTime();
-
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function getProjectTitle(workspace: WorkspaceListResponse) {
-  const latestProject = workspace.projects?.[0];
-
-  return latestProject?.name || workspace.name || "이름 없는 프로젝트";
-}
-
-function getProjectTech(workspace: WorkspaceListResponse) {
-  const latestProject = workspace.projects?.[0];
-
-  return latestProject?.language || workspace.mode;
-}
-
-function getIdeHref(project: RecentProject) {
-  return project.type === "team"
-    ? `/ide/team/${project.workspaceId}`
-    : `/ide/personal/${project.workspaceId}`;
-}
-
-function getScheduleTitle(schedule: RawSchedule) {
-  return schedule.title?.trim() || "제목 없는 일정";
-}
-
-function getDevlogTitle(devlog: RawDevlog) {
-  return devlog.title?.trim() || "제목 없는 개발일지";
-}
-
-function extractDevlogs(response: unknown): RawDevlog[] {
-  const data = response as any;
-
-  if (Array.isArray(data)) return data;
-
-  if (Array.isArray(data?.devlogs)) return data.devlogs;
-  if (Array.isArray(data?.posts)) return data.posts;
-  if (Array.isArray(data?.logs)) return data.logs;
-  if (Array.isArray(data?.devlogPosts)) return data.devlogPosts;
-
-  if (Array.isArray(data?.projects)) {
-    return data.projects.flatMap((project: any) => {
-      if (Array.isArray(project?.devlogs)) return project.devlogs;
-      if (Array.isArray(project?.posts)) return project.posts;
-      if (Array.isArray(project?.logs)) return project.logs;
-      return [];
-    });
-  }
-
-  return [];
-}
-
-function buildScheduleItems(
-  workspace: WorkspaceListResponse,
-  schedules: RawSchedule[],
-  dateKeys: string[],
-): WorkFlowItem[] {
-  const dateKeySet = new Set(dateKeys);
-
-  return schedules.flatMap((schedule, index) => {
-    const startKey = normalizeDateKey(schedule.startDate || schedule.date);
-    const endKey = normalizeDateKey(schedule.endDate || schedule.startDate);
-
-    const matchedDateKeys = getDateKeysBetween(startKey, endKey).filter(
-      (dateKey) => dateKeySet.has(dateKey),
-    );
-
-    return matchedDateKeys.map((dateKey) => ({
-      id: `schedule-${workspace.id}-${schedule.id ?? index}-${dateKey}`,
-      type: "schedule" as const,
-      title: getScheduleTitle(schedule),
-      dateKey,
-      workspaceId: workspace.id,
-      workspaceName: workspace.name,
-      workspaceMode: workspace.mode,
-      stage: schedule.stage ?? schedule.category ?? null,
-      status: schedule.status ?? null,
-      href: `/schedule?view=${workspace.mode}&workspaceId=${workspace.id}`,
-      sortTime: getSortTime(
-        schedule.updatedAt,
-        schedule.createdAt,
-        schedule.startDate,
-        schedule.date,
-        dateKey,
-      ),
-    }));
-  });
-}
-
-function buildDevlogItems(
-  workspace: WorkspaceListResponse,
-  devlogs: RawDevlog[],
-  dateKeys: string[],
-): WorkFlowItem[] {
-  const dateKeySet = new Set(dateKeys);
-
-  return devlogs
-    .map((devlog, index) => {
-      const dateKey = normalizeDateKey(
-        devlog.date || devlog.createdAt || devlog.updatedAt,
-      );
-
-      if (!dateKey || !dateKeySet.has(dateKey)) {
-        return null;
+      if (userId !== undefined && userId !== null && userId !== "") {
+        return String(userId);
       }
+    }
 
-      return {
-        id: `devlog-${workspace.id}-${devlog.id ?? index}`,
-        type: "devlog" as const,
-        title: getDevlogTitle(devlog),
-        dateKey,
-        workspaceId: workspace.id,
-        workspaceName: workspace.name,
-        workspaceMode: workspace.mode,
-        stage: devlog.stage ?? null,
-        status:
-          typeof devlog.progress === "number" ? `${devlog.progress}%` : null,
-        href: `/devlog?workspaceId=${workspace.id}`,
-        sortTime: getSortTime(
-          devlog.updatedAt,
-          devlog.createdAt,
-          devlog.date,
-          dateKey,
-        ),
-      };
-    })
-    .filter(Boolean) as WorkFlowItem[];
+    const userId = localStorage.getItem("userId");
+    return userId ? String(userId) : null;
+  } catch {
+    const userId = localStorage.getItem("userId");
+    return userId ? String(userId) : null;
+  }
 }
 
-async function loadMonthlyWorkFlowItems(
-  workspaces: WorkspaceListResponse[],
-): Promise<WorkFlowItem[]> {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const monthKeys = getMonthDays(today).map((day) => day.key);
+function getAuthHeaders(): HeadersInit {
+  if (typeof window === "undefined") return {};
 
-  const results = await Promise.allSettled(
-    workspaces.map(async (workspace) => {
-      const [scheduleResult, devlogResult] = await Promise.allSettled([
-        fetchMainMonthSchedulesApi({
-          view: workspace.mode,
-          year,
-          month,
-          workspaceId: workspace.id,
-        }),
-        fetchWorkspaceDevlogsApi(workspace.id),
-      ]);
+  const token =
+    localStorage.getItem("accessToken") || localStorage.getItem("token");
 
-      const schedules =
-        scheduleResult.status === "fulfilled" &&
-        Array.isArray(scheduleResult.value)
-          ? (scheduleResult.value as RawSchedule[])
-          : [];
+  if (!token) return {};
 
-      const devlogs =
-        devlogResult.status === "fulfilled"
-          ? extractDevlogs(devlogResult.value)
-          : [];
-
-      return [
-        ...buildScheduleItems(workspace, schedules, monthKeys),
-        ...buildDevlogItems(workspace, devlogs, monthKeys),
-      ];
-    }),
-  );
-
-  return results
-    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
-    .sort((a, b) => b.sortTime - a.sortTime);
+  return {
+    Authorization: `Bearer ${token}`,
+  };
 }
 
-export default function MainDashboard() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceListResponse[]>([]);
-  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
-  const [workFlowItems, setWorkFlowItems] = useState<WorkFlowItem[]>([]);
-  const [selectedDateKey, setSelectedDateKey] = useState(
-    formatDateKey(new Date()),
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+function formatDate(value: string) {
+  if (!value || value === "-") return "-";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+
+  return `${year}.${month}.${day}`;
+}
+
+function getTypeLabel(type: ProjectType) {
+  return type === "team" ? "팀 프로젝트" : "개인 프로젝트";
+}
+
+function getTypeStyle(type: ProjectType) {
+  return type === "team"
+    ? "bg-emerald-50 text-emerald-700"
+    : "bg-blue-50 text-blue-700";
+}
+
+function getProgressTextStyle(type: ProjectType) {
+  return type === "team" ? "text-emerald-600" : "text-blue-600";
+}
+
+function getProgressBarStyle(type: ProjectType) {
+  return type === "team" ? "bg-emerald-500" : "bg-blue-600";
+}
+
+export default function DashboardProjectSelectPage() {
+  /* =========================
+     1. 기본 상태
+  ========================= */
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [search, setSearch] = useState("");
+  const [projects, setProjects] = useState<DashboardCardItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    let ignore = false;
-
-    async function loadMainData() {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
-
-        const workspaceData = await getMyWorkspacesByTokenApi();
-
-        const safeWorkspaces: WorkspaceListResponse[] = Array.isArray(
-          workspaceData,
-        )
-          ? workspaceData
-          : [];
-
-        const [progressResults, monthlyWorkFlowItems] = await Promise.all([
-          Promise.allSettled(
-            safeWorkspaces.map((workspace) =>
-              fetchScheduleProgressApi({
-                view: workspace.mode,
-                workspaceId: workspace.id,
-              }),
-            ),
-          ),
-          loadMonthlyWorkFlowItems(safeWorkspaces),
-        ]);
-
-        const nextProgressMap: Record<string, number> = {};
-
-        progressResults.forEach((result, index) => {
-          const workspace = safeWorkspaces[index];
-
-          if (!workspace) return;
-
-          if (result.status === "fulfilled") {
-            const progressData = result.value as ScheduleProgressResponse;
-
-            nextProgressMap[workspace.id] =
-              typeof progressData.progress === "number"
-                ? progressData.progress
-                : 0;
-          } else {
-            nextProgressMap[workspace.id] = 0;
-          }
-        });
-
-        if (!ignore) {
-          const latestItem = monthlyWorkFlowItems[0];
-
-          setWorkspaces(safeWorkspaces);
-          setProgressMap(nextProgressMap);
-          setWorkFlowItems(monthlyWorkFlowItems);
-
-          if (latestItem?.dateKey) {
-            setSelectedDateKey(latestItem.dateKey);
-          }
-        }
-      } catch (error) {
-        if (!ignore) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "메인 데이터를 불러오지 못했습니다.",
-          );
-        }
-      } finally {
-        if (!ignore) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadMainData();
-
-    return () => {
-      ignore = true;
-    };
+    loadDashboardProjects();
   }, []);
 
-  const personalCount = workspaces.filter(
-    (workspace) => workspace.mode === "personal",
+  /* =========================
+     2. 프로젝트 + 진행률 조회
+  ========================= */
+  async function loadDashboardProjects() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const userId = getStoredUserId();
+
+      if (!userId) {
+        setProjects([]);
+        setError("로그인 사용자 정보가 없습니다.");
+        return;
+      }
+
+      const workspaceRes = await fetch(
+        `${API_BASE}/api/workspaces?userId=${encodeURIComponent(userId)}`,
+        {
+          method: "GET",
+          headers: {
+            ...getAuthHeaders(),
+          },
+          cache: "no-store",
+        },
+      );
+
+      if (!workspaceRes.ok) {
+        const text = await workspaceRes.text();
+        throw new Error(text || "워크스페이스 목록 조회에 실패했습니다.");
+      }
+
+      const workspaces: WorkspaceItem[] = await workspaceRes.json();
+      const workspaceList = Array.isArray(workspaces) ? workspaces : [];
+
+      const progressResults = await Promise.all(
+        workspaceList.map(async (workspace) => {
+          try {
+            const progressRes = await fetch(
+              `${API_BASE}/api/schedules/progress?view=${encodeURIComponent(
+                workspace.mode,
+              )}&workspaceId=${encodeURIComponent(workspace.id)}`,
+              {
+                method: "GET",
+                headers: {
+                  ...getAuthHeaders(),
+                },
+                cache: "no-store",
+              },
+            );
+
+            if (!progressRes.ok) {
+              return {
+                workspaceId: workspace.id,
+                workspaceName: workspace.name,
+                type: workspace.mode,
+                totalCount: 0,
+                doneCount: 0,
+                progress: 0,
+              } satisfies ScheduleProgressResponse;
+            }
+
+            return (await progressRes.json()) as ScheduleProgressResponse;
+          } catch {
+            return {
+              workspaceId: workspace.id,
+              workspaceName: workspace.name,
+              type: workspace.mode,
+              totalCount: 0,
+              doneCount: 0,
+              progress: 0,
+            } satisfies ScheduleProgressResponse;
+          }
+        }),
+      );
+
+      const progressMap = new Map<string, ScheduleProgressResponse>();
+
+      progressResults.forEach((item) => {
+        progressMap.set(item.workspaceId, item);
+      });
+
+      const merged: DashboardCardItem[] = workspaceList.map((workspace) => {
+        const latestProject =
+          Array.isArray(workspace.projects) && workspace.projects.length > 0
+            ? workspace.projects[0]
+            : null;
+
+        const progressInfo = progressMap.get(workspace.id);
+
+        return {
+          id: workspace.id,
+          title: latestProject?.name || workspace.name || "이름 없는 프로젝트",
+          description: workspace.description?.trim() || "설명이 없습니다.",
+          tech: latestProject?.language || "-",
+          type: workspace.mode,
+          progress: progressInfo?.progress ?? 0,
+          lastModified: workspace.updatedAt || "-",
+          memberCount: undefined,
+        };
+      });
+
+      setProjects(merged);
+    } catch (err) {
+      console.error(err);
+      setProjects([]);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "대시보드 프로젝트 목록 조회 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* =========================
+     3. 검색 / 필터 / 통계
+  ========================= */
+  const filteredProjects = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    return projects.filter((project) => {
+      const matchesFilter = filter === "all" || project.type === filter;
+
+      const matchesSearch =
+        keyword === "" ||
+        project.title.toLowerCase().includes(keyword) ||
+        project.description.toLowerCase().includes(keyword) ||
+        project.tech.toLowerCase().includes(keyword);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [filter, search, projects]);
+
+  const totalCount = projects.length;
+
+  const teamCount = projects.filter(
+    (project) => project.type === "team",
   ).length;
 
-  const teamCount = workspaces.filter(
-    (workspace) => workspace.mode === "team",
+  const personalCount = projects.filter(
+    (project) => project.type === "personal",
   ).length;
 
-  const summaryStats = SUMMARY_STATS_BASE.map((stat) => {
-    if (stat.id === 1) {
-      return {
-        ...stat,
-        count: personalCount,
-      };
-    }
-
-    if (stat.id === 2) {
-      return {
-        ...stat,
-        count: teamCount,
-      };
-    }
-
-    return stat;
-  });
-
-  const recentProjects = useMemo<RecentProject[]>(() => {
-    return [...workspaces]
-      .sort(
-        (a, b) =>
-          parseLastModified(b.updatedAt) - parseLastModified(a.updatedAt),
-      )
-      .slice(0, MAX_RECENT_PROJECTS)
-      .map((workspace) => ({
-        id: workspace.id,
-        workspaceId: workspace.id,
-        title: getProjectTitle(workspace),
-        tech: getProjectTech(workspace),
-        type: workspace.mode,
-        role: workspace.role,
-        progress: progressMap[workspace.id] ?? 0,
-        lastModified: workspace.updatedAt || "최근 수정일 없음",
-      }));
-  }, [workspaces, progressMap]);
+  const averageProgress =
+    totalCount === 0
+      ? 0
+      : Math.round(
+          projects.reduce((sum, project) => sum + project.progress, 0) /
+            totalCount,
+        );
 
   return (
-    <main className="min-h-screen bg-[#F8F9FA] p-5 md:p-8 font-sans text-gray-800">
-      <div className="max-w-6xl mx-auto space-y-5">
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3 mb-1.5">
-              <div className="h-9 w-9 rounded-xl bg-[#EEF2FF] text-[#5873F9] flex items-center justify-center font-black text-base">
-                D
-              </div>
-
+    <main className="min-h-screen bg-[#f5f6fa] px-6 py-6 text-slate-900 md:px-8">
+      <div className="mx-auto flex max-w-[1480px] flex-col gap-5">
+        {/* =========================
+            4. 축소형 상단 선택 패널
+            - 기존 큰 통계 카드 제거
+            - 프로젝트 선택 / 요약 / 검색 / 필터만 compact하게 구성
+        ========================= */}
+        <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
+          <div className="flex flex-col gap-4">
+            {/* 제목 + 액션 버튼 */}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h1 className="text-xl md:text-xl font-black text-[#5873F9] tracking-tight leading-none">
-                  Devw
+                <h1 className="text-2xl font-black tracking-tight text-slate-950">
+                  프로젝트 선택
                 </h1>
-                <p className="text-gray-500 text-sm mt-1">
-                  프로젝트 구조 중심 협업을 위한 웹 IDE 플랫폼
+
+                <p className="mt-1.5 text-sm font-medium text-slate-500">
+                  작업할 프로젝트를 선택하거나 바로 IDE, 일정관리, 개발일지로
+                  이동할 수 있습니다.
                 </p>
               </div>
-            </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto">
-            <Link
-              href="/projects"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-4 py-2.5 text-sm font-semibold text-[#5873F9] hover:bg-[#EEF3FF] transition-colors"
-            >
-              프로젝트 둘러보기
-              <ArrowRight size={17} />
-            </Link>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={loadDashboardProjects}
+                  className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <RefreshCw size={16} />
+                  새로고침
+                </button>
 
-            <Link
-              href="/new/workspace"
-              className="inline-flex items-center justify-center gap-2 bg-[#5873F9] hover:bg-[#4863E8] transition-colors text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm"
-            >
-              새 프로젝트 생성
-              <Icons.plus />
-            </Link>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {summaryStats.map((stat) => {
-            const Icon = Icons[stat.icon];
-
-            return (
-              <div
-                key={stat.id}
-                className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow border border-gray-200 px-4 py-3.5 min-h-[106px]"
-              >
-                <div className="flex items-start justify-between mb-2.5">
-                  <h3 className="text-[13px] font-semibold text-gray-600 leading-none">
-                    {stat.title}
-                  </h3>
-
-                  <div className="text-gray-400 mt-0.5">
-                    <Icon />
-                  </div>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-[30px] leading-none font-black text-gray-900">
-                    {stat.count ?? 0}
-                  </span>
-
-                  <span className="text-[11px] text-gray-400 font-medium mt-1.5">
-                    {stat.label}
-                  </span>
-                </div>
+                <Link
+                  href="/new/workspace"
+                  className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"
+                >
+                  <Plus size={17} />새 프로젝트 생성
+                </Link>
               </div>
-            );
-          })}
-        </section>
+            </div>
 
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
-          <div className="mb-5">
-            <h2 className="text-lg font-bold text-gray-900">최근 프로젝트</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              최근에 수정한 프로젝트만 빠르게 확인하세요.
-            </p>
+            {/* 한 줄 요약 정보 */}
+            <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
+              <SummaryChip label="전체" value={`${totalCount}개`} />
+              <span className="text-slate-300">·</span>
+              <SummaryChip label="팀" value={`${teamCount}개`} />
+              <span className="text-slate-300">·</span>
+              <SummaryChip label="개인" value={`${personalCount}개`} />
+              <span className="text-slate-300">·</span>
+              <SummaryChip label="평균 진행률" value={`${averageProgress}%`} />
+              <span className="text-slate-300">·</span>
+              <span className="rounded-full bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-500">
+                표시 {filteredProjects.length}개 / 전체 {totalCount}개
+              </span>
+            </div>
+
+            {/* 검색 + 필터 */}
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative w-full lg:max-w-[620px]">
+                <Search
+                  size={18}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="프로젝트 검색"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="flex w-full items-center rounded-2xl bg-slate-100 p-1 lg:w-auto">
+                {FILTERS.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setFilter(item.key)}
+                    className={`h-9 flex-1 rounded-xl px-5 text-sm font-black transition lg:flex-none ${
+                      filter === item.key
+                        ? "bg-slate-950 text-white shadow-sm"
+                        : "text-slate-500 hover:bg-white hover:text-slate-900"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-
-          {isLoading ? (
-            <div className="h-[220px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
-              최근 프로젝트를 불러오는 중입니다.
-            </div>
-          ) : errorMessage ? (
-            <div className="h-[220px] rounded-2xl border border-dashed border-red-200 bg-red-50 flex items-center justify-center text-sm text-red-500">
-              {errorMessage}
-            </div>
-          ) : recentProjects.length === 0 ? (
-            <div className="h-[220px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
-              표시할 프로젝트가 없습니다.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {recentProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
-            </div>
-          )}
         </section>
 
-        <MonthlyWorkFlowSection
-          isLoading={isLoading}
-          items={workFlowItems}
-          selectedDateKey={selectedDateKey}
-          onSelectDate={setSelectedDateKey}
-        />
+        {/* =========================
+            5. 에러 상태
+        ========================= */}
+        {error && (
+          <section className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 text-sm font-semibold text-rose-700">
+            {error}
+          </section>
+        )}
+
+        {/* =========================
+            6. 로딩 상태
+        ========================= */}
+        {loading && (
+          <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <ProjectCardSkeleton key={index} />
+            ))}
+          </section>
+        )}
+
+        {/* =========================
+            7. 빈 상태
+        ========================= */}
+        {!loading && !error && filteredProjects.length === 0 && (
+          <section className="rounded-[28px] border border-dashed border-slate-200 bg-white p-12 text-center shadow-sm">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-100 text-slate-400">
+              <Search size={24} />
+            </div>
+
+            <h2 className="mt-5 text-xl font-black">검색 결과가 없습니다</h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+              다른 키워드로 검색하거나 필터를 전체로 변경해보세요.
+            </p>
+          </section>
+        )}
+
+        {/* =========================
+            8. 프로젝트 카드 목록
+        ========================= */}
+        {!loading && !error && filteredProjects.length > 0 && (
+          <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {filteredProjects.map((project) => (
+              <ProjectDashboardCard key={project.id} project={project} />
+            ))}
+          </section>
+        )}
       </div>
     </main>
   );
 }
 
-function MonthlyWorkFlowSection({
-  isLoading,
-  items,
-  selectedDateKey,
-  onSelectDate,
-}: {
-  isLoading: boolean;
-  items: WorkFlowItem[];
-  selectedDateKey: string;
-  onSelectDate: (dateKey: string) => void;
-}) {
-  const monthDays = useMemo(() => getMonthDays(new Date()), []);
-
-  const itemsByDate = useMemo(() => {
-    return monthDays.reduce<Record<string, WorkFlowItem[]>>((acc, day) => {
-      acc[day.key] = items
-        .filter((item) => item.dateKey === day.key)
-        .sort((a, b) => b.sortTime - a.sortTime);
-      return acc;
-    }, {});
-  }, [items, monthDays]);
-
-  const selectedDay = monthDays.find((day) => day.key === selectedDateKey);
-
-  const selectedItems = [...(itemsByDate[selectedDateKey] ?? [])].sort(
-    (a, b) => b.sortTime - a.sortTime,
-  );
-
-  const schedules = selectedItems
-    .filter((item) => item.type === "schedule")
-    .sort((a, b) => b.sortTime - a.sortTime);
-
-  const devlogs = selectedItems
-    .filter((item) => item.type === "devlog")
-    .sort((a, b) => b.sortTime - a.sortTime);
-
-  const visibleSchedules = schedules.slice(0, 4);
-  const visibleDevlogs = devlogs.slice(0, 3);
-
-  const hiddenCount =
-    Math.max(schedules.length - visibleSchedules.length, 0) +
-    Math.max(devlogs.length - visibleDevlogs.length, 0);
-
+function SummaryChip({ label, value }: { label: string; value: string }) {
   return (
-    <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">이번 달 작업 흐름</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            이번 달 전체 워크스페이스의 일정과 개발일지를 최신순으로 확인하세요.
-          </p>
+    <span className="inline-flex items-center gap-1">
+      <span>{label}</span>
+      <span className="font-black text-slate-950">{value}</span>
+    </span>
+  );
+}
+
+function ProjectDashboardCard({ project }: { project: DashboardCardItem }) {
+  return (
+    <article className="group flex min-h-[320px] flex-col rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
+      {/* 카드 상단 */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-black ${getTypeStyle(
+              project.type,
+            )}`}
+          >
+            {getTypeLabel(project.type)}
+          </span>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+            {project.tech}
+          </span>
         </div>
 
-        <div className="flex gap-2">
-          <Link
-            href="/schedule"
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:text-[#5873F9] transition-colors"
+        <div className="shrink-0 rounded-2xl bg-slate-50 px-3.5 py-2.5 text-right">
+          <p className="text-[11px] font-bold text-slate-400">진행률</p>
+          <p
+            className={`mt-0.5 text-xl font-black ${getProgressTextStyle(project.type)}`}
           >
-            일정관리
-          </Link>
-
-          <Link
-            href="/devlog"
-            className="rounded-xl bg-[#5873F9] px-3 py-2 text-xs font-semibold text-white hover:bg-[#4863E8] transition-colors"
-          >
-            개발일지
-          </Link>
+            {project.progress}%
+          </p>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="h-[420px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
-          이번 달 작업 흐름을 불러오는 중입니다.
-        </div>
-      ) : (
-        <div className="grid items-start gap-4 lg:grid-cols-[1.35fr_1fr]">
-          <div>
-            <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-bold text-gray-400">
-              {["월", "화", "수", "목", "금", "토", "일"].map((dayName) => (
-                <div key={dayName}>{dayName}</div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-2">
-              {monthDays.map((day) => {
-                const dayItems = itemsByDate[day.key] ?? [];
-                const scheduleCount = dayItems.filter(
-                  (item) => item.type === "schedule",
-                ).length;
-                const devlogCount = dayItems.filter(
-                  (item) => item.type === "devlog",
-                ).length;
-                const active = selectedDateKey === day.key;
-                const hasItems = scheduleCount + devlogCount > 0;
-
-                return (
-                  <button
-                    key={day.key}
-                    type="button"
-                    onClick={() => onSelectDate(day.key)}
-                    className={`min-h-[82px] rounded-xl border p-2 text-left transition-all ${
-                      active
-                        ? "border-[#5873F9] bg-[#F7F9FF] shadow-sm"
-                        : "border-gray-200 bg-white hover:border-[#5873F9]/50 hover:bg-gray-50"
-                    } ${day.isCurrentMonth ? "" : "opacity-40"}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-sm font-black ${
-                          day.isToday ? "text-[#5873F9]" : "text-gray-900"
-                        }`}
-                      >
-                        {day.dayNumber}
-                      </span>
-
-                      {day.isToday ? (
-                        <span className="rounded-full bg-[#5873F9] px-1.5 py-0.5 text-[9px] font-bold text-white">
-                          오늘
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {hasItems ? (
-                      <div className="mt-2 space-y-1">
-                        {scheduleCount > 0 ? (
-                          <div className="flex items-center justify-between rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] font-bold text-[#5873F9]">
-                            <span>일정</span>
-                            <span>{scheduleCount}</span>
-                          </div>
-                        ) : null}
-
-                        {devlogCount > 0 ? (
-                          <div className="flex items-center justify-between rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
-                            <span>일지</span>
-                            <span>{devlogCount}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="mt-5 h-1.5 w-1.5 rounded-full bg-gray-200" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <aside className="rounded-2xl border border-gray-200 bg-[#FBFCFF] p-4">
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-[#5873F9]">
-                선택한 날짜
-              </p>
-
-              <h3 className="mt-1 text-lg font-black text-gray-900">
-                {selectedDay
-                  ? `${selectedDay.month}월 ${selectedDay.dayNumber}일 ${selectedDay.dayName}요일`
-                  : selectedDateKey}
-              </h3>
-
-              <p className="mt-1 text-xs text-gray-400">
-                일정 {schedules.length}개 · 개발일지 {devlogs.length}개
-              </p>
-            </div>
-
-            {selectedItems.length === 0 ? (
-              <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white text-sm text-gray-400">
-                이 날짜에는 표시할 작업이 없습니다.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <WorkFlowList
-                  title="일정"
-                  emptyText="등록된 일정이 없습니다."
-                  items={visibleSchedules}
-                />
-
-                <WorkFlowList
-                  title="개발일지"
-                  emptyText="작성된 개발일지가 없습니다."
-                  items={visibleDevlogs}
-                />
-
-                {hiddenCount > 0 ? (
-                  <div className="rounded-xl bg-white px-3 py-2 text-center text-xs font-semibold text-gray-500">
-                    외 {hiddenCount}개 더 있음
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </aside>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function WorkFlowList({
-  title,
-  emptyText,
-  items,
-}: {
-  title: string;
-  emptyText: string;
-  items: WorkFlowItem[];
-}) {
-  return (
-    <div>
-      <h4 className="mb-2 text-sm font-bold text-gray-900">{title}</h4>
-
-      {items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-3 text-xs text-gray-400">
-          {emptyText}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="block rounded-xl border border-gray-200 bg-white px-3 py-3 transition hover:border-[#5873F9]/50 hover:bg-[#F7F9FF]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-gray-900">
-                    {item.title}
-                  </p>
-
-                  <p className="mt-1 truncate text-xs text-gray-400">
-                    {item.workspaceName}
-                  </p>
-                </div>
-
-                <span
-                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
-                    item.type === "schedule"
-                      ? "bg-blue-50 text-blue-600"
-                      : "bg-purple-50 text-purple-600"
-                  }`}
-                >
-                  {item.type === "schedule" ? "일정" : "일지"}
-                </span>
-              </div>
-
-              {item.stage || item.status ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {item.stage ? (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                      {item.stage}
-                    </span>
-                  ) : null}
-
-                  {item.status ? (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                      {item.status}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProjectCard({ project }: { project: RecentProject }) {
-  const router = useRouter();
-  const ideHref = getIdeHref(project);
-
-  const handleCardClick = () => {
-    router.push(ideHref);
-  };
-
-  const handleButtonClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.stopPropagation();
-  };
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleCardClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          router.push(ideHref);
-        }
-      }}
-      className="bg-white border border-gray-200 rounded-xl p-5 hover:border-[#5873F9]/50 hover:shadow-md transition-all group flex flex-col justify-between min-h-[210px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#5873F9]/30"
-    >
-      <div>
-        <div className="flex justify-between items-start mb-2">
-          <span className="bg-gray-100 text-gray-600 text-[11px] font-medium px-2.5 py-1 rounded-md">
-            {project.tech}
-          </span>
-
-          <span
-            className={`text-[11px] font-semibold px-2 py-1 rounded-md ${
-              project.type === "team"
-                ? "text-blue-600 bg-blue-50"
-                : "text-purple-600 bg-purple-50"
-            }`}
-          >
-            {project.type === "team" ? "Team" : "Personal"}
-          </span>
-        </div>
-
-        <h3 className="font-bold text-gray-900 group-hover:text-[#5873F9] transition-colors truncate">
+      {/* 카드 본문 */}
+      <div className="mt-2 flex-1">
+        <h3 className="line-clamp-1 text-xl font-black tracking-tight text-slate-950 group-hover:text-blue-600">
           {project.title}
         </h3>
 
-        <p className="mt-1 text-xs text-gray-400">
-          {project.role === "owner" ? "Owner" : "Member"}
+        <p className="mt-2 line-clamp-2 min-h-[44px] text-sm leading-6 text-slate-500">
+          {project.description}
         </p>
       </div>
 
-      <div className="mt-4">
-        <div className="flex justify-between items-end mb-1.5">
-          <span className="text-xs text-gray-400">{project.lastModified}</span>
-
-          <span className="text-xs font-semibold text-[#5873F9]">
-            {project.progress}%
-          </span>
+      {/* 최근 수정일 + 진행률바 */}
+      <div className="mt-1">
+        <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+          <span>최근 수정일</span>
+          <span>{formatDate(project.lastModified)}</span>
         </div>
 
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
           <div
-            className="bg-[#5873F9] h-1.5 rounded-full transition-all duration-500"
+            className={`h-full rounded-full transition-all ${getProgressBarStyle(
+              project.type,
+            )}`}
             style={{ width: `${project.progress}%` }}
           />
         </div>
+      </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <Link
-            href={`/devlog?workspaceId=${project.workspaceId}`}
-            onClick={handleButtonClick}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9] transition-colors"
-          >
-            개발일지
-          </Link>
+      {/* 작업 유형 */}
+      <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-500">
+        {project.type === "team" ? (
+          <Users size={16} />
+        ) : (
+          <UserRound size={16} />
+        )}
+        <span>{project.type === "team" ? "팀 작업" : "개인 작업"}</span>
+      </div>
 
-          <Link
-            href={`/schedule?view=${project.type}&workspaceId=${project.workspaceId}`}
-            onClick={handleButtonClick}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9] transition-colors"
-          >
-            일정
-          </Link>
+      {/* 이동 버튼 */}
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <div className="grid grid-cols-2 gap-2">
+          <CardActionLink
+            href={getDashboardHref(project)}
+            icon={<LayoutDashboard size={15} />}
+            label="프로젝트 열기"
+            primary
+          />
 
-          <Link
-            href={`/dashboard/${project.workspaceId}?mode=${project.type}`}
-            onClick={handleButtonClick}
-            className="inline-flex items-center justify-center rounded-lg bg-[#5873F9] px-2 py-2 text-xs font-semibold text-white hover:bg-[#4863E8] transition-colors"
-          >
-            대시보드
-          </Link>
+          <CardActionLink
+            href={getIdeHref(project)}
+            icon={<Code2 size={15} />}
+            label="AIVS"
+          />
+
+          <CardActionLink
+            href={getScheduleHref(project)}
+            icon={<CalendarDays size={15} />}
+            label="일정관리"
+          />
+
+          <CardActionLink
+            href={getDevlogHref(project)}
+            icon={<BookOpenText size={15} />}
+            label="개발일지"
+          />
         </div>
+      </div>
+    </article>
+  );
+}
+
+function CardActionLink({
+  href,
+  icon,
+  label,
+  primary = false,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex h-10 items-center justify-center gap-1.5 rounded-2xl text-xs font-black transition ${
+        primary
+          ? "bg-blue-600 text-white hover:bg-blue-700"
+          : "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+      {primary && <ArrowRight size={14} />}
+    </Link>
+  );
+}
+
+function ProjectCardSkeleton() {
+  return (
+    <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="h-7 w-28 animate-pulse rounded-full bg-slate-100" />
+        <div className="h-14 w-16 animate-pulse rounded-2xl bg-slate-100" />
+      </div>
+
+      <div className="mt-6 h-6 w-2/3 animate-pulse rounded-lg bg-slate-100" />
+      <div className="mt-4 h-4 w-full animate-pulse rounded-lg bg-slate-100" />
+      <div className="mt-2 h-4 w-3/4 animate-pulse rounded-lg bg-slate-100" />
+      <div className="mt-6 h-2 w-full animate-pulse rounded-full bg-slate-100" />
+
+      <div className="mt-6 grid grid-cols-2 gap-2">
+        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
       </div>
     </div>
   );
