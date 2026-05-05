@@ -1,13 +1,12 @@
 export type TabKey =
-  | "profile"
-  | "account"
-  | "projects"
-  | "teams"
-  | "settings"
-  | "identity"
-  | "customize"
-  | "reputation"
-  | "achievements";
+  | "overview"
+  | "progress"
+  | "completed"
+  | "devlogs"
+  | "github"
+  | "account";
+
+export type ProjectStatus = "active" | "completed";
 
 export type User = {
   id: string;
@@ -20,64 +19,41 @@ export type User = {
 export type Project = {
   id: string;
   name: string;
-  role: "owner" | "member";
-  updatedAt: string;
+  description?: string;
+  type: "개인" | "팀";
+  status: ProjectStatus;
+  progress: number;
   language: string;
-  visibility: "private" | "team";
-  status?: "active" | "archived";
-};
-
-export type Team = {
-  id: string;
-  name: string;
-  role: "owner" | "member";
-  membersCount: number;
-  projectsCount: number;
+  stack: string[];
   updatedAt?: string;
-  description?: string;
+  devlogCount: number;
+  doneScheduleCount: number;
+  scheduleTotalCount: number;
+
+  workspaceId: string;
+  workspaceName: string;
+  workspaceRole: "owner" | "member";
+  workspaceVisibility: "private" | "team";
 };
 
-export type Stats = {
-  primaryLang: string;
-  langRatio: { label: string; value: number }[];
-  activeHours: { label: string; value: number }[];
-  collabSessions: number;
-  avgResponseMin: number;
-  feedbackScore: number;
-};
-
-export type IDEPrefs = {
-  theme: "light" | "dark";
-  keymap: "vscode" | "vim" | "intellij";
-  fontFamily: string;
-  fontSize: number;
-  tabSize: 2 | 4;
-  autoSave: "off" | "afterDelay";
-  autoSaveDelayMs: number;
-  formatter: "prettier" | "eslint" | "none";
-  aiAssistLevel: 0 | 1 | 2 | 3;
-};
-
-export type Achievement = {
+export type Devlog = {
   id: string;
+  projectId?: string;
+  workspaceId?: string;
   title: string;
-  desc: string;
-  earnedAt?: string;
+  projectName: string;
+  date: string;
+  summary: string;
+  rawDate?: string;
 };
 
-export type Solution = {
-  id: string;
-  name: string;
-  role: "owner" | "member";
-  visibility: "private" | "team";
-  updatedAt: string;
-  locationLabel?: string;
-  description?: string;
-  projects: {
-    id: string;
-    name: string;
-    language: string;
-    status?: "active" | "archived";
-    updatedAt?: string;
-  }[];
+export type ActivitySummary = {
+  progressProjectCount: number;
+  completedProjectCount: number;
+  devlogCount: number;
+  doneScheduleCount: number;
+  commitCount: number;
+  primaryLanguage: string;
 };
+
+export type HeatmapLevel = 0 | 1 | 2 | 3 | 4;
