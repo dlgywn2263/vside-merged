@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Editor, { DiffEditor, useMonaco } from "@monaco-editor/react";
 import { useDispatch, useSelector } from "react-redux";
 import { usePathname } from "next/navigation";
@@ -99,12 +100,12 @@ export default function CodeEditor() {
   const { user } = useAuth();
 
   const editorRef = useRef(null);
-  const monacoRef = useRef(null); // 💡 [핵심] Monaco 진짜 객체 보관용
+  const monacoRef = useRef(null); 
   const decorationsRef = useRef([]);
   
-  // 💡 [잠금 로직] 직접 접근용 Ref 보관
   const lockedLinesRef = useRef({});
   const lockDecosRef = useRef([]);
+  const cursorListenerRef = useRef(null); 
 
   const [fontSize, setFontSize] = useState(14);
   const [showAiInput, setShowAiInput] = useState(false);
@@ -154,6 +155,7 @@ export default function CodeEditor() {
   const bindingRef = useRef(null);
 
   const isTeamMode = pathname?.includes("/team");
+  
   const isTeamModeRef = useRef(isTeamMode);
   useEffect(() => {
     isTeamModeRef.current = isTeamMode;
@@ -207,6 +209,10 @@ export default function CodeEditor() {
     };
 
     try {
+      if (cursorListenerRef.current) {
+        cursorListenerRef.current.dispose();
+        cursorListenerRef.current = null;
+      }
       if (editorRef.current && lockDecosRef.current.length > 0) {
         editorRef.current.deltaDecorations(lockDecosRef.current, []);
         lockDecosRef.current = [];
@@ -219,7 +225,6 @@ export default function CodeEditor() {
       }
       if (providerRef.current) {
         if (providerRef.current.awareness) {
-          // 💡 퇴장 시 내 커서 상태 깔끔하게 지우기 (유령 방지)
           providerRef.current.awareness.setLocalState(null);
         }
         providerRef.current.disconnect();
@@ -239,7 +244,16 @@ export default function CodeEditor() {
     cleanupCollaboration();
     if (!activeFileId || !workspaceId || !activeProject) return;
 
+    const model = editor.getModel();
+    if (!model) return;
+
+    // 💡 [핵심 해결 1] Windows(CRLF)와 Yjs(LF)의 줄바꿈 계산 차이로 인한 "커서 밀림 현상" 완벽 방지!
+    if (monacoRef.current) {
+      model.setEOL(monacoRef.current.editor.EndOfLineSequence.LF);
+    }
+
     const roomName = `${workspaceId}:${activeProject}:${activeBranch || "master"}:${activeFileId}`;
+
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
 
@@ -249,54 +263,65 @@ export default function CodeEditor() {
       ydoc,
       {
         WebSocketPolyfill: CustomWebSocket,
-        maxBackoffTime: 5000,
       },
     );
     providerRef.current = provider;
 
     const awareness = provider.awareness;
     const myColor = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
+    const myName = getMyDisplayName();
 
-    // 초기 위치 방송
     const initialPos = editor.getPosition();
+    
+    // Yjs Awareness에 내 정보(커서 색상, 이름, 락 데이터) 등록
     awareness.setLocalStateField("user", {
-      name: getMyDisplayName(),
+      name: myName,
       color: myColor,
-      currentLine: initialPos ? initialPos.lineNumber : 1,
+    });
+    
+    awareness.setLocalStateField("lockData", {
+      name: myName,
+      line: initialPos ? initialPos.lineNumber : 1, 
     });
 
-    // 커서 이동 시 내 위치 방송
-    editor.onDidChangeCursorPosition((e) => {
+    // 커서 이동 시 내 위치를 실시간으로 상대방에게 전송 및 ReadOnly 처리
+    cursorListenerRef.current = editor.onDidChangeCursorPosition((e) => {
       if (!isTeamModeRef.current) return;
       const line = e.position.lineNumber;
-      const currentState = awareness.getLocalState();
-      if (currentState?.user && currentState.user.currentLine !== line) {
-        awareness.setLocalStateField("user", {
-          ...currentState.user,
-          currentLine: line,
-        });
+      
+      // 내 위치 서버로 전송
+      awareness.setLocalStateField("lockData", {
+        name: myName,
+        line: line,
+      });
+
+      // 💡 [핵심 해결 2] 내가 이동한 줄이 상대방이 점유 중이라면 "읽기 전용"으로 철벽 방어!
+      if (lockedLinesRef.current[line]) {
+        editor.updateOptions({ readOnly: true });
+      } else {
+        editor.updateOptions({ readOnly: false });
       }
     });
 
-    // 💡 [핵심] 잠금 영역(빨간줄) 화면에 그리기
+    // 상대방이 있는 줄에 락(빨간색 시각 효과) 그리기
     const updateLockDecorations = () => {
-      // monacoRef.current가 있어야 완벽한 객체 생성이 가능합니다!
-      if (!editorRef.current || !monacoRef.current) return;
+      if (!editorRef.current || !monacoRef.current) return; 
       
       const decos = [];
       Object.entries(lockedLinesRef.current).forEach(([lineStr, lockerName]) => {
         const line = Number(lineStr);
         decos.push({
-          // 💡 순수 자바스크립트 객체 대신 무조건 진짜 monaco.Range 객체 사용!
           range: new monacoRef.current.Range(line, 1, line, 1),
           options: {
             isWholeLine: true,
             className: "locked-line-bg",
-            linesDecorationsClassName: "locked-line-margin",
+            linesDecorationsClassName: "locked-line-margin", 
+            glyphMarginClassName: "locked-glyph", 
             hoverMessage: { value: `🚫 **${lockerName}**님이 이 줄을 수정 중입니다.` },
           },
         });
       });
+
       lockDecosRef.current = editorRef.current.deltaDecorations(lockDecosRef.current, decos);
     };
 
@@ -311,9 +336,10 @@ export default function CodeEditor() {
       }
 
       const styles = [];
-      const newLockedLines = {}; 
+      const newLockedLines = {};
 
       awareness.getStates().forEach((state, clientId) => {
+        // 상대방 이름표(커서) 스타일링 주입
         if (state.user && state.user.name && state.user.color) {
           styles.push(`
             .yRemoteSelectionHead-${clientId} {
@@ -344,43 +370,64 @@ export default function CodeEditor() {
               background-color: ${state.user.color}44 !important;
             }
           `);
+        }
 
-          // 나 이외의 다른 사람이 점유한 줄을 락으로 등록
-          if (clientId !== awareness.clientID && state.user.currentLine) {
-            newLockedLines[state.user.currentLine] = state.user.name;
-          }
+        // 상대방 락(Lock) 위치 갱신
+        if (clientId !== awareness.clientID && state.lockData && state.lockData.line) {
+          newLockedLines[state.lockData.line] = state.lockData.name;
         }
       });
       styleEl.innerHTML = styles.join("\n");
       
       lockedLinesRef.current = newLockedLines;
       updateLockDecorations();
+
+      // 💡 상대방이 내 위치로 다가와서 선점했다면, 즉시 내 에디터를 읽기 전용으로 차단!
+      const currentPos = editorRef.current?.getPosition();
+      if (currentPos && lockedLinesRef.current[currentPos.lineNumber]) {
+        editorRef.current.updateOptions({ readOnly: true });
+      } else if (editorRef.current) {
+        editorRef.current.updateOptions({ readOnly: false });
+      }
     });
 
-    const model = editor.getModel();
     const yText = ydoc.getText("monaco");
-    const initialContent = fileContentsRef.current[activeFileId] || "";
+    
+    // 로컬 데이터 역시 LF(\n) 규격으로 완벽히 맞춰서 빈 화면/밀림 충돌을 방지합니다.
+    const rawContent = fileContentsRef.current[activeFileId] || "";
+    const localContent = rawContent.replace(/\r\n/g, "\n");
 
+    // 💡 [해결 3: 복붙 더블링 방지 및 정석 바인딩]
     const doBind = () => {
       if (bindingRef.current) return;
-      if (yText.length === 0) {
+
+      // 1. 서버가 비어있다면, 방장(가장 먼저 들어온 사람)만 초기 데이터를 주입
+      if (yText.length === 0 && localContent !== "") {
         const clients = Array.from(awareness.getStates().keys()).sort();
-        const isLeader = clients.length === 0 || clients[0] === awareness.clientID;
-        if (isLeader && initialContent !== "") {
-          yText.insert(0, initialContent);
-        }
-      } else {
-        if (model.getValue() !== yText.toString()) {
-          model.setValue(yText.toString());
+        if (clients.length === 0 || clients[0] === awareness.clientID) {
+           yText.insert(0, localContent);
         }
       }
+
+      // 2. 바인딩 직전에 모델과 서버 텍스트를 정확히 일치시킵니다.
+      if (model.getValue() !== yText.toString()) {
+        model.setValue(yText.toString());
+      }
+
+      // 3. 결합!
       bindingRef.current = new MonacoBinding(yText, model, new Set([editor]), awareness);
     };
 
+    // 무한 멈춤 방지를 위해 연결 상태가 확인되면 즉각적으로 바인딩 시도
     if (provider.synced) {
       doBind();
     } else {
-      provider.once('sync', doBind);
+      provider.on('status', ({ status }) => {
+        if (status === 'connected') {
+          setTimeout(doBind, 300);
+        }
+      });
+      setTimeout(doBind, 1500); // 최후의 보루
     }
   };
 
@@ -392,6 +439,22 @@ export default function CodeEditor() {
       })
       .catch(console.error);
   }, [user]);
+
+  useEffect(() => {
+    if (providerRef.current && providerRef.current.awareness) {
+      const awareness = providerRef.current.awareness;
+      const currentState = awareness.getLocalState();
+      const currentName = getMyDisplayName();
+
+      if (currentName !== "익명 개발자" && currentState?.user?.name !== currentName) {
+        awareness.setLocalStateField("user", {
+          ...currentState?.user,
+          name: currentName,
+          color: currentState?.user?.color || "#ff9900",
+        });
+      }
+    }
+  }, [fetchedNickname, user]); 
 
   const isContentLoaded = fileContents[activeFileId] !== undefined;
 
@@ -493,7 +556,7 @@ export default function CodeEditor() {
     executeAiAction(
       aiQuery +
         "\n\n(명령어: explanation 필드의 설명은 반드시 핵심만 1~2줄로 아주 짧고 간결하게 작성해.)",
-      currentCode
+      currentCode,
     );
   };
 
@@ -532,45 +595,35 @@ export default function CodeEditor() {
 
   const handleEditorDidMount = (editor, monacoInstance) => {
     editorRef.current = editor;
-    monacoRef.current = monacoInstance; // 💡 [핵심] Monaco 객체 보관 완료!
+    monacoRef.current = monacoInstance;
     setIsEditorReady(true);
 
-    // 💡 [잠금 로직] 타이핑 완벽 차단
+    // 💡 키보드 타이핑 시 경고 토스트 띄우기 및 튕겨내기 로직
     editor.onKeyDown((e) => {
       if (!isTeamModeRef.current) return;
 
-      const selection = editor.getSelection();
-      if (!selection) return;
+      const position = editor.getPosition();
+      if (!position) return;
 
-      let isLocked = false;
-      let lockerName = "";
-
-      for (let i = selection.startLineNumber; i <= selection.endLineNumber; i++) {
-        if (lockedLinesRef.current[i]) {
-          isLocked = true;
-          lockerName = lockedLinesRef.current[i];
-          break;
-        }
-      }
-
-      if (isLocked) {
+      const lockerName = lockedLinesRef.current[position.lineNumber];
+      
+      if (lockerName) {
         const m = monacoInstance.KeyCode;
         const allowedKeys = [
           m.LeftArrow, m.RightArrow, m.UpArrow, m.DownArrow,
           m.Home, m.End, m.PageUp, m.PageDown,
-          m.Ctrl, m.Alt, m.Shift, m.Meta, m.Escape,
-          m.F1, m.F2, m.F3, m.F4, m.F5, m.F6, m.F7, m.F8, m.F9, m.F10, m.F11, m.F12,
-          m.Insert
+          m.Ctrl, m.Alt, m.Shift, m.Meta, m.Escape, m.Insert,
+          m.F1, m.F2, m.F3, m.F4, m.F5, m.F6, m.F7, m.F8, m.F9, m.F10, m.F11, m.F12
         ];
-        
+
         const isCopy = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyC;
-        const isFind = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyF;
         const isSelectAll = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyA;
 
-        if (!allowedKeys.includes(e.keyCode) && !isCopy && !isFind && !isSelectAll) {
+        // 허용되지 않은 쓰기/삭제 작업을 시도하면 막고 경고창 띄움
+        if (!allowedKeys.includes(e.keyCode) && !isCopy && !isSelectAll) {
           e.preventDefault();
           e.stopPropagation();
-          showWarningToast(`🚫 ${lockerName}님이 작업 중인 줄입니다!`);
+          showWarningToast(`🚫 ${lockerName}님이 작업 중인 구역입니다! (수정 불가)`);
         }
       }
     });
@@ -634,8 +687,8 @@ export default function CodeEditor() {
 
     editor.onMouseDown((e) => {
       if (
-        e.target.type ===
-        monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+        e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+        !lockedLinesRef.current[e.target.position.lineNumber]
       ) {
         const line = e.target.position.lineNumber;
         const currentFile = stateRef.current.activeFileId;
@@ -888,87 +941,6 @@ export default function CodeEditor() {
     dispatch(triggerEditorCmd(null));
   }, [editorCmd, dispatch, activeFileId]);
 
-  useEffect(() => {
-    if (!editorRef.current || !monaco || !activeFileId) return;
-
-    const editor = editorRef.current;
-    const model = editor.getModel ? editor.getModel() : null;
-    if (!model || !model.getValue) return;
-
-    const updateDecorations = () => {
-      const newDecorations = [];
-      const currentFileBreakpoints = breakpoints.filter(
-        (bp) => activeFileId.endsWith(bp.path) || bp.path.endsWith(activeFileId),
-      );
-
-      currentFileBreakpoints.forEach((bp) => {
-        newDecorations.push({
-          range: new monaco.Range(bp.line, 1, bp.line, 1),
-          options: {
-            isWholeLine: false,
-            glyphMarginClassName: "debug-breakpoint-glyph",
-            glyphMarginHoverMessage: { value: "Breakpoint" },
-          },
-        });
-      });
-
-      if (
-        debugLine &&
-        (activeFileId.endsWith(debugLine.path) || debugLine.path.endsWith(activeFileId))
-      ) {
-        newDecorations.push({
-          range: new monaco.Range(debugLine.line, 1, debugLine.line, 1),
-          options: { isWholeLine: true, className: "debug-current-line" },
-        });
-        editor.revealLineInCenter(debugLine.line);
-      }
-
-      const lines = model.getValue().split("\n");
-      let currentConflict = null;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.startsWith("<<<<<<<")) currentConflict = { start: i + 1 };
-        else if (line.startsWith("=======") && currentConflict) {
-          currentConflict.mid = i + 1;
-        } else if (line.startsWith(">>>>>>>")) {
-          if (currentConflict && currentConflict.mid) {
-            currentConflict.end = i + 1;
-
-            newDecorations.push({
-              range: new monaco.Range(currentConflict.start, 1, currentConflict.mid, 1),
-              options: {
-                isWholeLine: true,
-                className: "conflict-current-bg",
-                linesDecorationsClassName: "conflict-current-margin",
-              },
-            });
-
-            newDecorations.push({
-              range: new monaco.Range(currentConflict.mid, 1, currentConflict.end, 1),
-              options: {
-                isWholeLine: true,
-                className: "conflict-incoming-bg",
-                linesDecorationsClassName: "conflict-incoming-margin",
-              },
-            });
-
-            currentConflict = null;
-          }
-        }
-      }
-
-      decorationsRef.current = editor.deltaDecorations(
-        decorationsRef.current,
-        newDecorations,
-      );
-    };
-
-    updateDecorations();
-    const disposable = editor.onDidChangeModelContent(updateDecorations);
-    return () => disposable.dispose();
-  }, [breakpoints, debugLine, activeFileId, monaco, fileContents]);
-
   const isMapTab =
     activeFileId === "Architecture Map" ||
     activeFileId === "CodeMap" ||
@@ -996,9 +968,7 @@ export default function CodeEditor() {
   return (
     <div className="relative h-full w-full overflow-hidden bg-white flex flex-col">
       
-      {/* 💡 [핵심] 잠금 디자인 및 글로벌 CSS 무조건 적용! */}
       <style dangerouslySetInnerHTML={{ __html: `
-        /* 디버깅 & 충돌 마커 */
         .debug-current-line { background-color: rgba(255, 230, 0, 0.3) !important; border-left: 3px solid #eab308; }
         .debug-breakpoint-glyph { background: #ef4444; width: 10px !important; height: 10px !important; border-radius: 50%; margin-left: 6px; margin-top: 5px; cursor: pointer; z-index: 10; }
         .conflict-current-bg { background-color: rgba(60, 179, 113, 0.2) !important; }
@@ -1006,18 +976,22 @@ export default function CodeEditor() {
         .conflict-incoming-bg { background-color: rgba(65, 105, 225, 0.2) !important; }
         .conflict-incoming-margin { border-left: 4px solid #4169e1 !important; }
 
-        /* 💡 락(Lock) 걸린 영역 시각 디자인 완벽 강제 적용 */
         .locked-line-bg { 
-          background-color: rgba(255, 0, 0, 0.15) !important; 
+          background-color: rgba(255, 0, 0, 0.12) !important; 
         }
         .locked-line-margin {
-          border-left: 5px solid #ff0000 !important;
-          background-color: rgba(255, 0, 0, 0.15) !important;
+          border-left: 4px solid #ff0000 !important;
+          background-color: rgba(255, 0, 0, 0.12) !important;
+          z-index: 50 !important;
+        }
+        .locked-glyph {
+          background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="%23ff0000" viewBox="0 0 16 16"><path d="M11 7V5a3 3 0 0 0-6 0v2H4v7h8V7h-1zm-1.5 0h-3V5a1.5 1.5 0 0 1 3 0v2z"/></svg>') no-repeat center center !important;
+          background-size: 14px !important;
+          margin-left: 3px !important;
           z-index: 50 !important;
         }
       `}} />
 
-      {/* 💡 [튕김 UI] 타이핑 차단 시 강력한 토스트 팝업 */}
       {lockWarning.show && (
         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[99999] bg-red-600/95 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(255,0,0,0.4)] font-extrabold text-[14px] flex items-center gap-2 animate-bounce border border-red-400">
           <VscLock size={18} />
@@ -1028,100 +1002,37 @@ export default function CodeEditor() {
       {isDiffMode && (
         <div className="bg-indigo-50/90 border-b border-indigo-200 flex items-center justify-between p-3 shrink-0 shadow-sm z-10 backdrop-blur-sm min-h-[50px]">
           <div className="flex items-start gap-2 flex-1 min-w-0 mr-4">
-            <VscSparkle
-              className="text-indigo-600 animate-pulse shrink-0 mt-0.5"
-              size={18}
-            />
+            <VscSparkle className="text-indigo-600 animate-pulse shrink-0 mt-0.5" size={18} />
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-sm font-extrabold text-indigo-900 mb-1">
-                AI 코드 제안 검토
-              </span>
+              <span className="text-sm font-extrabold text-indigo-900 mb-1">AI 코드 제안 검토</span>
               <div className="text-[12px] font-medium text-indigo-800 bg-white/70 p-2 rounded-md border border-indigo-100/50 max-h-[50px] overflow-y-auto custom-scrollbar leading-relaxed">
                 {aiSuggestion.explanation}
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleAcceptAi}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-md shadow flex items-center gap-1.5 transition-colors"
-            >
-              <VscCheck size={14} /> 적용 (Accept)
-            </button>
-            <button
-              onClick={handleRejectAi}
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold rounded-md shadow flex items-center gap-1.5 transition-colors"
-            >
-              <VscClose size={14} /> 취소 (Reject)
-            </button>
+            <button onClick={handleAcceptAi} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-md shadow flex items-center gap-1.5 transition-colors"><VscCheck size={14} /> 적용</button>
+            <button onClick={handleRejectAi} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold rounded-md shadow flex items-center gap-1.5 transition-colors"><VscClose size={14} /> 취소</button>
           </div>
         </div>
       )}
 
       {showAiInput && !isDiffMode && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[500px] bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200 z-50 p-2 flex items-center gap-3 animate-fade-in-up">
-          <div className="bg-indigo-100 p-1.5 rounded-lg ml-1">
-            <VscSparkle className="text-indigo-600" size={18} />
-          </div>
-          <input
-            ref={aiInputRef}
-            type="text"
-            className="flex-1 border-none outline-none text-[13px] bg-transparent font-medium text-gray-800 placeholder-gray-400"
-            placeholder="AI에게 무엇을 만들어 달라고 할까요? (예: 에러 처리 추가해줘)"
-            value={aiQuery}
-            onChange={(e) => setAiQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleAiSubmit();
-              }
-              if (e.key === "Escape") setShowAiInput(false);
-            }}
-            disabled={isAiLoading}
-          />
-          {isAiLoading ? (
-            <VscLoading
-              className="animate-spin text-indigo-500 mr-2"
-              size={18}
-            />
-          ) : (
-            <div className="flex items-center gap-2 mr-2 text-[10px] font-bold text-gray-400">
-              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                Enter
-              </span>
-              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                Esc
-              </span>
-            </div>
-          )}
+          <div className="bg-indigo-100 p-1.5 rounded-lg ml-1"><VscSparkle className="text-indigo-600" size={18} /></div>
+          <input ref={aiInputRef} type="text" className="flex-1 border-none outline-none text-[13px] bg-transparent font-medium text-gray-800 placeholder-gray-400" placeholder="AI에게 무엇을 만들어 달라고 할까요?" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiSubmit(); } if (e.key === "Escape") setShowAiInput(false); }} disabled={isAiLoading} />
+          {isAiLoading ? <VscLoading className="animate-spin text-indigo-500 mr-2" size={18} /> : <div className="flex items-center gap-2 mr-2 text-[10px] font-bold text-gray-400"><span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">Enter</span><span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">Esc</span></div>}
         </div>
       )}
 
       <div className="flex-1 relative">
         {isDiffMode && (
           <div className="absolute inset-0 z-20 bg-white">
-            <DiffEditor
-              height="100%"
-              theme="light"
-              language={getLanguage(activeFileId)}
-              original={aiSuggestion?.originalCode || "// 코드 분석 중..."}
-              modified={aiSuggestion?.suggestedCode || "// 코드 분석 중..."}
-              options={{
-                renderSideBySide: true,
-                readOnly: false,
-                fontSize,
-                fontFamily: "'D2Coding', 'Consolas', monospace",
-                minimap: { enabled: editorSettings.minimap },
-                originalEditable: false,
-              }}
-            />
+            <DiffEditor height="100%" theme="light" language={getLanguage(activeFileId)} original={aiSuggestion?.originalCode || "// 코드 분석 중..."} modified={aiSuggestion?.suggestedCode || "// 코드 분석 중..."} options={{ renderSideBySide: true, readOnly: false, fontSize, fontFamily: "'D2Coding', 'Consolas', monospace", minimap: { enabled: editorSettings.minimap }, originalEditable: false }} />
           </div>
         )}
 
-        <div
-          className={`absolute inset-0 z-10 bg-white ${isDiffMode ? "invisible" : ""}`}
-        >
+        <div className={`absolute inset-0 z-10 bg-white ${isDiffMode ? "invisible" : ""}`}>
           <Editor
             height="100%"
             theme="light"
@@ -1142,9 +1053,7 @@ export default function CodeEditor() {
               padding: { top: 10 },
               quickSuggestions: editorSettings.autoComplete,
               suggestOnTriggerCharacters: editorSettings.autoComplete,
-              snippetSuggestions: editorSettings.autoComplete
-                ? "inline"
-                : "none",
+              snippetSuggestions: editorSettings.autoComplete ? "inline" : "none",
               wordBasedSuggestions: editorSettings.autoComplete,
               formatOnType: editorSettings.formatOnType,
               formatOnPaste: editorSettings.formatOnType,
