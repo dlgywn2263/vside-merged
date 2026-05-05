@@ -123,7 +123,7 @@ export default function TopNav() {
     { href: "/relocation", label: "재배치" },
     { href: "/schedules", label: "일정관리" },
     { href: "/devlogs", label: "개발일지" },
-
+    { href: "/community", label: "게시판" },
     { href: "/my", label: "마이페이지" },
   ];
 
