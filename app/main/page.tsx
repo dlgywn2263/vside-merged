@@ -15,6 +15,12 @@ import {
   Users,
 } from "lucide-react";
 
+import {
+  getAivsHref,
+  getDevlogHref,
+  getScheduleHref,
+} from "@/components/main-dashboard/dashboard.utils";
+
 const API_BASE = "http://localhost:8080";
 
 type ProjectType = "personal" | "team";
@@ -33,7 +39,7 @@ type WorkspaceItem = {
   updatedAt: string;
   description?: string | null;
   teamName?: string | null;
-  projects: WorkspaceProject[];
+  projects?: WorkspaceProject[];
 };
 
 type ScheduleProgressResponse = {
@@ -65,37 +71,11 @@ const FILTERS = [
 type FilterType = (typeof FILTERS)[number]["key"];
 
 /* =========================
-   페이지 이동 경로
-   실제 route가 다르면 여기만 수정
+   프로젝트 메인 대시보드 경로
+   - IDE / 일정관리 / 개발일지는 dashboard.utils 함수 사용
 ========================= */
 function getDashboardHref(project: DashboardCardItem) {
   return `/main/${project.id}?mode=${project.type}`;
-}
-
-function getIdeHref(
-  project: DashboardCardItem,
-  workspaceId?: string,
-  mode?: ProjectType,
-) {
-  return mode === "team"
-    ? `/ide/team/${project.id}`
-    : `/ide/personal/${project.id}`;
-}
-
-function getScheduleHref(
-  project: DashboardCardItem,
-
-  mode?: ProjectType,
-) {
-  return `/schedules?view=${mode}&workspaceId=${project.id}`;
-}
-
-function getDevlogHref(
-  project: DashboardCardItem,
-
-  mode?: ProjectType,
-) {
-  return `/devlogs?workspaceId=${project.id}&mode=${project.type}`;
 }
 
 function getStoredUserId(): string | null {
@@ -138,7 +118,10 @@ function formatDate(value: string) {
   if (!value || value === "-") return "-";
 
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
 
   const year = parsed.getFullYear();
   const month = String(parsed.getMonth() + 1).padStart(2, "0");
@@ -166,9 +149,6 @@ function getProgressBarStyle(type: ProjectType) {
 }
 
 export default function DashboardProjectSelectPage() {
-  /* =========================
-     1. 기본 상태
-  ========================= */
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
   const [projects, setProjects] = useState<DashboardCardItem[]>([]);
@@ -179,9 +159,6 @@ export default function DashboardProjectSelectPage() {
     loadDashboardProjects();
   }, []);
 
-  /* =========================
-     2. 프로젝트 + 진행률 조회
-  ========================= */
   async function loadDashboardProjects() {
     try {
       setLoading(true);
@@ -276,7 +253,7 @@ export default function DashboardProjectSelectPage() {
           tech: latestProject?.language || "-",
           type: workspace.mode,
           progress: progressInfo?.progress ?? 0,
-          lastModified: workspace.updatedAt || "-",
+          lastModified: workspace.updatedAt || latestProject?.updatedAt || "-",
           memberCount: undefined,
         };
       });
@@ -295,9 +272,6 @@ export default function DashboardProjectSelectPage() {
     }
   }
 
-  /* =========================
-     3. 검색 / 필터 / 통계
-  ========================= */
   const filteredProjects = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
@@ -336,13 +310,10 @@ export default function DashboardProjectSelectPage() {
     <main className="min-h-screen bg-[#f5f6fa] px-6 py-6 text-slate-900 md:px-8">
       <div className="mx-auto flex max-w-[1480px] flex-col gap-5">
         {/* =========================
-            4. 축소형 상단 선택 패널
-            - 기존 큰 통계 카드 제거
-            - 프로젝트 선택 / 요약 / 검색 / 필터만 compact하게 구성
+            상단 프로젝트 선택 패널
         ========================= */}
         <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
           <div className="flex flex-col gap-4">
-            {/* 제목 + 액션 버튼 */}
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h1 className="text-2xl font-black tracking-tight text-slate-950">
@@ -374,7 +345,6 @@ export default function DashboardProjectSelectPage() {
               </div>
             </div>
 
-            {/* 한 줄 요약 정보 */}
             <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
               <SummaryChip label="전체" value={`${totalCount}개`} />
               <span className="text-slate-300">·</span>
@@ -389,7 +359,6 @@ export default function DashboardProjectSelectPage() {
               </span>
             </div>
 
-            {/* 검색 + 필터 */}
             <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="relative w-full lg:max-w-[620px]">
                 <Search
@@ -426,18 +395,12 @@ export default function DashboardProjectSelectPage() {
           </div>
         </section>
 
-        {/* =========================
-            5. 에러 상태
-        ========================= */}
         {error && (
           <section className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 text-sm font-semibold text-rose-700">
             {error}
           </section>
         )}
 
-        {/* =========================
-            6. 로딩 상태
-        ========================= */}
         {loading && (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
@@ -446,9 +409,6 @@ export default function DashboardProjectSelectPage() {
           </section>
         )}
 
-        {/* =========================
-            7. 빈 상태
-        ========================= */}
         {!loading && !error && filteredProjects.length === 0 && (
           <section className="rounded-[28px] border border-dashed border-slate-200 bg-white p-12 text-center shadow-sm">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-100 text-slate-400">
@@ -463,9 +423,6 @@ export default function DashboardProjectSelectPage() {
           </section>
         )}
 
-        {/* =========================
-            8. 프로젝트 카드 목록
-        ========================= */}
         {!loading && !error && filteredProjects.length > 0 && (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project) => (
@@ -490,7 +447,6 @@ function SummaryChip({ label, value }: { label: string; value: string }) {
 function ProjectDashboardCard({ project }: { project: DashboardCardItem }) {
   return (
     <article className="group flex min-h-[320px] flex-col rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
-      {/* 카드 상단 */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <span
@@ -509,26 +465,26 @@ function ProjectDashboardCard({ project }: { project: DashboardCardItem }) {
         <div className="shrink-0 rounded-2xl bg-slate-50 px-3.5 py-2.5 text-right">
           <p className="text-[11px] font-bold text-slate-400">진행률</p>
           <p
-            className={`mt-0.5 text-xl font-black ${getProgressTextStyle(project.type)}`}
+            className={`mt-0.5 text-xl font-black ${getProgressTextStyle(
+              project.type,
+            )}`}
           >
             {project.progress}%
           </p>
         </div>
       </div>
 
-      {/* 카드 본문 */}
-      <div className="mt-2 flex-1">
+      <div className="mt-5 flex-1">
         <h3 className="line-clamp-1 text-xl font-black tracking-tight text-slate-950 group-hover:text-blue-600">
           {project.title}
         </h3>
 
-        <p className="mt-2 line-clamp-2 min-h-[44px] text-sm leading-6 text-slate-500">
+        <p className="mt-3 line-clamp-2 min-h-[44px] text-sm leading-6 text-slate-500">
           {project.description}
         </p>
       </div>
 
-      {/* 최근 수정일 + 진행률바 */}
-      <div className="mt-1">
+      <div className="mt-5">
         <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
           <span>최근 수정일</span>
           <span>{formatDate(project.lastModified)}</span>
@@ -544,7 +500,6 @@ function ProjectDashboardCard({ project }: { project: DashboardCardItem }) {
         </div>
       </div>
 
-      {/* 작업 유형 */}
       <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-500">
         {project.type === "team" ? (
           <Users size={16} />
@@ -554,7 +509,6 @@ function ProjectDashboardCard({ project }: { project: DashboardCardItem }) {
         <span>{project.type === "team" ? "팀 작업" : "개인 작업"}</span>
       </div>
 
-      {/* 이동 버튼 */}
       <div className="mt-5 border-t border-slate-100 pt-4">
         <div className="grid grid-cols-2 gap-2">
           <CardActionLink
@@ -565,19 +519,19 @@ function ProjectDashboardCard({ project }: { project: DashboardCardItem }) {
           />
 
           <CardActionLink
-            href={getIdeHref(project)}
+            href={getAivsHref(project.id, project.type)}
             icon={<Code2 size={15} />}
-            label="AIVS"
+            label="IDE"
           />
 
           <CardActionLink
-            href={getScheduleHref(project)}
+            href={getScheduleHref(project.id, project.type)}
             icon={<CalendarDays size={15} />}
             label="일정관리"
           />
 
           <CardActionLink
-            href={getDevlogHref(project)}
+            href={getDevlogHref(project.id)}
             icon={<BookOpenText size={15} />}
             label="개발일지"
           />
