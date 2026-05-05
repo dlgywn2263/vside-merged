@@ -316,7 +316,7 @@ export default function DevlogManagementMock() {
           - 메뉴 영역에 마우스를 올리면 플로팅 사이드바 표시
           - 메뉴 아이콘 클릭 시 사이드바 고정
       ========================= */}
-      {!isLeftSidebarPinned && (
+      {/* {!isLeftSidebarPinned && (
         <div
           className="fixed left-0 top-[58px] z-50"
           onMouseEnter={() => setIsSidebarHovering(true)}
@@ -365,7 +365,7 @@ export default function DevlogManagementMock() {
             )}
           </div>
         </div>
-      )}
+      )} */}
 
       <div
         className={[
@@ -376,7 +376,7 @@ export default function DevlogManagementMock() {
         ].join(" ")}
       >
         {/* 고정된 왼쪽 사이드바 */}
-        {isLeftSidebarPinned && (
+        {/* {isLeftSidebarPinned && (
           <ProjectPinnedSidebar
             projects={PROJECTS}
             devlogs={devlogs}
@@ -384,11 +384,9 @@ export default function DevlogManagementMock() {
             onSelectProject={handleSelectProject}
             onClose={() => setIsLeftSidebarPinned(false)}
           />
-        )}
+        )} */}
 
-        <main
-          className={`min-w-0 p-6 ${!isLeftSidebarPinned ? "pl-[88px]" : ""}`}
-        >
+        <main className={`min-w-0 p-6 `}>
           <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
             <header className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
