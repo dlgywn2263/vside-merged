@@ -2,20 +2,14 @@
 
 const API_BASE = "http://localhost:8080";
 
-/**
- * 현재 프로젝트에서 저장될 수 있는 토큰 키들을 순서대로 확인
- * - token
- * - accessToken
- * - jwt
- * - authToken
- */
 function getToken() {
   if (typeof window === "undefined") return null;
 
-  const candidates = ["token", "accessToken", "jwt", "authToken"];
+  const candidates = ["accessToken", "token", "jwt", "authToken"];
 
   for (const key of candidates) {
     const value = localStorage.getItem(key);
+
     if (value && value.trim()) {
       return value.trim();
     }
@@ -24,69 +18,68 @@ function getToken() {
   return null;
 }
 
-/**
- * 디버깅용: 현재 localStorage 상태 빠르게 확인
- */
 function debugTokenState() {
   if (typeof window === "undefined") return;
 
   console.log("[mypage api] localStorage keys:", Object.keys(localStorage));
-  console.log("[mypage api] token =", localStorage.getItem("token"));
   console.log(
     "[mypage api] accessToken =",
     localStorage.getItem("accessToken"),
   );
+  console.log("[mypage api] token =", localStorage.getItem("token"));
   console.log("[mypage api] jwt =", localStorage.getItem("jwt"));
   console.log("[mypage api] authToken =", localStorage.getItem("authToken"));
 }
 
-async function authFetch(path: string, options: RequestInit = {}) {
+async function authFetch<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const token = getToken();
 
   if (!token) {
     debugTokenState();
-
-    throw new Error(
-      "[authFetch] 로그인 토큰이 없습니다. 로그인 후 다시 시도하세요.",
-    );
+    throw new Error("로그인 정보가 없습니다. 다시 로그인해주세요.");
   }
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-    ...(options.headers ?? {}),
-  };
-
-  console.log("[mypage api] request:", `${API_BASE}${path}`);
-  console.log("[mypage api] Authorization header attached:", !!token);
-
-  const res = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(options.headers ?? {}),
+    },
     cache: "no-store",
   });
 
-  const text = await res.text();
+  const text = await response.text();
 
-  if (!res.ok) {
+  if (!response.ok) {
+    let message = "요청 처리 중 오류가 발생했습니다.";
+
+    try {
+      const json = JSON.parse(text);
+      message = json.message ?? json.error ?? message;
+    } catch {
+      if (text) message = text;
+    }
+
     console.error("[mypage api] request failed:", {
       path,
-      status: res.status,
-      statusText: res.statusText,
-      body: text,
+      status: response.status,
+      statusText: response.statusText,
+      message,
     });
 
-    throw new Error(
-      text || `[authFetch] 요청 실패: ${res.status} ${res.statusText}`,
-    );
+    throw new Error(message);
   }
 
-  if (!text) return null;
+  if (!text) return null as T;
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as T;
   } catch {
-    return text;
+    return text as T;
   }
 }
 
@@ -98,19 +91,36 @@ export type UserMeResponse = {
   createdAt?: string;
 };
 
+export type ProjectStatusResponse =
+  | "active"
+  | "completed"
+  | "ACTIVE"
+  | "COMPLETED"
+  | "done"
+  | "DONE"
+  | "complete"
+  | "COMPLETE"
+  | string;
+
 export type WorkspaceProjectResponse = {
   id: string;
   name: string;
-  language: string;
-  updatedAt: string;
+  language?: string | null;
+  updatedAt?: string | null;
+  status?: ProjectStatusResponse | null;
+  progress?: number | null;
+  description?: string | null;
+  stack?: string[] | null;
+  devlogCount?: number | null;
+  doneScheduleCount?: number | null;
 };
 
 export type WorkspaceListResponse = {
   id: string;
   name: string;
   mode: "team" | "personal";
-  role: "owner" | "member";
-  updatedAt: string;
+  role: "owner" | "member" | "OWNER" | "MEMBER";
+  updatedAt?: string | null;
   description?: string | null;
   teamName?: string | null;
   projects: WorkspaceProjectResponse[];
@@ -123,51 +133,88 @@ export type WorkspaceMemberResponse = {
   role: "OWNER" | "MEMBER";
 };
 
+export type MyPageDevlogResponse = Record<string, unknown>;
+
+export type WorkspaceDevlogsResponse = unknown;
+
+export type ScheduleView = "personal" | "team";
+
+export type ScheduleProgressResponse = {
+  workspaceId: string;
+  workspaceName: string;
+  type: string;
+  totalCount: number;
+  doneCount: number;
+  progress: number;
+};
+
 export async function fetchMyProfile(): Promise<UserMeResponse> {
-  return authFetch("/api/users/me");
+  return authFetch<UserMeResponse>("/api/users/me");
 }
 
 export async function updateMyProfile(payload: {
   nickname: string;
   profileImageUrl?: string | null;
 }): Promise<UserMeResponse> {
-  return authFetch("/api/users/me", {
+  return authFetch<UserMeResponse>("/api/users/me", {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function changeMyEmail(payload: {
-  email: string;
-}): Promise<UserMeResponse> {
-  return authFetch("/api/users/me/email", {
+export async function changeMyEmailApi(email: string): Promise<UserMeResponse> {
+  return authFetch<UserMeResponse>("/api/users/me/email", {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ email }),
   });
 }
 
-export async function changeMyPassword(payload: {
-  currentPassword: string;
-  newPassword: string;
-}): Promise<string | null> {
-  return authFetch("/api/users/me/password", {
+export async function changeMyPasswordApi(
+  currentPassword: string,
+  newPassword: string,
+): Promise<string | null> {
+  return authFetch<string | null>("/api/users/me/password", {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      currentPassword,
+      newPassword,
+    }),
   });
 }
 
-export async function deleteMyAccount(): Promise<string | null> {
-  return authFetch("/api/users/me", {
+export async function deleteMyAccountApi(): Promise<string | null> {
+  return authFetch<string | null>("/api/users/me", {
     method: "DELETE",
   });
 }
 
 export async function fetchMyWorkspaces(): Promise<WorkspaceListResponse[]> {
-  return authFetch("/api/workspaces/me");
+  return authFetch<WorkspaceListResponse[]>("/api/workspaces/me");
 }
 
 export async function fetchWorkspaceMembers(
   workspaceId: string,
 ): Promise<WorkspaceMemberResponse[]> {
-  return authFetch(`/api/workspaces/${workspaceId}/members`);
+  return authFetch<WorkspaceMemberResponse[]>(
+    `/api/workspaces/${workspaceId}/members`,
+  );
+}
+
+export async function fetchWorkspaceDevlogs(
+  workspaceId: string,
+): Promise<WorkspaceDevlogsResponse> {
+  return authFetch<WorkspaceDevlogsResponse>(
+    `/api/devlogs/workspaces/${workspaceId}`,
+  );
+}
+
+export async function fetchScheduleProgress(
+  view: ScheduleView,
+  workspaceId: string,
+): Promise<ScheduleProgressResponse> {
+  return authFetch<ScheduleProgressResponse>(
+    `/api/schedules/progress?view=${encodeURIComponent(
+      view,
+    )}&workspaceId=${encodeURIComponent(workspaceId)}`,
+  );
 }
