@@ -267,7 +267,7 @@ export default function ScheduleManagementMock() {
     - hover 시 플로팅 사이드바 표시
     - Menu 클릭 시 사이드바 고정
 ========================= */}
-      {!isLeftSidebarPinned && (
+      {/* {!isLeftSidebarPinned && (
         <div
           className="fixed left-0 top-[58px] z-50"
           onMouseEnter={() => setIsSidebarHovering(true)}
@@ -306,7 +306,7 @@ export default function ScheduleManagementMock() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* =========================
           9. 전체 본문 레이아웃
@@ -329,7 +329,7 @@ export default function ScheduleManagementMock() {
         {/* =========================
             10. 고정된 왼쪽 사이드바
         ========================= */}
-        {isLeftSidebarPinned && (
+        {/* {isLeftSidebarPinned && (
           <ProjectPinnedSidebar
             projects={PROJECTS}
             schedules={schedules}
@@ -337,16 +337,12 @@ export default function ScheduleManagementMock() {
             onSelectProject={handleSelectProject}
             onClose={() => setIsLeftSidebarPinned(false)}
           />
-        )}
+        )} */}
 
         {/* =========================
             11. 중앙 메인 영역
         ========================= */}
-        <main
-          className={`min-w-0 bg-[#f5f6fa] p-6 ${
-            !isLeftSidebarPinned ? "pl-[88px]" : ""
-          }`}
-        >
+        <main className={`min-w-0 bg-[#f5f6fa] p-6 `}>
           <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
               <div>
