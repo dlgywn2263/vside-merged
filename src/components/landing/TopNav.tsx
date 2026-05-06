@@ -170,7 +170,7 @@ export default function TopNav() {
   const NAV_ITEMS = [
     { href: homeHref, label: "HOME", matchPath: "/main" },
     { href: "/projects", label: "AIVS", matchPath: "/projects" },
-    { href: "/relocation", label: "재배치", matchPath: "/relocation" },
+    { href: "/relocation", label: "설계단계", matchPath: "/relocation" },
     { href: "/schedules", label: "일정관리", matchPath: "/schedules" },
     { href: "/devlogs", label: "개발일지", matchPath: "/devlogs" },
     { href: "/community", label: "게시판", matchPath: "/community" },
