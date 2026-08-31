@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
+import { CollabWebSocket } from "@/lib/ide/collabSocket";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE_URL || "ws://localhost:8080";
 
@@ -22,10 +23,17 @@ class WorkspaceSyncManager {
         this.doc = new Y.Doc();
         const globalRoomName = `global-workspace-room-${workspaceId}`;
 
+        // 공용 폴리필을 반드시 넘겨야 한다.
+        // 백엔드는 ?room= 쿼리로만 방을 구분하는데 y-websocket 기본값은
+        // 경로 형식이라, 폴리필 없이 붙으면 워크스페이스와 무관하게 모든
+        // 사용자가 default-room 한 곳에 모인다. 토큰도 여기서 붙는다.
         this.provider = new WebsocketProvider(
             `${WS_BASE}/ws/collab`,
             globalRoomName,
-            this.doc
+            this.doc,
+            {
+                WebSocketPolyfill: CollabWebSocket,
+            }
         );
 
         this.eventsMap = this.doc.getMap("workspaceGlobalEvents");

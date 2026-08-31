@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
+import { CollabWebSocket } from "@/lib/ide/collabSocket";
 import { VscCheck, VscClose, VscSparkle, VscLoading, VscLock, VscWarning, VscArrowRight } from "react-icons/vsc";
 
 import {
@@ -186,19 +187,9 @@ const configureTypeScriptMonaco = (monacoInstance) => {
   );
 };
 
-class CustomWebSocket extends WebSocket {
-  constructor(url, protocols) {
-    const parsedUrl = new URL(url);
-    const pathParts = parsedUrl.pathname.split("/ws/collab/");
-    const roomName =
-      pathParts.length > 1 ? decodeURIComponent(pathParts[1]) : "default-room";
-    
-    const safeUrl = `${WS_BASE}/ws/collab?room=${encodeURIComponent(
-      roomName,
-    )}`;
-    super(safeUrl, protocols);
-  }
-}
+// 방 접속 규약은 /ws/collab 을 쓰는 세 곳이 공유한다.
+// 서버가 핸드셰이크에서 토큰을 확인하므로 공용 폴리필을 써야 한다.
+const CustomWebSocket = CollabWebSocket;
 
 const normalizeCollabKeyPart = (value, fallback = "") => {
   return String(value ?? fallback)
