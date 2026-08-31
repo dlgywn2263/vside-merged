@@ -64,6 +64,16 @@ class DesignDocSession {
   private started = false;
   private listeners = new Set<Listener>();
 
+  /**
+   * 이미 정리된 세션인지.
+   *
+   * 문서를 불러오는 동안 사용자가 화면을 벗어날 수 있다. 그때 뒤늦게
+   * 도착한 응답이 이미 파기된 문서에 상태를 적용하고 WebSocket 을 열면,
+   * 그 연결은 아무도 닫지 않는 유령이 된다. 개발 모드에서는 React 가
+   * 효과를 두 번 실행하므로 첫 접속마다 재현된다.
+   */
+  private destroyed = false;
+
   private state: DesignDocState = {
     status: "loading",
     errorMessage: "",
@@ -111,9 +121,11 @@ class DesignDocSession {
   private async start(): Promise<void> {
     try {
       const doc = await fetchDesignDocApi(this.workspaceId);
+      if (this.destroyed) return;
 
       if (doc.needsSeed) {
         await this.seed();
+        if (this.destroyed) return;
       } else {
         applyEncodedState(this.doc, doc.yjsUpdate);
       }
@@ -121,6 +133,8 @@ class DesignDocSession {
       this.setState({ status: "ready", errorMessage: "" });
       this.connect();
     } catch (error) {
+      if (this.destroyed) return;
+
       // 저장본을 읽지 못한 상태에서 편집을 열어 주면, 나중에 저장할 때
       // 서버의 진짜 내용을 빈 문서로 덮어쓸 수 있다. 그래서 여기서는
       // 편집을 열지 않고 오류로 둔다.
@@ -167,6 +181,8 @@ class DesignDocSession {
   }
 
   private connect(): void {
+    if (this.destroyed) return;
+
     this.writer = new SnapshotWriter({
       workspaceId: this.workspaceId,
       doc: this.doc,
@@ -201,6 +217,9 @@ class DesignDocSession {
   }
 
   private destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+
     if (this.provider && this.writer) {
       this.writer.detachAwareness(this.provider.awareness);
     }
