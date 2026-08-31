@@ -26,6 +26,7 @@ import { ConfirmDialogProvider } from "./ConfirmDialog";
 import { ConnectionNotice, DesignHeader } from "./DesignHeader";
 import { DoctorPanel } from "./DoctorPanel";
 import { AiDraftDialog } from "../ai/AiDraftDialog";
+import { CodegenDialog } from "../codegen/CodegenDialog";
 import { isEmptyModel } from "../model/schema";
 import { WorkspaceSidebar, type WorkspaceSummary } from "./WorkspaceSidebar";
 import { RequirementsTab } from "../tabs/requirements/RequirementsTab";
@@ -86,6 +87,7 @@ export function DesignWorkspace() {
   const report = useDesignDoctor(workspaceId, model, state.status !== "loading" && state.status !== "error");
 
   const [aiOpen, setAiOpen] = useState(false);
+  const [codegenOpen, setCodegenOpen] = useState(false);
   const documentEmpty = isEmptyModel(model);
 
   const mutations = useMemo(() => (doc ? createDesignMutations(doc) : null), [doc]);
@@ -127,6 +129,7 @@ export function DesignWorkspace() {
                 state={state}
                 issueCount={report.errorCount + report.warningCount}
                 onOpenAiDraft={() => setAiOpen(true)}
+                onOpenCodegen={() => setCodegenOpen(true)}
               />
 
               <ConnectionNotice status={state.status} message={state.errorMessage} />
@@ -159,13 +162,23 @@ export function DesignWorkspace() {
               )}
 
               {mutations && workspaceId ? (
-                <AiDraftDialog
-                  open={aiOpen}
-                  onOpenChange={setAiOpen}
-                  workspaceId={workspaceId}
-                  mutations={mutations}
-                  hasExisting={!documentEmpty}
-                />
+                <>
+                  <AiDraftDialog
+                    open={aiOpen}
+                    onOpenChange={setAiOpen}
+                    workspaceId={workspaceId}
+                    mutations={mutations}
+                    hasExisting={!documentEmpty}
+                  />
+
+                  <CodegenDialog
+                    open={codegenOpen}
+                    onOpenChange={setCodegenOpen}
+                    workspaceId={workspaceId}
+                    model={model}
+                    errorCount={report.errorCount}
+                  />
+                </>
               ) : null}
             </>
           )}

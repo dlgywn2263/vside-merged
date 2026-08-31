@@ -8,7 +8,7 @@
 // 사실이 눈에 보여야 한다.
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CloudOff, Loader2, Sparkles, Stethoscope, Users } from "lucide-react";
+import { AlertTriangle, Check, CloudOff, FileCode, Loader2, Sparkles, Stethoscope, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,7 @@ export interface DesignHeaderProps {
   state: DesignDocState;
   issueCount: number;
   onOpenAiDraft: () => void;
+  onOpenCodegen: () => void;
 }
 
 export function DesignHeader({
@@ -96,6 +97,7 @@ export function DesignHeader({
   state,
   issueCount,
   onOpenAiDraft,
+  onOpenCodegen,
 }: DesignHeaderProps) {
   const activeTab = useDesignUiStore((s) => s.activeTab);
   const setActiveTab = useDesignUiStore((s) => s.setActiveTab);
@@ -128,6 +130,16 @@ export function DesignHeader({
           >
             <Sparkles className="h-4 w-4 text-indigo-500" />
             AI 초안
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenCodegen}
+            className="gap-1.5"
+          >
+            <FileCode className="h-4 w-4 text-slate-500" />
+            코드 생성
           </Button>
 
           <Button
