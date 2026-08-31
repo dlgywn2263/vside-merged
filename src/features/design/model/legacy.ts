@@ -242,7 +242,55 @@ export interface LegacyProjection {
   flowEdgesJson: string;
 }
 
+/**
+ * 화면 흐름을 예전 데이터 플로우 형식으로 옮긴다.
+ *
+ * 자료실과 마이페이지는 아직 예전 형식만 읽는다. 여기서 화면 흐름을
+ * 내보내지 않으면, 사용자가 지금 관리하는 흐름은 그 화면들에 영영 안 보이고
+ * 시드 때 보관해 둔 옛 다이어그램만 계속 보인다.
+ *
+ * 화면이 하나도 없을 때만 보관된 원본을 그대로 돌려준다. 아직 새 탭을
+ * 써 보지 않은 워크스페이스에서 자료실이 갑자기 비어 보이지 않게 하려는 것이다.
+ */
+function toLegacyFlow(model: DesignModel): { nodesJson: string; edgesJson: string } {
+  if (model.screens.length === 0) {
+    return {
+      nodesJson: model.meta.legacyFlow.nodesJson,
+      edgesJson: model.meta.legacyFlow.edgesJson,
+    };
+  }
+
+  const nodes = model.screens.map((screen) => ({
+    id: screen.id,
+    type: "systemNode",
+    position: { x: screen.layout.x, y: screen.layout.y },
+    data: {
+      label: screen.name,
+      type: "client",
+      // 예전 형식에는 라우트를 담을 자리가 없어 부가 설명 칸을 빌려 쓴다.
+      techStack: screen.key,
+    },
+  }));
+
+  const edges = model.screenTransitions.map((transition) => ({
+    id: transition.id,
+    source: transition.from,
+    target: transition.to,
+    animated: true,
+    label: transition.condition
+      ? `${transition.trigger} (${transition.condition})`
+      : transition.trigger,
+  }));
+
+  return {
+    nodesJson: toJsonArrayString(nodes),
+    edgesJson: toJsonArrayString(edges),
+  };
+}
+
 export function modelToLegacy(model: DesignModel): LegacyProjection {
+  const flow = toLegacyFlow(model);
+
   const erdNodes = model.erd.tables.map((table) => ({
     id: table.id,
     type: "tableNode",
@@ -284,9 +332,7 @@ export function modelToLegacy(model: DesignModel): LegacyProjection {
     })),
     erdNodesJson: toJsonArrayString(erdNodes),
     erdEdgesJson: toJsonArrayString(erdEdges),
-    // 데이터 플로우는 시드 때 보관한 원본을 그대로 돌려준다.
-    // 화면 흐름도에서 되그리지 않으므로 예전 다이어그램이 정확히 재현된다.
-    flowNodesJson: model.meta.legacyFlow.nodesJson,
-    flowEdgesJson: model.meta.legacyFlow.edgesJson,
+    flowNodesJson: flow.nodesJson,
+    flowEdgesJson: flow.edgesJson,
   };
 }
