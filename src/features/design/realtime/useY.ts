@@ -11,7 +11,60 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import * as Y from "yjs";
 
+import { createEmptyModel, type DesignModel } from "../model/schema";
+import { docToModel } from "./yjsSchema";
+
 type YArrayAny = Y.Array<Y.Map<unknown>>;
+
+const EMPTY_MODEL = createEmptyModel();
+
+/**
+ * 문서 전체를 평문 모델로 읽는다. 네 탭이 모두 이걸 쓴다.
+ *
+ * 컬렉션마다 따로 구독하지 않고 문서 하나를 통째로 보는 이유:
+ * 이 기능의 핵심은 산출물 사이의 연결이라, 요구사항 표를 그릴 때도 화면과
+ * API 목록이 필요하다. 결국 거의 모든 화면이 문서 전체를 보게 되므로,
+ * 구독을 잘게 쪼개면 코드만 복잡해지고 얻는 것이 없다. 설계 문서 크기는
+ * 항목 수백 개 수준이라 통째로 다시 읽어도 부담되지 않는다.
+ */
+export function useDesignModel(doc: Y.Doc | null): DesignModel {
+  const version = useRef(0);
+  const cache = useRef<{ version: number; value: DesignModel }>({
+    version: -1,
+    value: EMPTY_MODEL,
+  });
+
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (!doc) return () => {};
+
+      const handler = () => {
+        version.current += 1;
+        onChange();
+      };
+
+      doc.on("update", handler);
+      return () => doc.off("update", handler);
+    },
+    [doc],
+  );
+
+  const currentVersion = useSyncExternalStore(
+    subscribe,
+    useCallback(() => (doc ? version.current : 0), [doc]),
+    () => 0,
+  );
+
+  return useMemo(() => {
+    if (!doc) return EMPTY_MODEL;
+
+    if (cache.current.version !== currentVersion) {
+      cache.current = { version: currentVersion, value: docToModel(doc) };
+    }
+
+    return cache.current.value;
+  }, [doc, currentVersion]);
+}
 
 /**
  * Y.Array 를 평문 배열로 읽는다.

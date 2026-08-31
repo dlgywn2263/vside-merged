@@ -1,0 +1,476 @@
+"use client";
+
+// 경로: src/features/design/tabs/screens/ScreenFlowTab.tsx
+//
+// 데이터 플로우 탭을 대체하는 화면·기능 흐름도.
+//
+// 드래그 중에는 좌표를 문서에 쓰지 않는다. 매 프레임 방송하면 팀원 수만큼
+// 메시지가 곱해져 연결이 죽는다. 손을 뗄 때 한 번만 기록한다.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactFlow, {
+  Background,
+  Controls,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  type Connection,
+  type Edge,
+  type Node,
+} from "reactflow";
+import "reactflow/dist/style.css";
+import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import type { DesignModel, ScreenRole, TransitionKind } from "../../model/schema";
+import type { DesignMutations } from "../../realtime/mutations";
+import { useDesignUiStore } from "../../store/designUiStore";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { LinkPicker } from "../../components/LinkPicker";
+import { ScreenNode, type ScreenNodeData } from "./ScreenNode";
+
+const nodeTypes = { screenNode: ScreenNode };
+
+const KIND_LABEL: Record<TransitionKind, string> = {
+  navigate: "이동",
+  submit: "제출",
+  redirect: "자동 이동",
+  back: "뒤로",
+};
+
+const ROLE_LABEL: Record<ScreenRole, string> = {
+  page: "화면",
+  modal: "팝업",
+  external: "외부 서비스",
+};
+
+export interface ScreenFlowTabProps {
+  model: DesignModel;
+  mutations: DesignMutations;
+}
+
+function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
+  const confirm = useConfirm();
+  const selectedScreenId = useDesignUiStore((s) => s.selection.screenId);
+  const select = useDesignUiStore((s) => s.select);
+
+  const [detailed, setDetailed] = useState(true);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const draggingRef = useRef(false);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<ScreenNodeData>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  const apiLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    model.apis.forEach((api) => map.set(api.id, `${api.method} ${api.endpoint}`));
+    return map;
+  }, [model.apis]);
+
+  const nextNodes = useMemo<Node<ScreenNodeData>[]>(
+    () =>
+      model.screens.map((screen) => ({
+        id: screen.id,
+        type: "screenNode",
+        position: { x: screen.layout.x, y: screen.layout.y },
+        data: {
+          name: screen.name,
+          routeKey: screen.key,
+          role: screen.role,
+          isEntry: screen.isEntry,
+          requiresAuth: screen.requiresAuth,
+          requirementCount: screen.requirementIds.length,
+          apiLabels: screen.apiIds
+            .map((id) => apiLabelById.get(id))
+            .filter((label): label is string => Boolean(label)),
+          detailed,
+        },
+      })),
+    [model.screens, apiLabelById, detailed],
+  );
+
+  const nextEdges = useMemo<Edge[]>(
+    () =>
+      model.screenTransitions.map((transition) => ({
+        id: transition.id,
+        source: transition.from,
+        target: transition.to,
+        type: "smoothstep",
+        animated: transition.kind === "redirect",
+        label: transition.condition
+          ? `${transition.trigger} (${transition.condition})`
+          : transition.trigger,
+        labelStyle: { fontSize: 11 },
+        style: { stroke: selectedEdgeId === transition.id ? "#4f46e5" : "#94a3b8" },
+      })),
+    [model.screenTransitions, selectedEdgeId],
+  );
+
+  // 문서가 바뀌면 캔버스를 맞춘다. 단 드래그 중에는 건드리지 않는다.
+  // 드래그 도중 좌표를 문서 값으로 되돌리면 노드가 손에서 튕겨 나간다.
+  useEffect(() => {
+    if (draggingRef.current) return;
+    setNodes(nextNodes);
+  }, [nextNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(nextEdges);
+  }, [nextEdges, setEdges]);
+
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      mutations.addTransition(connection.source, connection.target, { trigger: "" });
+    },
+    [mutations],
+  );
+
+  const selectedScreen =
+    model.screens.find((screen) => screen.id === selectedScreenId) ?? null;
+  const selectedTransition =
+    model.screenTransitions.find((item) => item.id === selectedEdgeId) ?? null;
+
+  const handleAddScreen = () => {
+    const id = mutations.addScreen({
+      name: "새 화면",
+      isEntry: model.screens.length === 0,
+      layout: { x: 120 + model.screens.length * 60, y: 120 + (model.screens.length % 4) * 140 },
+    });
+
+    select({ screenId: id });
+    setSelectedEdgeId(null);
+  };
+
+  const handleRemoveScreen = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: "이 화면을 삭제할까요?",
+      description: `"${name}" 과 이 화면에 연결된 흐름이 함께 사라집니다.`,
+      confirmLabel: "삭제",
+      destructive: true,
+    });
+
+    if (!ok) return;
+
+    mutations.removeScreen(id);
+    select({ screenId: null });
+  };
+
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="relative min-w-0 flex-1">
+        <div className="absolute left-4 top-4 z-10 flex gap-2">
+          <Button size="sm" onClick={handleAddScreen} className="gap-1.5 shadow-sm">
+            <Plus className="h-4 w-4" />
+            화면 추가
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDetailed((value) => !value)}
+            className="gap-1.5 bg-white shadow-sm"
+          >
+            {detailed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {detailed ? "요약 보기" : "상세 보기"}
+          </Button>
+        </div>
+
+        {model.screens.length === 0 ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-center">
+            <p className="text-sm text-slate-500">아직 화면이 없습니다.</p>
+            <p className="max-w-xs text-xs text-slate-400">
+              로그인, 목록, 상세처럼 사용자가 실제로 보게 될 화면을 놓고
+              화살표로 이어 보세요.
+            </p>
+          </div>
+        ) : null}
+
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={handleConnect}
+          onNodeDragStart={() => {
+            draggingRef.current = true;
+          }}
+          onNodeDragStop={(_event, node) => {
+            draggingRef.current = false;
+            mutations.moveScreen(node.id, node.position.x, node.position.y);
+          }}
+          onNodeClick={(_event, node) => {
+            select({ screenId: node.id });
+            setSelectedEdgeId(null);
+          }}
+          onEdgeClick={(_event, edge) => {
+            setSelectedEdgeId(edge.id);
+            select({ screenId: null });
+          }}
+          onPaneClick={() => {
+            select({ screenId: null });
+            setSelectedEdgeId(null);
+          }}
+          fitView
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={16} color="#e2e8f0" />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+
+      <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-slate-50/60 p-5">
+        {selectedTransition ? (
+          <TransitionPanel
+            trigger={selectedTransition.trigger}
+            kind={selectedTransition.kind}
+            condition={selectedTransition.condition}
+            onChange={(patch) => mutations.updateTransition(selectedTransition.id, patch)}
+            onRemove={async () => {
+              const ok = await confirm({
+                title: "이 흐름을 삭제할까요?",
+                confirmLabel: "삭제",
+                destructive: true,
+              });
+              if (!ok) return;
+              mutations.removeTransition(selectedTransition.id);
+              setSelectedEdgeId(null);
+            }}
+          />
+        ) : selectedScreen ? (
+          <div className="space-y-5">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-500">화면 정보</span>
+              <button
+                type="button"
+                onClick={() => void handleRemoveScreen(selectedScreen.id, selectedScreen.name)}
+                className="rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+                aria-label="화면 삭제"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <Field label="화면 이름">
+                <Input
+                  value={selectedScreen.name}
+                  onChange={(event) =>
+                    mutations.updateScreen(selectedScreen.id, { name: event.target.value })
+                  }
+                  className="bg-white"
+                />
+              </Field>
+
+              <Field
+                label="라우트 경로"
+                hint="React 페이지 파일을 만들 때 이 경로가 쓰입니다."
+              >
+                <Input
+                  value={selectedScreen.key}
+                  onChange={(event) =>
+                    mutations.updateScreen(selectedScreen.id, { key: event.target.value })
+                  }
+                  placeholder="/login"
+                  className="bg-white font-mono text-sm"
+                />
+              </Field>
+
+              <Field label="종류">
+                <Select
+                  value={selectedScreen.role}
+                  onValueChange={(value) =>
+                    mutations.updateScreen(selectedScreen.id, { role: value as ScreenRole })
+                  }
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(ROLE_LABEL) as ScreenRole[]).map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {ROLE_LABEL[role]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={selectedScreen.isEntry}
+                  onChange={(event) =>
+                    mutations.updateScreen(selectedScreen.id, { isEntry: event.target.checked })
+                  }
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                시작 화면
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={selectedScreen.requiresAuth}
+                  onChange={(event) =>
+                    mutations.updateScreen(selectedScreen.id, {
+                      requiresAuth: event.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                로그인이 필요한 화면
+              </label>
+
+              <Field label="설명">
+                <Textarea
+                  value={selectedScreen.description}
+                  onChange={(event) =>
+                    mutations.updateScreen(selectedScreen.id, {
+                      description: event.target.value,
+                    })
+                  }
+                  className="min-h-[80px] bg-white"
+                />
+              </Field>
+            </div>
+
+            <LinkPicker
+              title="이 화면이 만족시키는 요구사항"
+              emptyHint="요구사항 탭에서 먼저 만들어 주세요."
+              candidates={model.requirements.map((item) => ({
+                id: item.id,
+                label: item.name,
+                hint: item.code,
+              }))}
+              selectedIds={selectedScreen.requirementIds}
+              onToggle={(requirementId, linked) =>
+                mutations.linkRequirementScreen(requirementId, selectedScreen.id, linked)
+              }
+            />
+
+            <LinkPicker
+              title="이 화면이 호출하는 API"
+              emptyHint="API 명세 탭에서 먼저 만들어 주세요."
+              candidates={model.apis.map((api) => ({
+                id: api.id,
+                label: `${api.method} ${api.endpoint}`,
+                hint: api.description,
+              }))}
+              selectedIds={selectedScreen.apiIds}
+              onToggle={(apiId, linked) =>
+                mutations.linkScreenApi(selectedScreen.id, apiId, linked)
+              }
+            />
+          </div>
+        ) : (
+          <p className="mt-8 text-center text-sm text-slate-400">
+            화면이나 화살표를 클릭하면
+            <br />
+            여기서 편집합니다.
+          </p>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-slate-500">{label}</label>
+      {children}
+      {hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p> : null}
+    </div>
+  );
+}
+
+/** 화살표(전이) 편집. 예전에는 이 값을 window.prompt 로 받았다. */
+function TransitionPanel({
+  trigger,
+  kind,
+  condition,
+  onChange,
+  onRemove,
+}: {
+  trigger: string;
+  kind: TransitionKind;
+  condition: string;
+  onChange: (patch: { trigger?: string; kind?: TransitionKind; condition?: string }) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-500">화면 이동</span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+          aria-label="흐름 삭제"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      <Field label="무엇을 했을 때" hint="예: 로그인 버튼 클릭">
+        <Input
+          value={trigger}
+          onChange={(event) => onChange({ trigger: event.target.value })}
+          placeholder="사용자의 행동"
+          className="bg-white"
+        />
+      </Field>
+
+      <Field label="이동 방식">
+        <Select value={kind} onValueChange={(value) => onChange({ kind: value as TransitionKind })}>
+          <SelectTrigger className="bg-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(KIND_LABEL) as TransitionKind[]).map((value) => (
+              <SelectItem key={value} value={value}>
+                {KIND_LABEL[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      <Field label="조건" hint="예: 성공 시 / 실패 시">
+        <Input
+          value={condition}
+          onChange={(event) => onChange({ condition: event.target.value })}
+          placeholder="없으면 비워 두세요"
+          className="bg-white"
+        />
+      </Field>
+    </div>
+  );
+}
+
+export function ScreenFlowTab(props: ScreenFlowTabProps) {
+  return (
+    <ReactFlowProvider>
+      <ScreenFlowCanvas {...props} />
+    </ReactFlowProvider>
+  );
+}
