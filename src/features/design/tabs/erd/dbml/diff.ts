@@ -32,13 +32,22 @@ export interface TablePlan {
 
 export interface ErdPlan {
   tables: TablePlan[];
-  /** 반영 후 남아야 할 관계. 기존 id 를 최대한 재사용한다. */
+  /**
+   * 반영 후 남아야 할 관계. 기존 id 를 최대한 재사용한다.
+   *
+   * 이름을 함께 담는 이유: 아직 만들어지지 않은 테이블/컬럼은 계획 단계에서
+   * id 를 알 수 없다. 적용할 때 실제로 만든 뒤 이름으로 다시 찾아 이어 붙인다.
+   */
   relations: {
     id: string | null;
     fromTableId: string;
     fromColumnId: string;
     toTableId: string;
     toColumnId: string;
+    fromTableName: string;
+    fromColumnName: string;
+    toTableName: string;
+    toColumnName: string;
     cardinality: ParsedRef["cardinality"];
     note: string;
   }[];
@@ -196,6 +205,10 @@ export function planErdFromParse(parsed: ParseResult, erd: Erd): ErdPlan {
         fromColumnId,
         toTableId: to.tableId,
         toColumnId,
+        fromTableName: ref.fromTable,
+        fromColumnName: ref.fromColumn,
+        toTableName: ref.toTable,
+        toColumnName: ref.toColumn,
         cardinality: ref.cardinality,
         note: existing?.note ?? "",
       };
