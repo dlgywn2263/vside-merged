@@ -17,11 +17,13 @@ import { getMyWorkspacesByTokenApi } from "@/lib/ide/api";
 import { getAuthUser } from "@/lib/auth/tokenStore";
 
 import { useDesignDoc } from "../realtime/useDesignDoc";
+import { useDesignDoctor } from "../realtime/useDesignDoctor";
 import { useDesignModel } from "../realtime/useY";
 import { createDesignMutations } from "../realtime/mutations";
 import { useDesignUiStore } from "../store/designUiStore";
 import { ConfirmDialogProvider } from "./ConfirmDialog";
 import { ConnectionNotice, DesignHeader } from "./DesignHeader";
+import { DoctorPanel } from "./DoctorPanel";
 import { WorkspaceSidebar, type WorkspaceSummary } from "./WorkspaceSidebar";
 import { RequirementsTab } from "../tabs/requirements/RequirementsTab";
 import { ScreenFlowTab } from "../tabs/screens/ScreenFlowTab";
@@ -74,6 +76,11 @@ export function DesignWorkspace() {
   const { doc, session, state } = useDesignDoc(workspaceId);
   const model = useDesignModel(doc);
   const activeTab = useDesignUiStore((s) => s.activeTab);
+  const doctorOpen = useDesignUiStore((s) => s.doctorOpen);
+
+  // 문서를 열지 못한 상태에서는 점검하지 않는다. 빈 문서를 검사해 봐야
+  // 없는 문제를 잔뜩 보고할 뿐이다.
+  const report = useDesignDoctor(workspaceId, model, state.status !== "loading" && state.status !== "error");
 
   const mutations = useMemo(() => (doc ? createDesignMutations(doc) : null), [doc]);
 
@@ -112,7 +119,7 @@ export function DesignWorkspace() {
               <DesignHeader
                 workspaceName={currentWorkspace?.name ?? ""}
                 state={state}
-                issueCount={0}
+                issueCount={report.errorCount + report.warningCount}
               />
 
               <ConnectionNotice status={state.status} message={state.errorMessage} />
@@ -123,16 +130,20 @@ export function DesignWorkspace() {
                   설계 문서를 여는 중
                 </div>
               ) : state.status === "error" || !mutations ? null : (
-                <div className="min-h-0 flex-1">
-                  {activeTab === "requirements" ? (
-                    <RequirementsTab model={model} mutations={mutations} />
-                  ) : activeTab === "screens" ? (
-                    <ScreenFlowTab model={model} mutations={mutations} />
-                  ) : activeTab === "erd" ? (
-                    <ErdTab model={model} mutations={mutations} awareness={awareness} />
-                  ) : (
-                    <ApiTab model={model} mutations={mutations} />
-                  )}
+                <div className="flex min-h-0 flex-1">
+                  <div className="min-w-0 flex-1">
+                    {activeTab === "requirements" ? (
+                      <RequirementsTab model={model} mutations={mutations} />
+                    ) : activeTab === "screens" ? (
+                      <ScreenFlowTab model={model} mutations={mutations} />
+                    ) : activeTab === "erd" ? (
+                      <ErdTab model={model} mutations={mutations} awareness={awareness} />
+                    ) : (
+                      <ApiTab model={model} mutations={mutations} />
+                    )}
+                  </div>
+
+                  {doctorOpen ? <DoctorPanel report={report} /> : null}
                 </div>
               )}
             </>
