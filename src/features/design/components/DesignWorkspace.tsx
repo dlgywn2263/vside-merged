@@ -11,8 +11,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { getMyWorkspacesByTokenApi } from "@/lib/ide/api";
 import { getAuthUser } from "@/lib/auth/tokenStore";
 
@@ -24,6 +25,8 @@ import { useDesignUiStore } from "../store/designUiStore";
 import { ConfirmDialogProvider } from "./ConfirmDialog";
 import { ConnectionNotice, DesignHeader } from "./DesignHeader";
 import { DoctorPanel } from "./DoctorPanel";
+import { AiDraftDialog } from "../ai/AiDraftDialog";
+import { isEmptyModel } from "../model/schema";
 import { WorkspaceSidebar, type WorkspaceSummary } from "./WorkspaceSidebar";
 import { RequirementsTab } from "../tabs/requirements/RequirementsTab";
 import { ScreenFlowTab } from "../tabs/screens/ScreenFlowTab";
@@ -82,6 +85,9 @@ export function DesignWorkspace() {
   // 없는 문제를 잔뜩 보고할 뿐이다.
   const report = useDesignDoctor(workspaceId, model, state.status !== "loading" && state.status !== "error");
 
+  const [aiOpen, setAiOpen] = useState(false);
+  const documentEmpty = isEmptyModel(model);
+
   const mutations = useMemo(() => (doc ? createDesignMutations(doc) : null), [doc]);
 
   const awareness = session?.provider?.awareness ?? null;
@@ -120,6 +126,7 @@ export function DesignWorkspace() {
                 workspaceName={currentWorkspace?.name ?? ""}
                 state={state}
                 issueCount={report.errorCount + report.warningCount}
+                onOpenAiDraft={() => setAiOpen(true)}
               />
 
               <ConnectionNotice status={state.status} message={state.errorMessage} />
@@ -131,7 +138,11 @@ export function DesignWorkspace() {
                 </div>
               ) : state.status === "error" || !mutations ? null : (
                 <div className="flex min-h-0 flex-1">
-                  <div className="min-w-0 flex-1">
+                  <div className="relative min-w-0 flex-1">
+                    {documentEmpty ? (
+                      <EmptyDesign onStart={() => setAiOpen(true)} />
+                    ) : null}
+
                     {activeTab === "requirements" ? (
                       <RequirementsTab model={model} mutations={mutations} />
                     ) : activeTab === "screens" ? (
@@ -146,11 +157,52 @@ export function DesignWorkspace() {
                   {doctorOpen ? <DoctorPanel report={report} /> : null}
                 </div>
               )}
+
+              {mutations && workspaceId ? (
+                <AiDraftDialog
+                  open={aiOpen}
+                  onOpenChange={setAiOpen}
+                  workspaceId={workspaceId}
+                  mutations={mutations}
+                  hasExisting={!documentEmpty}
+                />
+              ) : null}
             </>
           )}
         </main>
       </div>
     </ConfirmDialogProvider>
+  );
+}
+
+/**
+ * 문서가 비었을 때 첫 화면.
+ *
+ * 예전 설계 화면은 여기서 "요구사항 추가" 버튼 하나만 보여 줬다. 학생 팀은
+ * 무엇을 써야 할지 몰라서 설계를 못 하는데 칸만 하나 더 주는 셈이었다.
+ * 이제는 한 줄만 적으면 시작할 수 있다는 것을 가장 먼저 보여 준다.
+ */
+function EmptyDesign({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/95 px-8 text-center">
+      <Sparkles className="h-8 w-8 text-indigo-400" />
+      <p className="text-base font-semibold text-slate-800">
+        어떤 서비스를 만드시나요?
+      </p>
+      <p className="max-w-sm text-sm text-slate-500">
+        한 줄만 알려 주시면 요구사항과 화면, 표, API를 서로 연결해 초안을 만들어 드립니다.
+        마음에 안 드는 것은 빼고 넣을 수 있습니다.
+      </p>
+
+      <Button onClick={onStart} className="mt-1 gap-1.5">
+        <Sparkles className="h-4 w-4" />
+        초안 만들기
+      </Button>
+
+      <p className="text-xs text-slate-400">
+        직접 쓰고 싶다면 위 탭에서 바로 시작해도 됩니다.
+      </p>
+    </div>
   );
 }
 

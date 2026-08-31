@@ -547,6 +547,74 @@ export function createDesignMutations(doc: Y.Doc) {
     },
 
     /**
+     * AI 초안을 문서에 더한다.
+     *
+     * 이미 있는 것은 건드리지 않고 새 항목만 넣는다. 덮어쓰기가 아니라
+     * 더하기라, 사용자가 그동안 손으로 적어 둔 내용이 사라질 일이 없다.
+     *
+     * 항목의 id 는 서버가 이미 붙여 두었고 그 안에서 서로를 가리키고 있으므로
+     * 그대로 넣는다. 여기서 새 id 를 발급하면 연결이 전부 끊긴다.
+     *
+     * 전체를 한 트랜잭션으로 묶어 팀원 화면에 반쯤 만들어진 상태가 보이지 않게 한다.
+     */
+    applyDraft(draft: {
+      meta?: { projectSummary?: string; techStack?: Partial<{ backend: string; frontend: string; db: string }> };
+      requirements?: Requirement[];
+      screens?: Screen[];
+      screenTransitions?: ScreenTransition[];
+      apis?: ApiSpec[];
+      erd?: { tables?: Table[]; relations?: Relation[] };
+    }) {
+      tx(() => {
+        const existingIds = new Set<string>();
+        const collect = (array: YArrayOfMaps) =>
+          (array.toArray() as YMapAny[]).forEach((item) =>
+            existingIds.add(String(item.get("id"))),
+          );
+
+        collect(requirements());
+        collect(screens());
+        collect(transitions());
+        collect(apis());
+        collect(tables());
+        collect(relations());
+
+        const meta = getMeta(doc);
+
+        // 요약과 기술 스택은 비어 있을 때만 채운다. 사용자가 적어 둔 것을
+        // AI 입력값으로 덮지 않는다.
+        if (draft.meta?.projectSummary && !meta.get("projectSummary")) {
+          meta.set("projectSummary", draft.meta.projectSummary);
+        }
+
+        const stack = meta.get("techStack");
+        if (stack instanceof Y.Map && draft.meta?.techStack) {
+          Object.entries(draft.meta.techStack).forEach(([key, value]) => {
+            if (typeof value === "string" && value && !stack.get(key)) {
+              stack.set(key, value);
+            }
+          });
+        }
+
+        const push = <T extends { id: string }>(
+          array: YArrayOfMaps,
+          items: T[] | undefined,
+          toY: (item: T) => YMapAny,
+        ) => {
+          const fresh = (items ?? []).filter((item) => !existingIds.has(item.id));
+          if (fresh.length > 0) array.push(fresh.map(toY));
+        };
+
+        push(requirements(), draft.requirements, requirementToY);
+        push(screens(), draft.screens, screenToY);
+        push(transitions(), draft.screenTransitions, transitionToY);
+        push(apis(), draft.apis, apiToY);
+        push(tables(), draft.erd?.tables, tableToY);
+        push(relations(), draft.erd?.relations, relationToY);
+      });
+    },
+
+    /**
      * API 와 테이블만 한쪽 배열로 둔다.
      * 테이블에 apiIds 를 두지 않는 이유는, 테이블의 진짜 주인이 ERD 텍스트라
      * 텍스트를 고쳐 쓸 때마다 역참조를 다시 맞춰야 하는 부담이 생기기 때문이다.

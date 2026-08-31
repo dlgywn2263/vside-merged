@@ -8,7 +8,7 @@
 // 사실이 눈에 보여야 한다.
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CloudOff, Loader2, Stethoscope, Users } from "lucide-react";
+import { AlertTriangle, Check, CloudOff, Loader2, Sparkles, Stethoscope, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -88,9 +88,15 @@ export interface DesignHeaderProps {
   workspaceName: string;
   state: DesignDocState;
   issueCount: number;
+  onOpenAiDraft: () => void;
 }
 
-export function DesignHeader({ workspaceName, state, issueCount }: DesignHeaderProps) {
+export function DesignHeader({
+  workspaceName,
+  state,
+  issueCount,
+  onOpenAiDraft,
+}: DesignHeaderProps) {
   const activeTab = useDesignUiStore((s) => s.activeTab);
   const setActiveTab = useDesignUiStore((s) => s.setActiveTab);
   const doctorOpen = useDesignUiStore((s) => s.doctorOpen);
@@ -113,6 +119,16 @@ export function DesignHeader({ workspaceName, state, issueCount }: DesignHeaderP
               {state.peerCount}명이 함께 보는 중
             </span>
           ) : null}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenAiDraft}
+            className="gap-1.5"
+          >
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            AI 초안
+          </Button>
 
           <Button
             variant={doctorOpen ? "default" : "outline"}
