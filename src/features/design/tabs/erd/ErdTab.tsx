@@ -18,7 +18,6 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import ReactFlow, {
   Background,
   Controls,
-  MarkerType,
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
@@ -40,6 +39,11 @@ import { serializeDbml } from "./dbml/serialize";
 import { planErdFromParse } from "./dbml/diff";
 import { applyErdPlan } from "./dbml/applyPlan";
 import { TableNode, type TableNodeData } from "./TableNode";
+import {
+  buildRelationEdges,
+  buildTableNodes,
+  usedTableIds,
+} from "../../render/diagramNodes";
 
 const nodeTypes = { tableNode: TableNode };
 
@@ -188,51 +192,17 @@ function ErdCanvasAndText({ model, mutations, awareness }: ErdTabProps) {
 
   // ── 다이어그램 ────────────────────────────────────────────────────
 
-  const usedTableIds = useMemo(() => {
-    const used = new Set<string>();
-    model.apis.forEach((api) => api.tableIds.forEach((id) => used.add(id)));
-    return used;
-  }, [model.apis]);
+  const usedIds = useMemo(() => usedTableIds(model), [model]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<TableNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const nextNodes = useMemo<Node<TableNodeData>[]>(
-    () =>
-      model.erd.tables.map((table) => ({
-        id: table.id,
-        type: "tableNode",
-        position: { x: table.layout.x, y: table.layout.y },
-        data: {
-          name: table.name,
-          unused: !usedTableIds.has(table.id),
-          columns: table.columns.map((column) => ({
-            id: column.id,
-            name: column.name,
-            type: column.length ? `${column.type}(${column.length})` : column.type,
-            isPk: column.isPk,
-            isFk: column.isFk,
-            nullable: column.nullable,
-          })),
-        },
-      })),
-    [model.erd.tables, usedTableIds],
+    () => buildTableNodes(model, usedIds),
+    [model, usedIds],
   );
 
-  const nextEdges = useMemo<Edge[]>(
-    () =>
-      model.erd.relations.map((relation) => ({
-        id: relation.id,
-        source: relation.fromTableId,
-        target: relation.toTableId,
-        type: "smoothstep",
-        label: relation.cardinality,
-        labelStyle: { fontSize: 10 },
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: "#94a3b8" },
-      })),
-    [model.erd.relations],
-  );
+  const nextEdges = useMemo<Edge[]>(() => buildRelationEdges(model), [model]);
 
   useEffect(() => {
     if (draggingRef.current) return;

@@ -9,7 +9,7 @@
 // 보이는 데다 방 이름이 워크스페이스에 묶여 있어 엉뚱한 사람들이 한 방에
 // 모일 수 있다.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -27,6 +27,9 @@ import { ConnectionNotice, DesignHeader } from "./DesignHeader";
 import { DoctorPanel } from "./DoctorPanel";
 import { AiDraftDialog } from "../ai/AiDraftDialog";
 import { CodegenDialog } from "../codegen/CodegenDialog";
+import { DesignPrintCapture } from "../export/DesignPrintCapture";
+import { buildPrintDocument, type PrintImages } from "../export/buildPrintDocument";
+import { printHtmlDocument } from "../export/printDesign";
 import { isEmptyModel } from "../model/schema";
 import { WorkspaceSidebar, type WorkspaceSummary } from "./WorkspaceSidebar";
 import { RequirementsTab } from "../tabs/requirements/RequirementsTab";
@@ -88,6 +91,8 @@ export function DesignWorkspace() {
 
   const [aiOpen, setAiOpen] = useState(false);
   const [codegenOpen, setCodegenOpen] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState("");
   const documentEmpty = isEmptyModel(model);
 
   const mutations = useMemo(() => (doc ? createDesignMutations(doc) : null), [doc]);
@@ -108,6 +113,30 @@ export function DesignWorkspace() {
   }, [awareness]);
 
   const currentWorkspace = workspaces.find((item) => item.id === workspaceId) ?? null;
+
+  // 캡처가 끝나면 그림을 끼워 넣어 인쇄 창을 띄운다. 인쇄 대화상자가 뜬
+  // 뒤에는 화면 밖 캔버스를 더 둘 이유가 없으므로 곧바로 걷는다.
+  const handlePrintReady = useCallback(
+    async (images: PrintImages) => {
+      try {
+        await printHtmlDocument(
+          buildPrintDocument(model, currentWorkspace?.name ?? "설계 문서", images),
+        );
+      } catch (error) {
+        setPrintError(
+          error instanceof Error ? error.message : "인쇄 창을 열지 못했습니다.",
+        );
+      } finally {
+        setPrinting(false);
+      }
+    },
+    [model, currentWorkspace],
+  );
+
+  const handlePrintError = useCallback((message: string) => {
+    setPrintError(message);
+    setPrinting(false);
+  }, []);
 
   return (
     <ConfirmDialogProvider>
@@ -130,9 +159,20 @@ export function DesignWorkspace() {
                 issueCount={report.errorCount + report.warningCount}
                 onOpenAiDraft={() => setAiOpen(true)}
                 onOpenCodegen={() => setCodegenOpen(true)}
+                onPrint={() => {
+                  setPrintError("");
+                  setPrinting(true);
+                }}
+                printing={printing}
               />
 
               <ConnectionNotice status={state.status} message={state.errorMessage} />
+
+              {printError ? (
+                <p className="mx-6 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {printError}
+                </p>
+              ) : null}
 
               {state.status === "loading" ? (
                 <div className="flex flex-1 items-center justify-center gap-2 text-sm text-slate-400">
@@ -178,6 +218,14 @@ export function DesignWorkspace() {
                     model={model}
                     errorCount={report.errorCount}
                   />
+
+                  {printing ? (
+                    <DesignPrintCapture
+                      model={model}
+                      onReady={handlePrintReady}
+                      onError={handlePrintError}
+                    />
+                  ) : null}
                 </>
               ) : null}
             </>

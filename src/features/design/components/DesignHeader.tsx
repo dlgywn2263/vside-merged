@@ -8,7 +8,17 @@
 // 사실이 눈에 보여야 한다.
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CloudOff, FileCode, Loader2, Sparkles, Stethoscope, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CloudOff,
+  FileCode,
+  Loader2,
+  Printer,
+  Sparkles,
+  Stethoscope,
+  Users,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -90,6 +100,8 @@ export interface DesignHeaderProps {
   issueCount: number;
   onOpenAiDraft: () => void;
   onOpenCodegen: () => void;
+  onPrint: () => void;
+  printing: boolean;
 }
 
 export function DesignHeader({
@@ -98,6 +110,8 @@ export function DesignHeader({
   issueCount,
   onOpenAiDraft,
   onOpenCodegen,
+  onPrint,
+  printing,
 }: DesignHeaderProps) {
   const activeTab = useDesignUiStore((s) => s.activeTab);
   const setActiveTab = useDesignUiStore((s) => s.setActiveTab);
@@ -130,6 +144,21 @@ export function DesignHeader({
           >
             <Sparkles className="h-4 w-4 text-indigo-500" />
             AI 초안
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onPrint}
+            disabled={printing}
+            className="gap-1.5"
+          >
+            {printing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4 text-slate-500" />
+            )}
+            {printing ? "만드는 중" : "PDF / 인쇄"}
           </Button>
 
           <Button

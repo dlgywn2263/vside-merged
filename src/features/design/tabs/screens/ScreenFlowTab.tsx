@@ -38,6 +38,11 @@ import { useDesignUiStore } from "../../store/designUiStore";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { LinkPicker } from "../../components/LinkPicker";
 import { ScreenNode, type ScreenNodeData } from "./ScreenNode";
+import {
+  buildApiLabelMap,
+  buildScreenEdges,
+  buildScreenNodes,
+} from "../../render/diagramNodes";
 
 const nodeTypes = { screenNode: ScreenNode };
 
@@ -71,49 +76,16 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<ScreenNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  const apiLabelById = useMemo(() => {
-    const map = new Map<string, string>();
-    model.apis.forEach((api) => map.set(api.id, `${api.method} ${api.endpoint}`));
-    return map;
-  }, [model.apis]);
+  const apiLabelById = useMemo(() => buildApiLabelMap(model), [model]);
 
   const nextNodes = useMemo<Node<ScreenNodeData>[]>(
-    () =>
-      model.screens.map((screen) => ({
-        id: screen.id,
-        type: "screenNode",
-        position: { x: screen.layout.x, y: screen.layout.y },
-        data: {
-          name: screen.name,
-          routeKey: screen.key,
-          role: screen.role,
-          isEntry: screen.isEntry,
-          requiresAuth: screen.requiresAuth,
-          requirementCount: screen.requirementIds.length,
-          apiLabels: screen.apiIds
-            .map((id) => apiLabelById.get(id))
-            .filter((label): label is string => Boolean(label)),
-          detailed,
-        },
-      })),
-    [model.screens, apiLabelById, detailed],
+    () => buildScreenNodes(model, { detailed, apiLabelById }),
+    [model, apiLabelById, detailed],
   );
 
   const nextEdges = useMemo<Edge[]>(
-    () =>
-      model.screenTransitions.map((transition) => ({
-        id: transition.id,
-        source: transition.from,
-        target: transition.to,
-        type: "smoothstep",
-        animated: transition.kind === "redirect",
-        label: transition.condition
-          ? `${transition.trigger} (${transition.condition})`
-          : transition.trigger,
-        labelStyle: { fontSize: 11 },
-        style: { stroke: selectedEdgeId === transition.id ? "#4f46e5" : "#94a3b8" },
-      })),
-    [model.screenTransitions, selectedEdgeId],
+    () => buildScreenEdges(model, selectedEdgeId),
+    [model, selectedEdgeId],
   );
 
   // 문서가 바뀌면 캔버스를 맞춘다. 단 드래그 중에는 건드리지 않는다.
