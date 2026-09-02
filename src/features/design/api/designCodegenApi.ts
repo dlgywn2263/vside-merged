@@ -51,6 +51,37 @@ export interface CodegenApplyReport {
   failed: number;
 }
 
+export interface CodegenTargets {
+  /** git 이 아는 브랜치가 아니라 디스크에 실제로 있는 작업 폴더다. */
+  branches: string[];
+  stack: CodegenPreview["stack"];
+  stackLabel: string;
+  basePackage: string;
+  note: string;
+}
+
+export async function fetchCodegenTargetsApi(
+  workspaceId: string,
+  projectName: string,
+  branchName: string,
+): Promise<CodegenTargets> {
+  const query = new URLSearchParams({ projectName });
+  if (branchName) query.set("branchName", branchName);
+
+  const response = await apiFetch(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}/design/codegen/targets?${query}`,
+    { cache: "no-store" },
+  );
+
+  const text = await response.text().catch(() => "");
+
+  if (!response.ok) {
+    throw new Error(text || "프로젝트를 확인하지 못했습니다.");
+  }
+
+  return JSON.parse(text) as CodegenTargets;
+}
+
 async function post<T>(path: string, body: unknown, fallback: string): Promise<T> {
   const response = await apiFetch(path, {
     method: "POST",

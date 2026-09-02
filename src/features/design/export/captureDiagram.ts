@@ -50,6 +50,15 @@ export async function captureFlow(
     width: CAPTURE_WIDTH,
     height: CAPTURE_HEIGHT,
     pixelRatio: 2,
+    // 웹폰트를 그림 안에 심지 않는다.
+    //
+    // 이 단계는 페이지에 걸린 모든 스타일시트를 훑는데, 다른 출처에서 온
+    // 것은 브라우저가 규칙을 읽지 못하게 막고(SecurityError), 코드
+    // 에디터가 쓰는 아이콘 폰트는 규칙 문법이 맞지 않아 또 실패한다.
+    // 둘 다 콘솔에 오류로 찍힌다.
+    //
+    // 이 앱은 Arial 같은 기본 글꼴만 쓰므로 심을 폰트가 애초에 없다.
+    skipFonts: true,
     style: {
       width: `${CAPTURE_WIDTH}px`,
       height: `${CAPTURE_HEIGHT}px`,

@@ -22,16 +22,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { fetchBranchListApi, fetchWorkspaceProjectsApi } from "@/lib/ide/api";
+import { fetchWorkspaceProjectsApi } from "@/lib/ide/api";
 import { globalSyncInstance } from "@/hooks/useWorkspaceGlobalSync";
 
 import {
   applyCodegenApi,
+  fetchCodegenTargetsApi,
   previewCodegenApi,
   type CodegenApplyReport,
   type CodegenFileStatus,
   type CodegenFileView,
   type CodegenPreview,
+  type CodegenTargets,
 } from "../api/designCodegenApi";
 import type { DesignModel } from "../model/schema";
 
@@ -72,6 +74,7 @@ export function CodegenDialog({
   const [branches, setBranches] = useState<string[]>([]);
   const [branchName, setBranchName] = useState("");
   const [basePackage, setBasePackage] = useState("");
+  const [targetInfo, setTargetInfo] = useState<CodegenTargets | null>(null);
 
   const [preview, setPreview] = useState<CodegenPreview | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -87,12 +90,23 @@ export function CodegenDialog({
 
     (async () => {
       try {
-        const list = await fetchWorkspaceProjectsApi(workspaceId);
+        // 이 API 는 프로젝트 배열이 아니라 워크스페이스 폴더 트리를 돌려준다.
+        // 프로젝트는 그 아래 children 에 들어 있다.
+        const root = await fetchWorkspaceProjectsApi(workspaceId);
         if (cancelled) return;
 
-        const names = (list ?? []).map((item: { name: string }) => item.name);
+        const names = (root?.children ?? [])
+          .map((item: { name?: string }) => item?.name)
+          .filter((name: string | undefined): name is string => Boolean(name));
+
         setProjects(names);
         setProjectName((current) => current || names[0] || "");
+
+        if (names.length === 0) {
+          setErrorMessage(
+            "이 워크스페이스에 프로젝트가 없습니다. IDE에서 프로젝트를 먼저 만들어 주세요.",
+          );
+        }
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(
@@ -107,6 +121,9 @@ export function CodegenDialog({
     };
   }, [open, workspaceId]);
 
+  // 고른 프로젝트에 실제로 있는 작업 폴더와, 그곳이 무엇인지 확인한다.
+  // 미리보기를 누르기 전에 "여기는 Spring Boot 이고 패키지는 이것"이 보여야
+  // 한다. 패키지를 잘못 짚으면 자바 파일이 한 개도 컴파일되지 않는다.
   useEffect(() => {
     if (!open || !projectName) return;
 
@@ -114,17 +131,26 @@ export function CodegenDialog({
 
     (async () => {
       try {
-        const list = await fetchBranchListApi(workspaceId, projectName);
+        const result = await fetchCodegenTargetsApi(workspaceId, projectName, branchName);
         if (cancelled) return;
 
-        const names: string[] = list ?? [];
-        setBranches(names);
-        setBranchName(names.includes("master") ? "master" : names[0] ?? "master");
-      } catch {
-        // 깃을 안 쓰는 프로젝트도 있다. 그때는 기본 브랜치로 둔다.
+        setBranches(result.branches);
+        setTargetInfo(result);
+
+        if (result.branches.length > 0 && !result.branches.includes(branchName)) {
+          setBranchName(
+            result.branches.includes("master") ? "master" : result.branches[0],
+          );
+          return;
+        }
+
+        setBasePackage((current) => current || result.basePackage);
+      } catch (error) {
         if (!cancelled) {
-          setBranches([]);
-          setBranchName("master");
+          setTargetInfo(null);
+          setErrorMessage(
+            error instanceof Error ? error.message : "프로젝트를 확인하지 못했습니다.",
+          );
         }
       }
     })();
@@ -132,7 +158,7 @@ export function CodegenDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, workspaceId, projectName]);
+  }, [open, workspaceId, projectName, branchName]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, CodegenFileView[]>();
@@ -155,6 +181,7 @@ export function CodegenDialog({
     setSelected(new Set());
     setOpenedPath("");
     setErrorMessage("");
+    setTargetInfo(null);
   }
 
   async function handlePreview() {
@@ -273,6 +300,7 @@ export function CodegenDialog({
               onBranchChange={setBranchName}
               basePackage={basePackage}
               onPackageChange={setBasePackage}
+              targetInfo={targetInfo}
               busy={step === "applying"}
             />
           ) : step === "done" && report ? (
@@ -337,6 +365,7 @@ function SetupPane({
   onBranchChange,
   basePackage,
   onPackageChange,
+  targetInfo,
   busy,
 }: {
   projects: string[];
@@ -347,6 +376,7 @@ function SetupPane({
   onBranchChange: (value: string) => void;
   basePackage: string;
   onPackageChange: (value: string) => void;
+  targetInfo: CodegenTargets | null;
   busy: boolean;
 }) {
   return (
@@ -377,7 +407,9 @@ function SetupPane({
             disabled={busy}
             className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
           >
-            {branches.length === 0 ? <option value={branchName}>{branchName}</option> : null}
+            {branches.length === 0 ? (
+              <option value={branchName}>{branchName || "작업 폴더 없음"}</option>
+            ) : null}
             {branches.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -386,6 +418,19 @@ function SetupPane({
           </select>
         </label>
       </div>
+
+      {targetInfo ? (
+        <p
+          className={cn(
+            "rounded-lg px-3 py-2 text-xs",
+            targetInfo.stack === "SPRING" || targetInfo.stack === "REACT"
+              ? "bg-slate-50 text-slate-600"
+              : "bg-amber-50 text-amber-800",
+          )}
+        >
+          {targetInfo.note || `${targetInfo.stackLabel} 프로젝트`}
+        </p>
+      ) : null}
 
       <label className="block space-y-1.5 text-sm">
         <span className="font-medium text-slate-700">자바 패키지 (비워 두면 알아서 찾습니다)</span>
