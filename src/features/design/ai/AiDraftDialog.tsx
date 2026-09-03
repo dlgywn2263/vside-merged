@@ -8,7 +8,7 @@
 // 필요 없는 것을 빼고 나서야 반영된다. 반영은 덮어쓰기가 아니라 더하기라,
 // 손으로 적어 둔 내용은 그대로 남는다.
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Loader2, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/dialog";
 
 import { generateDetailApi, generateSkeletonApi } from "../api/designAiApi";
+import type { Awareness } from "y-protocols/awareness";
+
 import { createSafetyCheckpoint } from "../realtime/checkpoint";
 import type { DesignDocSession } from "../realtime/designDocProvider";
 import type { DoctorReport } from "../api/designDoctorApi";
@@ -42,6 +44,12 @@ export interface AiDraftDialogProps {
   hasExisting: boolean;
   /** 넣기 직전에 저장을 밀어 넣고 되돌아올 자리를 남기는 데 쓴다. */
   session: DesignDocSession | null;
+  /** 지금 문서 내용. AI 에게 이미 있는 것을 알려 주는 데 쓴다. */
+  model: DesignModel;
+  /** 팀원에게 초안을 만드는 중이라고 알리고, 남이 만드는 중인지도 본다. */
+  awareness: Awareness | null;
+  /** 알림에 쓸 내 이름. */
+  myName: string;
 }
 
 export function AiDraftDialog({
@@ -51,6 +59,9 @@ export function AiDraftDialog({
   mutations,
   hasExisting,
   session,
+  model,
+  awareness,
+  myName,
 }: AiDraftDialogProps) {
   const [step, setStep] = useState<Step>("input");
   const [progress, setProgress] = useState("");
@@ -66,6 +77,7 @@ export function AiDraftDialog({
   const [report, setReport] = useState<DoctorReport | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const [peerChangeCount, setPeerChangeCount] = useState(0);
   const [checkpointFailed, setCheckpointFailed] = useState(false);
 
   const reset = () => {
@@ -80,9 +92,44 @@ export function AiDraftDialog({
   };
 
   const close = (next: boolean) => {
-    if (!next) reset();
+    if (!next) {
+      reset();
+      awareness?.setLocalStateField("designAiDraft", null);
+    }
     onOpenChange(next);
   };
+
+  // 다른 사람이 지금 초안을 만드는 중인가.
+  //
+  // 완전히 막지는 않는다. 상대가 창을 그냥 닫아 버리면 영영 못 만들게 된다.
+  // 대신 둘이 각자 넣으면 요구사항이 두 벌 들어간다는 것을 알린다.
+  const otherDrafter = useMemo(() => {
+    if (!awareness) return null;
+
+    let found: string | null = null;
+    awareness.getStates().forEach((state, clientId) => {
+      if (clientId === awareness.clientID) return;
+
+      const drafting = (state as Record<string, unknown>)?.designAiDraft as
+        | { name?: string }
+        | null
+        | undefined;
+
+      if (drafting) {
+        found = drafting.name ?? "다른 팀원";
+      }
+    });
+
+    return found;
+  }, [awareness, peerChangeCount]);
+
+  useEffect(() => {
+    if (!awareness) return;
+
+    const handler = () => setPeerChangeCount((count) => count + 1);
+    awareness.on("change", handler);
+    return () => awareness.off("change", handler);
+  }, [awareness]);
 
   const generate = async () => {
     if (!summary.trim()) {
@@ -93,6 +140,14 @@ export function AiDraftDialog({
     setStep("generating");
     setErrorMessage("");
 
+    // 팀원에게 지금 초안을 만드는 중이라고 알린다. 둘이 동시에 만들어
+    // 각자 넣으면 요구사항이 두 벌 들어간다.
+    awareness?.setLocalStateField("designAiDraft", { name: myName });
+
+    // 이미 있는 내용을 알려 준다. 안 알려 주면 AI 가 빈 문서인 줄 알고
+    // 이미 있는 요구사항과 화면을 다시 내놓는다.
+    const existing = hasExisting ? model : null;
+
     try {
       setProgress("요구사항과 화면을 정리하는 중 (1/2)");
       const skeleton = await generateSkeletonApi(
@@ -100,6 +155,7 @@ export function AiDraftDialog({
         summary.trim(),
         { backend, frontend, db },
         instruction.trim(),
+        existing,
       );
 
       setProgress("표와 API를 설계하는 중 (2/2)");
@@ -107,6 +163,7 @@ export function AiDraftDialog({
         workspaceId,
         skeleton.model,
         instruction.trim(),
+        existing,
       );
 
       setDraft(detail.model);
@@ -117,6 +174,8 @@ export function AiDraftDialog({
         error instanceof Error ? error.message : "초안을 만들지 못했습니다.",
       );
       setStep("input");
+    } finally {
+      awareness?.setLocalStateField("designAiDraft", null);
     }
   };
 
@@ -203,9 +262,18 @@ export function AiDraftDialog({
           </div>
         ) : (
           <div className="space-y-4 py-2">
+            {otherDrafter ? (
+              <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {otherDrafter}님이 지금 초안을 만드는 중입니다. 둘 다 넣으면 같은 내용이 두 벌
+                들어갈 수 있습니다.
+              </p>
+            ) : null}
+
             {hasExisting ? (
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                이미 작성된 내용이 있습니다. 지우지 않고 새로 만든 것만 더합니다.
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                이미 작성된 내용이 있습니다. 지우지 않고 새로 만든 것만 더하며, 이미 있는 것은
+                AI에게 알려 주어 다시 만들지 않게 합니다.
               </p>
             ) : null}
 

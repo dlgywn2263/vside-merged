@@ -36,15 +36,20 @@ async function post<T>(path: string, body: unknown, fallback: string): Promise<T
   return JSON.parse(text) as T;
 }
 
+/**
+ * @param existing 지금 문서에 이미 있는 내용. 알려 주지 않으면 AI 가 빈
+ *   문서인 줄 알고 이미 있는 요구사항과 화면을 다시 내놓는다.
+ */
 export async function generateSkeletonApi(
   workspaceId: string,
   summary: string,
   techStack: TechStack,
   instruction: string,
+  existing: DesignModel | null,
 ): Promise<DraftResponse> {
   return post(
     `/api/workspaces/${encodeURIComponent(workspaceId)}/design/ai/skeleton`,
-    { summary, techStack, instruction },
+    { summary, techStack, instruction, existing },
     "초안을 만들지 못했습니다.",
   );
 }
@@ -53,10 +58,11 @@ export async function generateDetailApi(
   workspaceId: string,
   skeleton: DesignModel,
   instruction: string,
+  existing: DesignModel | null,
 ): Promise<DraftResponse> {
   return post(
     `/api/workspaces/${encodeURIComponent(workspaceId)}/design/ai/detail`,
-    { skeleton, instruction },
+    { skeleton, instruction, existing },
     "표와 API를 만들지 못했습니다.",
   );
 }

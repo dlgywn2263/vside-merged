@@ -220,6 +220,9 @@ export function DesignWorkspace() {
                     mutations={mutations}
                     hasExisting={!documentEmpty}
                     session={session}
+                    model={model}
+                    awareness={awareness}
+                    myName={getAuthUser()?.nickname ?? "익명"}
                   />
 
                   <HistoryDialog
