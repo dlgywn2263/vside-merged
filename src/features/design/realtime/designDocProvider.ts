@@ -20,6 +20,7 @@
 
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
+import type { Awareness } from "y-protocols/awareness";
 
 import { CollabWebSocket } from "@/lib/ide/collabSocket";
 import {
@@ -52,6 +53,32 @@ export interface DesignDocState {
 }
 
 type Listener = () => void;
+
+/**
+ * 몇 <b>사람</b>이 보고 있는가.
+ *
+ * 접속 수를 그대로 세면 안 된다. 한 사람이 탭을 두 개 열면 2명이 되고,
+ * 끊긴 연결이 정리되기 전 잠깐은 그것까지 세어져 3명, 4명으로 튄다.
+ * "2명이 함께 보는 중"은 사람 수를 뜻하므로 사람으로 센다.
+ *
+ * 아직 자기 정보를 알리지 않은 접속은 각각 한 사람으로 센다. 막 들어온
+ * 사람을 안 보이게 하는 것보다 잠깐 하나 더 세는 편이 낫다.
+ */
+function countPeople(awareness: Awareness | null | undefined): number {
+  if (!awareness) return 1;
+
+  const people = new Set<string>();
+
+  awareness.getStates().forEach((state, clientId) => {
+    const user = (state as Record<string, unknown>)?.user as
+      | { id?: string | number }
+      | undefined;
+
+    people.add(user?.id === undefined ? `client:${clientId}` : `user:${user.id}`);
+  });
+
+  return Math.max(1, people.size);
+}
 
 class DesignDocSession {
   readonly workspaceId: string;
@@ -205,7 +232,7 @@ class DesignDocSession {
       });
 
       this.provider.awareness.on("change", () => {
-        this.setState({ peerCount: this.provider?.awareness.getStates().size ?? 1 });
+        this.setState({ peerCount: countPeople(this.provider?.awareness) });
       });
 
       this.writer.attachAwareness(this.provider.awareness);
@@ -220,19 +247,39 @@ class DesignDocSession {
     if (this.destroyed) return;
     this.destroyed = true;
 
+    // 담당자인지는 연결을 끊기 전에 물어봐야 한다. 끊고 나면 누가
+    // 접속해 있는지 알 수 없어 모두가 자기를 담당이라고 여기게 되고,
+    // 나가는 사람마다 저장을 보내 남은 팀원의 최신 상태를 덮을 수 있다.
+    const shouldSave = this.writer?.shouldSaveOnLeave() ?? false;
+
     if (this.provider && this.writer) {
       this.writer.detachAwareness(this.provider.awareness);
     }
 
-    // 마지막으로 한 번 저장하고 정리한다. 방을 떠나면 서버에는 아무것도
-    // 남지 않으므로, 여기서 놓치면 마지막 편집이 사라진다.
-    void this.writer?.flush().finally(() => {
-      this.writer?.destroy();
-      this.provider?.destroy();
-      this.doc.destroy();
-    });
+    // 연결부터 끊는다.
+    //
+    // 예전에는 마지막 저장이 끝난 뒤에 끊었는데, 그 사이에 화면이 다시
+    // 그려지면 새 세션이 새 연결을 열어 한 사람이 두 개로 잡혔다. 접속자
+    // 수가 3명, 4명으로 튀던 원인이다. 저장은 REST 라 연결과 무관하므로
+    // 먼저 끊어도 잃는 것이 없다.
+    this.provider?.destroy();
+    this.provider = null;
 
     sessions.delete(this.workspaceId);
+
+    // 담당이었다면 마지막으로 한 번 저장하고 간다. 방을 떠나면 서버에는
+    // 아무것도 남지 않으므로, 여기서 놓치면 마지막 편집이 사라진다.
+    // 문서는 저장이 끝난 뒤에 닫는다 — 저장이 문서를 읽어야 한다.
+    const finish = () => {
+      this.writer?.destroy();
+      this.doc.destroy();
+    };
+
+    if (shouldSave) {
+      void this.writer?.flush().finally(finish);
+    } else {
+      finish();
+    }
   }
 }
 

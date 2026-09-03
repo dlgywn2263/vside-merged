@@ -28,6 +28,8 @@ export interface DesignDocWritePayload {
 export interface DesignCheckpoint {
   id: string;
   label: string;
+  /** 그 시점에 담겨 있던 것. 예전 기록에는 없어서 빌 수 있다. */
+  summary: string;
   createdByNickname: string;
   createdAt: string;
 }

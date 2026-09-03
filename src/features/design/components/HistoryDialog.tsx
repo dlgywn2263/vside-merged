@@ -156,6 +156,10 @@ export function HistoryDialog({
                     <p className="truncate text-sm font-medium text-slate-800">
                       {checkpoint.label}
                     </p>
+                    {checkpoint.summary ? (
+                      <p className="truncate text-xs text-slate-500">{checkpoint.summary}</p>
+                    ) : null}
+
                     <p className="text-xs text-slate-400">
                       {timeLabel(checkpoint.createdAt)}
                       {checkpoint.createdByNickname

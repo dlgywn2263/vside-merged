@@ -114,6 +114,9 @@ export function DesignWorkspace() {
     const colorIndex = Math.abs(Number(user?.userId ?? 0)) % PRESENCE_COLORS.length;
 
     awareness.setLocalStateField("user", {
+      // 접속자 수를 사람 단위로 세려면 누구인지 알아야 한다.
+      // 한 사람이 탭을 두 개 열어도 한 명으로 보여야 한다.
+      id: user?.userId ?? null,
       name: user?.nickname ?? "익명",
       color: PRESENCE_COLORS[colorIndex],
     });
