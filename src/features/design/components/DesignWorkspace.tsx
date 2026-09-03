@@ -205,7 +205,9 @@ export function DesignWorkspace() {
                     )}
                   </div>
 
-                  {doctorOpen ? <DoctorPanel report={report} /> : null}
+                  {doctorOpen ? (
+                    <DoctorPanel report={report} mutations={mutations} />
+                  ) : null}
                 </div>
               )}
 

@@ -8,12 +8,14 @@
 // 데려다주는 것까지가 이 기능의 값어치다.
 
 import { useMemo } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, Wand2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 import type { DoctorReport, Finding, FindingSeverity } from "../api/designDoctorApi";
 import { focusDesignTarget, useDesignUiStore } from "../store/designUiStore";
+import { applyDoctorFix, describeFix } from "../doctor/applyFix";
+import type { DesignMutations } from "../realtime/mutations";
 
 const SEVERITY_ORDER: FindingSeverity[] = ["ERROR", "WARNING", "INFO"];
 
@@ -41,7 +43,13 @@ const SEVERITY_META: Record<
   },
 };
 
-export function DoctorPanel({ report }: { report: DoctorReport }) {
+export interface DoctorPanelProps {
+  report: DoctorReport;
+  /** 없으면 "고치기" 버튼을 띄우지 않는다. */
+  mutations: DesignMutations | null;
+}
+
+export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
   const toggleDoctor = useDesignUiStore((s) => s.toggleDoctor);
 
   const grouped = useMemo(() => {
@@ -137,6 +145,19 @@ export function DoctorPanel({ report }: { report: DoctorReport }) {
                           ) : null}
                         </span>
                       </button>
+
+                      {finding.fix && mutations ? (
+                        <div className="pb-2 pl-9 pr-4">
+                          <button
+                            type="button"
+                            onClick={() => applyDoctorFix(mutations, finding.fix!)}
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                          >
+                            <Wand2 className="h-3 w-3" />
+                            {describeFix(finding.fix)}
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
