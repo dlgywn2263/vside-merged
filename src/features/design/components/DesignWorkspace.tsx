@@ -21,10 +21,12 @@ import { useDesignDoc } from "../realtime/useDesignDoc";
 import { useDesignDoctor } from "../realtime/useDesignDoctor";
 import { useDesignModel } from "../realtime/useY";
 import { createDesignMutations } from "../realtime/mutations";
+import { useDesignUndo } from "../realtime/useUndo";
 import { useDesignUiStore } from "../store/designUiStore";
 import { ConfirmDialogProvider } from "./ConfirmDialog";
 import { ConnectionNotice, DesignHeader } from "./DesignHeader";
 import { DoctorPanel } from "./DoctorPanel";
+import { HistoryDialog } from "./HistoryDialog";
 import { AiDraftDialog } from "../ai/AiDraftDialog";
 import { CodegenDialog } from "../codegen/CodegenDialog";
 import { DesignPrintCapture } from "../export/DesignPrintCapture";
@@ -82,6 +84,10 @@ export function DesignWorkspace() {
 
   const { doc, session, state } = useDesignDoc(workspaceId);
   const model = useDesignModel(doc);
+
+  // Ctrl+Z 는 내가 한 편집만 되돌린다. 팀원의 편집까지 사라지면 안 된다.
+  useDesignUndo(doc);
+
   const activeTab = useDesignUiStore((s) => s.activeTab);
   const doctorOpen = useDesignUiStore((s) => s.doctorOpen);
 
@@ -91,6 +97,7 @@ export function DesignWorkspace() {
 
   const [aiOpen, setAiOpen] = useState(false);
   const [codegenOpen, setCodegenOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
   const documentEmpty = isEmptyModel(model);
@@ -164,6 +171,7 @@ export function DesignWorkspace() {
                   setPrinting(true);
                 }}
                 printing={printing}
+                onOpenHistory={() => setHistoryOpen(true)}
               />
 
               <ConnectionNotice status={state.status} message={state.errorMessage} />
@@ -209,6 +217,14 @@ export function DesignWorkspace() {
                     workspaceId={workspaceId}
                     mutations={mutations}
                     hasExisting={!documentEmpty}
+                    session={session}
+                  />
+
+                  <HistoryDialog
+                    open={historyOpen}
+                    onOpenChange={setHistoryOpen}
+                    workspaceId={workspaceId}
+                    mutations={mutations}
                   />
 
                   <CodegenDialog
@@ -217,6 +233,7 @@ export function DesignWorkspace() {
                     workspaceId={workspaceId}
                     model={model}
                     errorCount={report.errorCount}
+                    session={session}
                   />
 
                   {printing ? (

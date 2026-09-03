@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/dialog";
 
 import { generateDetailApi, generateSkeletonApi } from "../api/designAiApi";
+import { createSafetyCheckpoint } from "../realtime/checkpoint";
+import type { DesignDocSession } from "../realtime/designDocProvider";
 import type { DoctorReport } from "../api/designDoctorApi";
 import type { DesignModel } from "../model/schema";
 import type { DesignMutations } from "../realtime/mutations";
@@ -38,6 +40,8 @@ export interface AiDraftDialogProps {
   mutations: DesignMutations;
   /** 이미 문서에 내용이 있으면 더하기라는 점을 분명히 알린다. */
   hasExisting: boolean;
+  /** 넣기 직전에 저장을 밀어 넣고 되돌아올 자리를 남기는 데 쓴다. */
+  session: DesignDocSession | null;
 }
 
 export function AiDraftDialog({
@@ -46,6 +50,7 @@ export function AiDraftDialog({
   workspaceId,
   mutations,
   hasExisting,
+  session,
 }: AiDraftDialogProps) {
   const [step, setStep] = useState<Step>("input");
   const [progress, setProgress] = useState("");
@@ -60,6 +65,8 @@ export function AiDraftDialog({
   const [draft, setDraft] = useState<DesignModel | null>(null);
   const [report, setReport] = useState<DoctorReport | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const [checkpointFailed, setCheckpointFailed] = useState(false);
 
   const reset = () => {
     setStep("input");
@@ -68,6 +75,8 @@ export function AiDraftDialog({
     setDraft(null);
     setReport(null);
     setExcluded(new Set());
+    setApplying(false);
+    setCheckpointFailed(false);
   };
 
   const close = (next: boolean) => {
@@ -120,7 +129,38 @@ export function AiDraftDialog({
     });
   };
 
-  const apply = () => {
+  const apply = async () => {
+    if (!draft || applying) return;
+
+    setApplying(true);
+    setErrorMessage("");
+
+    // 넣기 전에 되돌아올 자리를 남긴다. 초안은 한 번에 수십 개 항목을 넣는
+    // 동작이라, 마음에 안 들 때 손으로 지우는 것이 사실상 불가능하다.
+    const checkpoint = await createSafetyCheckpoint(
+      workspaceId,
+      session,
+      "AI 초안 적용 직전",
+    );
+
+    if (!checkpoint.ok) {
+      // 조용히 넘어가면 안전망이 없다는 사실을 모른 채 진행하게 된다.
+      setApplying(false);
+      setErrorMessage(
+        `되돌리기 기록을 남기지 못했습니다 (${checkpoint.message}). ` +
+          "그래도 넣으려면 한 번 더 눌러 주세요.",
+      );
+      setCheckpointFailed(true);
+      return;
+    }
+
+    mutations.applyDraft(filterDraft(draft, excluded));
+    setApplying(false);
+    close(false);
+  };
+
+  /** 기록 남기기에 실패한 뒤 그래도 진행하겠다고 한 경우. */
+  const applyWithoutCheckpoint = () => {
     if (!draft) return;
 
     mutations.applyDraft(filterDraft(draft, excluded));
@@ -151,7 +191,16 @@ export function AiDraftDialog({
             </p>
           </div>
         ) : step === "review" && draft ? (
-          <ReviewStep draft={draft} report={report} excluded={excluded} onToggle={toggle} />
+          <div className="space-y-3">
+            {errorMessage ? (
+              <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {errorMessage}
+              </p>
+            ) : null}
+
+            <ReviewStep draft={draft} report={report} excluded={excluded} onToggle={toggle} />
+          </div>
         ) : (
           <div className="space-y-4 py-2">
             {hasExisting ? (
@@ -205,9 +254,17 @@ export function AiDraftDialog({
               <Button variant="outline" onClick={() => close(false)}>
                 버리기
               </Button>
-              <Button onClick={apply} className="gap-1.5">
-                <Check className="h-4 w-4" />
-                문서에 넣기
+              <Button
+                onClick={checkpointFailed ? applyWithoutCheckpoint : () => void apply()}
+                disabled={applying}
+                className="gap-1.5"
+              >
+                {applying ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                {checkpointFailed ? "그래도 넣기" : "문서에 넣기"}
               </Button>
             </>
           ) : (

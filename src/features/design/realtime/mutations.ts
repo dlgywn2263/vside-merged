@@ -153,6 +153,15 @@ function setPoint(map: YMapAny, key: string, x: number, y: number): void {
 
 // ── 팩토리 ─────────────────────────────────────────────────────────
 
+/**
+ * 내가 한 편집이라는 표식.
+ *
+ * 실행취소가 이 표식이 붙은 것만 되돌린다. 스코프 없이 UndoManager 를 쓰면
+ * Ctrl+Z 한 번에 팀원의 편집까지 사라지는데, 실시간 협업에서 가장 흔한
+ * 사고다. 쓰기가 모두 아래 tx() 한 줄을 지나므로 여기 한 곳만 표시하면 된다.
+ */
+export const LOCAL_ORIGIN = Symbol("design-local-edit");
+
 export function createDesignMutations(doc: Y.Doc) {
   const requirements = () => getRequirements(doc);
   const screens = () => getScreens(doc);
@@ -161,7 +170,7 @@ export function createDesignMutations(doc: Y.Doc) {
   const tables = () => getTables(doc);
   const relations = () => getRelations(doc);
 
-  const tx = <T>(fn: () => T): T => doc.transact(fn);
+  const tx = <T>(fn: () => T): T => doc.transact(fn, LOCAL_ORIGIN);
 
   return {
     // ── 메타 ──────────────────────────────────────────────────────
@@ -611,6 +620,62 @@ export function createDesignMutations(doc: Y.Doc) {
         push(apis(), draft.apis, apiToY);
         push(tables(), draft.erd?.tables, tableToY);
         push(relations(), draft.erd?.relations, relationToY);
+      });
+    },
+
+    /**
+     * 문서 내용을 통째로 다른 것으로 바꾼다. 되돌리기가 쓴다.
+     *
+     * 예전 문서를 새로 만들어 붙이지 않고 <b>살아 있는 문서 안에서 내용만</b>
+     * 바꾸는 것이 중요하다. 서버는 CRDT 를 모르므로 서버에 저장된 것만
+     * 되돌려 봐야, 접속 중인 사람의 브라우저가 자기 문서를 그대로 들고 있다가
+     * 다음 저장 때 도로 덮어쓴다. 이렇게 하면 팀원 화면에도 즉시 반영되고
+     * 그 상태가 그대로 굳는다.
+     *
+     * 한 트랜잭션으로 묶어 반쯤 비워진 문서가 남에게 보이지 않게 하고,
+     * 표식이 붙으므로 Ctrl+Z 로도 되돌릴 수 있다.
+     */
+    replaceAll(next: {
+      meta?: {
+        projectSummary?: string;
+        techStack?: Partial<{ backend: string; frontend: string; db: string }>;
+      };
+      requirements?: Requirement[];
+      screens?: Screen[];
+      screenTransitions?: ScreenTransition[];
+      apis?: ApiSpec[];
+      erd?: { tables?: Table[]; relations?: Relation[] };
+    }) {
+      tx(() => {
+        const meta = getMeta(doc);
+
+        if (typeof next.meta?.projectSummary === "string") {
+          meta.set("projectSummary", next.meta.projectSummary);
+        }
+
+        const stack = meta.get("techStack");
+        if (stack instanceof Y.Map && next.meta?.techStack) {
+          Object.entries(next.meta.techStack).forEach(([key, value]) => {
+            if (typeof value === "string") stack.set(key, value);
+          });
+        }
+
+        const swap = <T extends { id: string }>(
+          array: YArrayOfMaps,
+          items: T[] | undefined,
+          toY: (item: T) => YMapAny,
+        ) => {
+          if (array.length > 0) array.delete(0, array.length);
+          const fresh = items ?? [];
+          if (fresh.length > 0) array.push(fresh.map(toY));
+        };
+
+        swap(requirements(), next.requirements, requirementToY);
+        swap(screens(), next.screens, screenToY);
+        swap(transitions(), next.screenTransitions, transitionToY);
+        swap(apis(), next.apis, apiToY);
+        swap(tables(), next.erd?.tables, tableToY);
+        swap(relations(), next.erd?.relations, relationToY);
       });
     },
 

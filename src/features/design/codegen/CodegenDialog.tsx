@@ -36,6 +36,8 @@ import {
   type CodegenTargets,
 } from "../api/designCodegenApi";
 import type { DesignModel } from "../model/schema";
+import { createSafetyCheckpoint } from "../realtime/checkpoint";
+import type { DesignDocSession } from "../realtime/designDocProvider";
 
 type Step = "setup" | "preview" | "applying" | "done";
 
@@ -57,6 +59,8 @@ export interface CodegenDialogProps {
   workspaceId: string;
   model: DesignModel;
   errorCount: number;
+  /** 넣기 직전에 저장을 밀어 넣고 되돌아올 자리를 남기는 데 쓴다. */
+  session: DesignDocSession | null;
 }
 
 export function CodegenDialog({
@@ -65,6 +69,7 @@ export function CodegenDialog({
   workspaceId,
   model,
   errorCount,
+  session,
 }: CodegenDialogProps) {
   const [step, setStep] = useState<Step>("setup");
   const [errorMessage, setErrorMessage] = useState("");
@@ -80,6 +85,7 @@ export function CodegenDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openedPath, setOpenedPath] = useState("");
   const [report, setReport] = useState<CodegenApplyReport | null>(null);
+  const [checkpointFailed, setCheckpointFailed] = useState(false);
 
   // 워크스페이스의 프로젝트 목록. 설계는 워크스페이스 단위인데 코드가 놓일
   // 곳은 프로젝트라, 어디에 넣을지 반드시 골라야 한다.
@@ -182,6 +188,7 @@ export function CodegenDialog({
     setOpenedPath("");
     setErrorMessage("");
     setTargetInfo(null);
+    setCheckpointFailed(false);
   }
 
   async function handlePreview() {
@@ -219,6 +226,28 @@ export function CodegenDialog({
 
     setErrorMessage("");
     setStep("applying");
+
+    // 파일을 쓰기 직전에 설계 쪽 되돌아올 자리를 남긴다. 코드 생성이
+    // 잘못됐을 때 설계까지 함께 확인해야 하는 경우가 많다.
+    //
+    // 한 번 실패한 뒤 사용자가 그래도 진행하기로 했으면 다시 시도하지
+    // 않는다. 같은 이유로 또 막히면 영영 못 넣는다.
+    if (!checkpointFailed) {
+      const checkpoint = await createSafetyCheckpoint(
+        workspaceId,
+        session,
+        "코드 생성 적용 직전",
+      );
+
+      if (!checkpoint.ok) {
+        setErrorMessage(
+          `되돌리기 기록을 남기지 못했습니다 (${checkpoint.message}). 그래도 넣으려면 한 번 더 눌러 주세요.`,
+        );
+        setStep("preview");
+        setCheckpointFailed(true);
+        return;
+      }
+    }
 
     try {
       const files = preview.files
@@ -336,7 +365,7 @@ export function CodegenDialog({
                 ) : (
                   <Check className="mr-1.5 h-4 w-4" />
                 )}
-                고른 {selected.size}개 파일 넣기
+                {checkpointFailed ? "그래도 " : ""}고른 {selected.size}개 파일 넣기
               </Button>
             </>
           ) : (

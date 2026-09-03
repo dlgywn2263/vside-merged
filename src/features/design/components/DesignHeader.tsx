@@ -13,6 +13,7 @@ import {
   Check,
   CloudOff,
   FileCode,
+  History,
   Loader2,
   Printer,
   Sparkles,
@@ -102,6 +103,7 @@ export interface DesignHeaderProps {
   onOpenCodegen: () => void;
   onPrint: () => void;
   printing: boolean;
+  onOpenHistory: () => void;
 }
 
 export function DesignHeader({
@@ -112,6 +114,7 @@ export function DesignHeader({
   onOpenCodegen,
   onPrint,
   printing,
+  onOpenHistory,
 }: DesignHeaderProps) {
   const activeTab = useDesignUiStore((s) => s.activeTab);
   const setActiveTab = useDesignUiStore((s) => s.setActiveTab);
@@ -144,6 +147,16 @@ export function DesignHeader({
           >
             <Sparkles className="h-4 w-4 text-indigo-500" />
             AI 초안
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenHistory}
+            className="gap-1.5"
+          >
+            <History className="h-4 w-4 text-slate-500" />
+            기록
           </Button>
 
           <Button
