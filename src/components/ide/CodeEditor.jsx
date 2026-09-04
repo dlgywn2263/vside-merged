@@ -18,6 +18,7 @@ import {
 } from "@/store/slices/fileSystemSlice";
 
 import {
+  claimCollabSeedApi,
   saveFileApi,
   fetchAiAssistApi,
   fetchAiAutocompleteApi,
@@ -311,6 +312,12 @@ export default function CodeEditor() {
   
   const lockedLinesRef = useRef({});
   const lockDecosRef = useRef([]);
+
+  /** 이 방의 최초 내용을 넣어도 되는지. 서버가 방마다 한 사람에게만 준다. */
+  const seedGrantedRef = useRef(false);
+
+  /** 넣을 디스크 내용. 허락이 늦게 와도 넣을 수 있게 들고 있는다. */
+  const localContentRef = useRef("");
   const conflictDecosRef = useRef([]);
   const conflictOriginalContentRef = useRef({});
   const cursorListenerRef = useRef(null); 
@@ -700,6 +707,33 @@ export default function CodeEditor() {
       normalizeCollabKeyPart(activeFileId),
     ].join(":");
 
+    // 이 방의 최초 내용을 넣을 권한을 서버에 물어본다.
+    //
+    // 답이 오기 전에 연결이 끝나 bind 가 실행될 수 있으므로 기본값은
+    // "넣지 않음"이다. 넣지 않아 잠깐 비어 보이는 것은 상대의 내용이 오면
+    // 채워지지만, 잘못 넣은 중복은 되돌리기 어렵다.
+    seedGrantedRef.current = false;
+
+    claimCollabSeedApi(roomName)
+      .then((granted) => {
+        if (collabSessionRef.current !== sessionId) return;
+
+        seedGrantedRef.current = granted;
+
+        // 이미 bind 가 끝났는데 이제야 허락이 왔고 문서가 비어 있다면
+        // 여기서 넣는다. 아니면 파일이 빈 채로 남는다.
+        if (granted) {
+          const yText = ydocRef.current?.getText("monaco");
+
+          if (yText && yText.length === 0 && localContentRef.current !== "") {
+            yText.insert(0, localContentRef.current);
+          }
+        }
+      })
+      .catch(() => {
+        // 물어보지 못했으면 넣지 않는다. 위와 같은 이유다.
+      });
+
     console.log("[COLLAB ROOM ENTER]", {
       activeFileId,
       collabFileKey: normalizeCollabKeyPart(activeFileId),
@@ -868,6 +902,7 @@ export default function CodeEditor() {
       "";
 
     const localContent = String(rawContent).replace(/\r\n/g, "\n");
+    localContentRef.current = localContent;
 
     const doBind = () => {
       if (!isLiveSession()) return;
@@ -877,23 +912,22 @@ export default function CodeEditor() {
 
       if (!currentModel || currentModel.isDisposed()) return;
 
-      if (yText.length === 0 && localContent !== "") {
-        const clients = Array.from(awareness.getStates().keys()).sort();
-
-        if (clients.length === 0 || clients[0] === awareness.clientID) {
-          yText.insert(0, localContent);
-        }
+      // 최초 내용을 넣을지는 서버가 준 허락으로만 정한다.
+      //
+      // 예전에는 awareness 에 누가 있는지를 보고 정했는데, bind 가 타이머로
+      // 먼저 실행되면 상대 정보가 아직 안 와서 양쪽 다 자기가 처음이라고
+      // 판단해 같은 내용을 두 번 넣었다.
+      if (seedGrantedRef.current && yText.length === 0 && localContent !== "") {
+        yText.insert(0, localContent);
       }
 
       if (!isLiveSession()) return;
 
-      const yTextValue = yText.toString();
-
-      if (!currentModel.isDisposed() && currentModel.getValue() !== yTextValue) {
-        currentModel.setValue(yTextValue);
-      }
-
-      if (!isLiveSession()) return;
+      // 여기서 model.setValue 를 하지 않는다.
+      //
+      // MonacoBinding 이 붙는 순간 문서 내용이 에디터에 반영된다. 예전에는
+      // 손으로 덮었는데, 상대의 내용이 아직 안 온 상태에서 실행되면 빈
+      // 문자열로 덮어 화면이 비고 그 빈 상태가 상대에게도 퍼졌다.
 
       try {
         bindingRef.current = new MonacoBinding(
@@ -977,6 +1011,30 @@ const syncHandler = (isSynced) => {
   const finalFallbackTimerId = window.setTimeout(() => {
     safeDoBind("final-fallback");
   }, 2000);
+
+  // 허락을 못 받았는데 문서가 계속 비어 있고 방에 나 혼자라면, 먼저 있던
+  // 사람이 그새 나간 것이다. 그대로 두면 파일이 빈 채로 열리므로 한 번 더
+  // 물어본다.
+  const reclaimTimerId = window.setTimeout(() => {
+    if (!isLiveSession()) return;
+    if (seedGrantedRef.current) return;
+    if (yText.length > 0) return;
+    if (awareness.getStates().size > 1) return;
+
+    claimCollabSeedApi(roomName)
+      .then((granted) => {
+        if (!isLiveSession() || !granted) return;
+
+        seedGrantedRef.current = true;
+
+        if (yText.length === 0 && localContentRef.current !== "") {
+          yText.insert(0, localContentRef.current);
+        }
+      })
+      .catch(() => {});
+  }, 3000);
+
+  bindTimeoutsRef.current.push(reclaimTimerId);
 
   bindTimeoutsRef.current.push(finalFallbackTimerId);
   },
