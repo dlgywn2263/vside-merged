@@ -115,7 +115,6 @@ export default function PostEditor({ mode, initialData, postId }: PostEditorProp
             <option value="Free">자유</option>
             <option value="Info">정보</option>
             <option value="AIHelp">AI 도움</option>
-            <option value="Showcase">쇼케이스</option>
           </select>
         </div>
 
