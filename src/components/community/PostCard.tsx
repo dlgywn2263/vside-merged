@@ -1,96 +1,183 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, ImageIcon } from "lucide-react";
-import { CommunityPost } from "./CommunityTypes";
+import { Eye, Heart, Bookmark, FileText } from "lucide-react";
 
 type Props = {
   post: any;
+  isLast?: boolean;
 };
 
-export default function PostCard({ post }: Props) {
-  // 💡 [디버깅용] 개발자 도구(F12)의 콘솔창에서 백엔드가 주는 실제 데이터를 확인해 보세요!
-  // console.log("백엔드에서 온 데이터:", post); 
+const categoryLabel: Record<string, string> = {
+  Question: "질문",
+  Free: "자유",
+  Info: "정보",
+  AIHelp: "AI 도움",
+};
 
+const categoryStyle: Record<string, string> = {
+  Question: "bg-blue-50 text-blue-600",
+  Free: "bg-violet-50 text-violet-600",
+  Info: "bg-emerald-50 text-emerald-600",
+  AIHelp: "bg-amber-50 text-amber-600",
+};
+
+export default function PostCard({
+  post,
+  isLast = false,
+}: Props) {
   const preview = post.attachments?.[0];
-  const imageUrl = post.previewImageUrl || preview?.url;
-  const isImage = post.previewImageUrl || preview?.type === "image";
 
-  // 🚀 [핵심] 만능 날짜 포맷팅 함수 (배열이든 문자열이든 무조건 변환)
+  const imageUrl =
+    post.previewImageUrl ||
+    (preview?.type === "image" ? preview?.url : null);
+
+  const hasImage = Boolean(imageUrl);
+  const hasFile = preview && preview.type !== "image";
+
   let formattedDate = "";
+
   if (post.createdAt) {
     if (typeof post.createdAt === "string") {
-      // 1. 문자열로 올 때 (예: "2026-05-08T14:30:00")
       formattedDate = post.createdAt.split("T")[0];
     } else if (Array.isArray(post.createdAt)) {
-      // 2. 배열로 올 때 (예: [2026, 5, 8, 14, 30])
       const year = post.createdAt[0];
-      const month = String(post.createdAt[1]).padStart(2, "0"); // 5 -> 05
-      const day = String(post.createdAt[2]).padStart(2, "0");   // 8 -> 08
+      const month = String(post.createdAt[1]).padStart(2, "0");
+      const day = String(post.createdAt[2]).padStart(2, "0");
+
       formattedDate = `${year}-${month}-${day}`;
     }
   }
 
+  const views =
+    post.viewCount ??
+    post.views ??
+    0;
+
+  const likes =
+    post.likeCount ??
+    post.likes ??
+    0;
+
+  const scraps =
+    post.scrapCount ??
+    post.scraps ??
+    0;
+
+  const handleClick = () => {
+    sessionStorage.setItem(
+      `community-view-${post.id}`,
+      String(views)
+    );
+  };
+
   return (
     <Link
       href={`/community/${post.id}`}
-      className="group block rounded-2xl border border-slate-200 bg-white p-6 transition hover:border-blue-300 hover:shadow-[0_12px_35px_rgba(37,99,235,0.10)]"
+      onClick={handleClick}
+      className={`group block h-[190px] px-6 py-5 transition hover:bg-blue-50/30 ${
+        !isLast ? "border-b border-slate-100" : ""
+      }`}
     >
-      <div className="flex gap-6">
-        <div className="min-w-0 flex-1">
-          <div className="mb-4 flex items-center gap-2">
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-600">
-              {post.category}
+      <div className="flex h-full gap-6">
+        {/* 왼쪽 게시글 정보 */}
+        <div className="grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto]">
+          {/* 카테고리 */}
+          <div>
+            <span
+              className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${
+                categoryStyle[post.category] ??
+                "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {categoryLabel[post.category] ?? post.category}
             </span>
-
-            {post.tags?.map((tag: string) => (
-              <span key={tag} className="text-sm text-slate-500">
-                #{tag}
-              </span>
-            ))}
           </div>
 
-          <h2 className="text-xl font-bold text-slate-950 group-hover:text-blue-700">
+          {/* 제목 */}
+          <h3 className="mt-2 truncate text-[17px] font-bold text-slate-900 transition group-hover:text-blue-600">
             {post.title}
-          </h2>
+          </h3>
 
-          <p className="mt-3 line-clamp-2 text-sm text-slate-500">
-            {post.contentSnippet || post.content}
-          </p>
-        </div>
+          {/* 내용 + 태그 */}
+          <div className="min-h-0 pt-2">
+            <p className="line-clamp-2 overflow-hidden text-sm leading-6 text-slate-500">
+              {post.contentSnippet ?? post.content}
+            </p>
 
-        {imageUrl || preview ? (
-          <div className="hidden h-24 w-32 shrink-0 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50 md:block">
-            {isImage ? (
-              <img
-                src={imageUrl}
-                alt={preview?.name || post.title}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-blue-600">
-                <FileText size={28} />
-                <span className="max-w-[110px] truncate text-xs">
-                  {preview?.name}
-                </span>
+            {post.tags?.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {post.tags.slice(0, 4).map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="text-xs font-medium text-blue-500"
+                  >
+                    #{tag}
+                  </span>
+                ))}
               </div>
             )}
           </div>
-        ) : (
-          <div className="hidden h-24 w-32 shrink-0 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-slate-300 md:flex">
-            <ImageIcon size={30} />
+
+          {/* 작성자 / 날짜 / 통계 */}
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span>{post.authorName}</span>
+
+              {formattedDate && (
+                <>
+                  <span>·</span>
+                  <span>{formattedDate}</span>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-slate-400">
+              {/* 조회수 */}
+              <span className="flex items-center gap-1">
+                <Eye size={13} />
+                {views}
+              </span>
+
+              {/* 좋아요 */}
+              <span className="flex items-center gap-1">
+                <Heart size={13} />
+                {likes}
+              </span>
+
+              {/* 스크랩 */}
+              <span className="flex items-center gap-1">
+                <Bookmark size={13} />
+                {scraps}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 이미지 미리보기 */}
+        {hasImage && (
+          <div className="h-full w-[165px] shrink-0 overflow-hidden rounded-xl bg-slate-100">
+            <img
+              src={imageUrl}
+              alt={post.title || "게시글 이미지"}
+              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            />
           </div>
         )}
-      </div>
 
-      <div className="mt-7 flex items-center justify-between text-sm text-slate-500">
-        <span>
-          {post.authorName} · {formattedDate}
-        </span>
+        {/* 일반 첨부파일 */}
+        {!hasImage && hasFile && (
+          <div className="flex h-full w-[165px] shrink-0 flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-center">
+            <FileText
+              size={24}
+              className="text-blue-400"
+            />
 
-        <span className="text-right">
-          조회 {post.views || 0} · 좋아요 {post.likeCount ?? post.likes ?? 0}
-        </span>
+            <span className="mt-2 line-clamp-2 text-xs text-slate-500">
+              {preview.name}
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );

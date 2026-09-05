@@ -1,17 +1,25 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
 import {
+  AlertTriangle,
+  ArrowRight,
   CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   FilePenLine,
+  Filter,
   FolderOpen,
+  GripVertical,
   ListTodo,
   Loader2,
-  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -22,16 +30,8 @@ import {
   X,
 } from "lucide-react";
 
-import { MonthlyCalendarBarView } from "@/components/schedules/MonthlyCalendarBarView";
-
 import {
-  boardColumnStyle,
-  calendarEventStyle,
   formatDateKey,
-  getWeekDays,
-  scheduleStatusLabel,
-  statusBadgeStyle,
-  type ScheduleItem,
   type ScheduleStatus,
 } from "@/components/schedules/scheduleMockData";
 
@@ -45,42 +45,41 @@ import {
   type ScheduleApiItem,
 } from "@/lib/schedules/scheduleApi";
 
-import { getMyWorkspacesByTokenApi } from "@/lib/ide/api";
+import {
+  getMyWorkspacesByTokenApi,
+  getWorkspaceMembersApi,
+} from "@/lib/ide/api";
 
-type ScheduleViewMode = "calendar" | "month" | "board" | "list";
+/* =========================================================
+   TYPES
+   ========================================================= */
+
+type ScheduleViewMode = "board" | "calendar" | "gantt" | "list";
+
 type WorkspaceMode = "personal" | "team";
+
 type ProjectFilter = "all" | WorkspaceMode;
-type SidebarPanelMode = "projects" | "today" | "devlog";
-type TodayScheduleScope = "selected" | "all";
 
-type ProjectScheduleItem = ScheduleItem & {
-  workspaceId: string;
-  projectName: string;
-  customProjectName?: string;
-  startDate: string;
-  endDate: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
+type SmartFilter = "all" | "today" | "mine" | "noDevlog";
 
-type CreateScheduleForm = {
-  title: string;
-  startDate: string;
-  endDate: string;
-  status: ScheduleStatus;
-  description: string;
-};
+type TodayScope = "selected" | "all";
+
+type StatusFilter = "all" | ScheduleStatus;
 
 type WorkspaceLike = {
   id?: string;
   uuid?: string;
   workspaceId?: string;
+
   name?: string;
   title?: string;
   projectName?: string;
+
   mode?: WorkspaceMode;
   type?: WorkspaceMode;
+
   role?: string;
+
   childCount?: number;
   subProjectCount?: number;
   childrenCount?: number;
@@ -95,44 +94,252 @@ type WorkspaceSidebarItem = {
   childCount: number;
 };
 
-const DETAIL_SIDEBAR_DEFAULT_WIDTH = 320;
-const DETAIL_SIDEBAR_MIN_WIDTH = 300;
-const DETAIL_SIDEBAR_MAX_WIDTH = 620;
+type WorkspaceMember = {
+  userId: number;
+  email?: string;
+  nickname?: string;
+  name?: string;
+  role: "OWNER" | "MEMBER" | "owner" | "member" | string;
+};
 
-function getTodayLocalDate() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
+type ProjectScheduleItem = {
+  id: string;
 
-function getDateKeyFromDate(date: Date) {
-  return formatDateKey(date.getFullYear(), date.getMonth(), date.getDate());
+  workspaceId: string;
+
+  projectName: string;
+  customProjectName?: string;
+
+  title: string;
+  description: string;
+
+  startDate: string;
+  endDate: string;
+
+  status: ScheduleStatus;
+
+  hasDevlog: boolean;
+
+  assigneeUserId?: number | null;
+  assigneeName?: string;
+
+  creatorId?: number | null;
+  creatorName?: string;
+
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type ScheduleForm = {
+  title: string;
+  startDate: string;
+  endDate: string;
+  status: ScheduleStatus;
+  description: string;
+
+  assigneeUserId: number | null;
+};
+
+/* =========================================================
+   CONSTANT
+   ========================================================= */
+
+const PRIMARY = "#5873F9";
+
+const STATUS_META: Record<
+  ScheduleStatus,
+  {
+    label: string;
+    dot: string;
+    badge: string;
+    board: string;
+  }
+> = {
+  todo: {
+    label: "할 일",
+    dot: "bg-slate-400",
+    badge: "border-slate-200 bg-slate-50 text-slate-600",
+    board: "border-slate-200 bg-slate-50/70",
+  },
+
+  progress: {
+    label: "진행 중",
+    dot: "bg-[#5873F9]",
+    badge: "border-blue-200 bg-blue-50 text-blue-700",
+    board: "border-blue-100 bg-blue-50/40",
+  },
+
+  done: {
+    label: "완료",
+    dot: "bg-emerald-500",
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    board: "border-emerald-100 bg-emerald-50/40",
+  },
+
+  delayed: {
+    label: "지연",
+    dot: "bg-rose-500",
+    badge: "border-rose-200 bg-rose-50 text-rose-700",
+    board: "border-rose-100 bg-rose-50/40",
+  },
+};
+
+const BOARD_STATUSES: ScheduleStatus[] = [
+  "todo",
+  "progress",
+  "done",
+  "delayed",
+];
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+/* =========================================================
+   COMMON
+   ========================================================= */
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
 function normalizeWorkspaceId(value: string | null) {
   if (!value) return "";
-  if (value === "undefined" || value === "null") return "";
+
+  if (value === "undefined" || value === "null") {
+    return "";
+  }
+
   return value;
 }
 
-function extractWorkspaceList(value: unknown): WorkspaceLike[] {
-  if (Array.isArray(value)) return value as WorkspaceLike[];
+function getTodayLocalDate() {
+  const now = new Date();
 
-  if (value && typeof value === "object") {
-    const objectValue = value as Record<string, unknown>;
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+}
 
-    if (Array.isArray(objectValue.workspaces)) {
+function getDateKeyFromDate(date: Date) {
+  return formatDateKey(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+}
+
+function parseDateKey(value: string) {
+  const [year, month, date] = value
+    .split("-")
+    .map(Number);
+
+  return new Date(
+    year,
+    month - 1,
+    date,
+  );
+}
+
+function addDays(date: Date, amount: number) {
+  const next = new Date(date);
+
+  next.setDate(next.getDate() + amount);
+
+  return next;
+}
+
+function getDayDifference(
+  start: Date,
+  end: Date,
+) {
+  const startTime = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+  ).getTime();
+
+  const endTime = new Date(
+    end.getFullYear(),
+    end.getMonth(),
+    end.getDate(),
+  ).getTime();
+
+  return Math.round(
+    (endTime - startTime) / DAY_MS,
+  );
+}
+
+function formatShortDate(value: string) {
+  if (!value) return "-";
+
+  const [year, month, date] = value.split("-");
+
+  return `${year}.${month}.${date}`;
+}
+
+function formatCompactDate(value: string) {
+  if (!value) return "-";
+
+  const [, month, date] = value.split("-");
+
+  return `${Number(month)}/${Number(date)}`;
+}
+
+function getInitial(value?: string) {
+  return (
+    value?.trim().charAt(0).toUpperCase() ||
+    "U"
+  );
+}
+
+/* =========================================================
+   WORKSPACE
+   ========================================================= */
+
+function extractWorkspaceList(
+  value: unknown,
+): WorkspaceLike[] {
+  if (Array.isArray(value)) {
+    return value as WorkspaceLike[];
+  }
+
+  if (
+    value &&
+    typeof value === "object"
+  ) {
+    const objectValue =
+      value as Record<string, unknown>;
+
+    if (
+      Array.isArray(
+        objectValue.workspaces,
+      )
+    ) {
       return objectValue.workspaces as WorkspaceLike[];
     }
 
-    if (Array.isArray(objectValue.data)) {
+    if (
+      Array.isArray(
+        objectValue.data,
+      )
+    ) {
       return objectValue.data as WorkspaceLike[];
     }
 
-    if (Array.isArray(objectValue.content)) {
+    if (
+      Array.isArray(
+        objectValue.content,
+      )
+    ) {
       return objectValue.content as WorkspaceLike[];
     }
 
-    if (Array.isArray(objectValue.list)) {
+    if (
+      Array.isArray(
+        objectValue.list,
+      )
+    ) {
       return objectValue.list as WorkspaceLike[];
     }
   }
@@ -140,2882 +347,6630 @@ function extractWorkspaceList(value: unknown): WorkspaceLike[] {
   return [];
 }
 
-function mapWorkspaceFromApi(item: WorkspaceLike): WorkspaceSidebarItem | null {
-  const id = item.uuid || item.id || item.workspaceId;
-  if (!id) return null;
+function mapWorkspaceFromApi(
+  item: WorkspaceLike,
+): WorkspaceSidebarItem | null {
+  const id =
+    item.uuid ||
+    item.id ||
+    item.workspaceId;
 
-  const mode = item.mode || item.type || "personal";
+  if (!id) {
+    return null;
+  }
+
+  const mode =
+    item.mode ||
+    item.type ||
+    "personal";
 
   return {
     id,
-    name: item.name || item.title || item.projectName || "이름 없는 프로젝트",
+
+    name:
+      item.name ||
+      item.title ||
+      item.projectName ||
+      "이름 없는 프로젝트",
+
     mode,
+
     role: item.role,
+
     childCount:
       item.childCount ??
       item.subProjectCount ??
       item.childrenCount ??
-      (Array.isArray(item.children) ? item.children.length : 0),
+      (Array.isArray(item.children)
+        ? item.children.length
+        : 0),
   };
 }
 
-function mapScheduleFromApi(item: ScheduleApiItem): ProjectScheduleItem {
-  return {
-    id: item.id,
-    workspaceId: item.workspaceId,
-    projectName: item.projectName,
-    customProjectName: item.customProjectName,
-    title: item.title,
-    description: item.description,
-    date: item.startDate,
-    startDate: item.startDate,
-    endDate: item.endDate,
-    status: item.status,
-    hasDevlog: item.hasDevlog,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-  };
-}
-
-function getScheduleStartDate(schedule: ProjectScheduleItem) {
-  return schedule.startDate ?? schedule.date;
-}
-
-function getScheduleEndDate(schedule: ProjectScheduleItem) {
-  return schedule.endDate ?? schedule.date;
-}
-
-function getSchedulePeriodText(schedule: ProjectScheduleItem) {
-  const startDate = getScheduleStartDate(schedule);
-  const endDate = getScheduleEndDate(schedule);
-
-  return endDate !== startDate ? `${startDate} ~ ${endDate}` : startDate;
-}
-
-function isDateInScheduleRange(schedule: ProjectScheduleItem, dateKey: string) {
-  const startDate = getScheduleStartDate(schedule);
-  const endDate = getScheduleEndDate(schedule);
-
-  return startDate <= dateKey && dateKey <= endDate;
-}
-
-function isScheduleVisibleInWeek(
-  schedule: ProjectScheduleItem,
-  weekStartKey: string,
-  weekEndKey: string,
+function normalizeWorkspaceRole(
+  role?: string,
 ) {
-  const startDate = getScheduleStartDate(schedule);
-  const endDate = getScheduleEndDate(schedule);
-
-  return startDate <= weekEndKey && endDate >= weekStartKey;
+  return role?.toLowerCase() === "owner"
+    ? "OWNER"
+    : "MEMBER";
 }
 
-function getProjectName(schedule: ProjectScheduleItem | null) {
-  if (!schedule) return "프로젝트 없음";
-  return schedule.customProjectName || schedule.projectName || "프로젝트 없음";
+/* =========================================================
+   MEMBER
+   ========================================================= */
+
+function normalizeMember(
+  value: unknown,
+): WorkspaceMember | null {
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return null;
+  }
+
+  const item =
+    value as Record<string, unknown>;
+
+  const rawUserId =
+    item.userId ??
+    item.id;
+
+  const userId = Number(rawUserId);
+
+  if (
+    !Number.isFinite(userId)
+  ) {
+    return null;
+  }
+
+  return {
+    userId,
+
+    email:
+      typeof item.email === "string"
+        ? item.email
+        : undefined,
+
+    nickname:
+      typeof item.nickname === "string"
+        ? item.nickname
+        : undefined,
+
+    name:
+      typeof item.name === "string"
+        ? item.name
+        : undefined,
+
+    role:
+      typeof item.role === "string"
+        ? item.role
+        : "MEMBER",
+  };
 }
+
+function getMemberName(
+  member?: WorkspaceMember | null,
+) {
+  if (!member) {
+    return "담당자 없음";
+  }
+
+  return (
+    member.nickname ||
+    member.name ||
+    member.email ||
+    `User ${member.userId}`
+  );
+}
+
+function getMemberRole(
+  member?: WorkspaceMember | null,
+) {
+  return member?.role
+    ?.toUpperCase() === "OWNER"
+    ? "OWNER"
+    : "MEMBER";
+}
+
+/* =========================================================
+   SCHEDULE MAPPING
+   ========================================================= */
+
+function getNumberValue(
+  record: Record<string, unknown>,
+  keys: string[],
+) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (
+      value !== null &&
+      value !== undefined &&
+      value !== ""
+    ) {
+      const numberValue = Number(value);
+
+      if (
+        Number.isFinite(numberValue)
+      ) {
+        return numberValue;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getStringValue(
+  record: Record<string, unknown>,
+  keys: string[],
+) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (
+      typeof value === "string" &&
+      value.trim()
+    ) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function getAssigneeUserId(
+  record: Record<string, unknown>,
+) {
+  const direct = getNumberValue(
+    record,
+    [
+      "assigneeUserId",
+      "assigneeId",
+      "assignedUserId",
+      "participantUserId",
+    ],
+  );
+
+  if (direct !== null) {
+    return direct;
+  }
+
+  const arrays = [
+    record.assigneeUserIds,
+    record.assigneeIds,
+    record.participantUserIds,
+  ];
+
+  for (const candidate of arrays) {
+    if (
+      Array.isArray(candidate) &&
+      candidate.length > 0
+    ) {
+      const first = Number(candidate[0]);
+
+      if (Number.isFinite(first)) {
+        return first;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getAssigneeName(
+  record: Record<string, unknown>,
+) {
+  const direct = getStringValue(
+    record,
+    [
+      "assigneeName",
+      "assignedUserName",
+      "participantName",
+    ],
+  );
+
+  if (direct) {
+    return direct;
+  }
+
+  const participants =
+    record.participants;
+
+  if (
+    typeof participants === "string"
+  ) {
+    return (
+      participants
+        .split(",")
+        .map((value) =>
+          value.trim(),
+        )
+        .filter(Boolean)[0] || ""
+    );
+  }
+
+  return "";
+}
+
+function mapScheduleFromApi(
+  item: ScheduleApiItem,
+): ProjectScheduleItem {
+  const raw =
+    item as unknown as Record<
+      string,
+      unknown
+    >;
+
+  return {
+    id: String(item.id),
+
+    workspaceId:
+      item.workspaceId,
+
+    projectName:
+      item.projectName ||
+      "프로젝트",
+
+    customProjectName:
+      item.customProjectName,
+
+    title:
+      item.title || "제목 없는 일정",
+
+    description:
+      item.description || "",
+
+    startDate:
+      item.startDate,
+
+    endDate:
+      item.endDate,
+
+    status:
+      item.status,
+
+    hasDevlog:
+      Boolean(item.hasDevlog),
+
+    assigneeUserId:
+      getAssigneeUserId(raw),
+
+    assigneeName:
+      getAssigneeName(raw),
+
+    creatorId:
+      getNumberValue(
+        raw,
+        ["creatorId", "createdByUserId"],
+      ),
+
+    creatorName:
+      getStringValue(
+        raw,
+        ["creatorName", "createdByName"],
+      ),
+
+    createdAt:
+      item.createdAt,
+
+    updatedAt:
+      item.updatedAt,
+  };
+}
+
+function getProjectName(
+  schedule: ProjectScheduleItem,
+) {
+  return (
+    schedule.customProjectName ||
+    schedule.projectName ||
+    "프로젝트"
+  );
+}
+
+function isDateInScheduleRange(
+  schedule: ProjectScheduleItem,
+  dateKey: string,
+) {
+  return (
+    schedule.startDate <= dateKey &&
+    dateKey <= schedule.endDate
+  );
+}
+
+function getSchedulePeriodText(
+  schedule: ProjectScheduleItem,
+) {
+  if (
+    schedule.startDate ===
+    schedule.endDate
+  ) {
+    return formatShortDate(
+      schedule.startDate,
+    );
+  }
+
+  return `${formatShortDate(
+    schedule.startDate,
+  )} ~ ${formatShortDate(
+    schedule.endDate,
+  )}`;
+}
+
+/* =========================================================
+   CALENDAR
+   ========================================================= */
+
+function buildMonthCells(
+  year: number,
+  month: number,
+) {
+  const firstDate =
+    new Date(year, month, 1);
+
+  const start = new Date(
+    year,
+    month,
+    1 - firstDate.getDay(),
+  );
+
+  return Array.from(
+    { length: 42 },
+    (_, index) =>
+      addDays(start, index),
+  );
+}
+
+/* =========================================================
+   MAIN
+   ========================================================= */
 
 export default function ScheduleManagementPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const searchParams =
+    useSearchParams();
 
-  const workspaceId = normalizeWorkspaceId(
-    searchParams.get("workspaceId") ?? searchParams.get("id"),
+  const workspaceId =
+    normalizeWorkspaceId(
+      searchParams.get("workspaceId") ??
+        searchParams.get("id"),
+    );
+
+  const today = useMemo(
+    () => getTodayLocalDate(),
+    [],
   );
 
-  const today = useMemo(() => getTodayLocalDate(), []);
-  const todayDate = useMemo(() => getDateKeyFromDate(today), [today]);
+  const todayDate =
+    useMemo(
+      () =>
+        getDateKeyFromDate(today),
+      [today],
+    );
 
-  const [workspaces, setWorkspaces] = useState<WorkspaceSidebarItem[]>([]);
-  const [workspaceName, setWorkspaceName] = useState("프로젝트");
+  /* =====================================================
+     DATA
+     ===================================================== */
 
-  const [schedules, setSchedules] = useState<ProjectScheduleItem[]>([]);
-  const [allProjectTodaySchedules, setAllProjectTodaySchedules] = useState<
+  const [
+    workspaces,
+    setWorkspaces,
+  ] = useState<
+    WorkspaceSidebarItem[]
+  >([]);
+
+  const [
+    workspaceName,
+    setWorkspaceName,
+  ] = useState("프로젝트");
+
+  const [
+    schedules,
+    setSchedules,
+  ] = useState<
     ProjectScheduleItem[]
   >([]);
 
-  const [loading, setLoading] = useState(true);
-  const [allTodayLoading, setAllTodayLoading] = useState(true);
-  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [
+    allProjectTodaySchedules,
+    setAllProjectTodaySchedules,
+  ] = useState<
+    ProjectScheduleItem[]
+  >([]);
 
-  const [errorMessage, setErrorMessage] = useState("");
-  const [allTodayErrorMessage, setAllTodayErrorMessage] = useState("");
-  const [workspaceErrorMessage, setWorkspaceErrorMessage] = useState("");
+  const [
+    teamMembers,
+    setTeamMembers,
+  ] = useState<
+    WorkspaceMember[]
+  >([]);
 
-  const [viewMode, setViewMode] = useState<ScheduleViewMode>("calendar");
-  const [query, setQuery] = useState("");
-
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
+  const [
+    currentUserId,
+    setCurrentUserId,
+  ] = useState<number | null>(
     null,
   );
 
-  const [baseWeekDate, setBaseWeekDate] = useState<Date>(() =>
-    getTodayLocalDate(),
+  /* =====================================================
+     LOADING
+     ===================================================== */
+
+  const [
+    workspaceLoading,
+    setWorkspaceLoading,
+  ] = useState(true);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    teamMemberLoading,
+    setTeamMemberLoading,
+  ] = useState(false);
+
+  const [
+    allTodayLoading,
+    setAllTodayLoading,
+  ] = useState(false);
+
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  const [
+    deleting,
+    setDeleting,
+  ] = useState(false);
+
+  /* =====================================================
+     ERROR
+     ===================================================== */
+
+  const [
+    workspaceErrorMessage,
+    setWorkspaceErrorMessage,
+  ] = useState("");
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState("");
+
+  const [
+    memberErrorMessage,
+    setMemberErrorMessage,
+  ] = useState("");
+
+  /* =====================================================
+     SIDEBAR
+     ===================================================== */
+
+  const [
+    projectSearch,
+    setProjectSearch,
+  ] = useState("");
+
+const projectSearchInputRef =
+  useRef<HTMLInputElement | null>(null);
+
+  const [
+    projectFilter,
+    setProjectFilter,
+  ] = useState<ProjectFilter>(
+    "all",
   );
 
-  const [currentYear, setCurrentYear] = useState(today.getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [
+    isSidebarPinned,
+    setIsSidebarPinned,
+  ] = useState(true);
 
-  const [isProjectSidebarOpen, setIsProjectSidebarOpen] = useState(true);
-  const [sidebarPanelMode, setSidebarPanelMode] =
-    useState<SidebarPanelMode>("projects");
+  const [
+    isSidebarHovered,
+    setIsSidebarHovered,
+  ] = useState(false);
 
-  const [isDetailSidebarOpen, setIsDetailSidebarOpen] = useState(true);
-  const [detailSidebarWidth, setDetailSidebarWidth] = useState(
-    DETAIL_SIDEBAR_DEFAULT_WIDTH,
+  const [
+    canSidebarHoverExpand,
+    setCanSidebarHoverExpand,
+  ] = useState(true);
+
+  // 화면 최상단에서는 메인 영역과 같은 시작 높이를 유지하고,
+  // 스크롤이 시작된 뒤에는 사이드바가 WAIVS 헤더 아래에 붙도록 합니다.
+  const [
+    isPageScrolled,
+    setIsPageScrolled,
+  ] = useState(false);
+
+  const sidebarExpanded =
+    isSidebarPinned ||
+    (canSidebarHoverExpand &&
+      isSidebarHovered);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsPageScrolled(
+        window.scrollY > 0,
+      );
+    };
+
+    handleScroll();
+
+    window.addEventListener(
+      "scroll",
+      handleScroll,
+      {
+        passive: true,
+      },
+    );
+
+    return () => {
+      window.removeEventListener(
+        "scroll",
+        handleScroll,
+      );
+    };
+  }, []);
+
+      const openSidebarForSearch = () => {
+  setIsSidebarPinned(true);
+  setIsSidebarHovered(false);
+  setCanSidebarHoverExpand(true);
+
+  requestAnimationFrame(() => {
+    projectSearchInputRef.current?.focus();
+  });
+};
+
+const openSidebarForProjects = () => {
+  setIsSidebarPinned(true);
+  setIsSidebarHovered(false);
+  setCanSidebarHoverExpand(true);
+
+  setProjectFilter("all");
+};
+
+  /* =====================================================
+     VIEW / FILTER
+     ===================================================== */
+
+  const [
+    viewMode,
+    setViewMode,
+  ] =
+    useState<ScheduleViewMode>(
+      "board",
+    );
+
+  const [
+    query,
+    setQuery,
+  ] = useState("");
+
+  const [
+    smartFilter,
+    setSmartFilter,
+  ] =
+    useState<SmartFilter>("all");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] =
+    useState<StatusFilter>("all");
+
+  const [
+    todayScope,
+    setTodayScope,
+  ] =
+    useState<TodayScope>("selected");
+
+  const [
+    assigneeFilter,
+    setAssigneeFilter,
+  ] =
+    useState<string>("all");
+
+  /* =====================================================
+     MODAL
+     ===================================================== */
+
+  const [
+    selectedScheduleId,
+    setSelectedScheduleId,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    isDetailModalOpen,
+    setIsDetailModalOpen,
+  ] = useState(false);
+
+  const [
+    isCreateModalOpen,
+    setIsCreateModalOpen,
+  ] = useState(false);
+
+  const [
+    isEditModalOpen,
+    setIsEditModalOpen,
+  ] = useState(false);
+
+  const [
+    editingSchedule,
+    setEditingSchedule,
+  ] =
+    useState<ProjectScheduleItem | null>(
+      null,
+    );
+
+  /* =====================================================
+     CALENDAR
+     ===================================================== */
+
+  const [
+    currentYear,
+    setCurrentYear,
+  ] = useState(
+    today.getFullYear(),
   );
-  const [isDetailSidebarResizing, setIsDetailSidebarResizing] = useState(false);
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<ProjectScheduleItem | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [
+    currentMonth,
+    setCurrentMonth,
+  ] = useState(
+    today.getMonth(),
+  );
 
-  const [createForm, setCreateForm] = useState<CreateScheduleForm>({
-    title: "",
-    startDate: todayDate,
-    endDate: todayDate,
-    status: "todo",
-    description: "",
+  /* =====================================================
+     GANTT
+     ===================================================== */
+
+  const [
+    ganttStartDate,
+    setGanttStartDate,
+  ] = useState<Date>(() => {
+    const result =
+      getTodayLocalDate();
+
+    const day =
+      result.getDay();
+
+    const mondayDiff =
+      day === 0
+        ? -6
+        : 1 - day;
+
+    result.setDate(
+      result.getDate() +
+        mondayDiff,
+    );
+
+    return result;
   });
 
-  const [editForm, setEditForm] = useState<CreateScheduleForm>({
-    title: "",
-    startDate: todayDate,
-    endDate: todayDate,
-    status: "todo",
-    description: "",
-  });
+  /* =====================================================
+     FORM
+     ===================================================== */
 
-  const loadAllProjectTodaySchedules = async (
-    workspaceList: WorkspaceSidebarItem[],
-  ) => {
-    if (workspaceList.length === 0) {
-      setAllProjectTodaySchedules([]);
-      setAllTodayLoading(false);
+  const [
+    createForm,
+    setCreateForm,
+  ] =
+    useState<ScheduleForm>({
+      title: "",
+      description: "",
+      startDate: todayDate,
+      endDate: todayDate,
+      status: "todo",
+      assigneeUserId: null,
+    });
+
+  const [
+    editForm,
+    setEditForm,
+  ] =
+    useState<ScheduleForm>({
+      title: "",
+      description: "",
+      startDate: todayDate,
+      endDate: todayDate,
+      status: "todo",
+      assigneeUserId: null,
+    });
+
+  /* =====================================================
+     SELECTED WORKSPACE
+     ===================================================== */
+
+  const currentWorkspace =
+    useMemo(() => {
+      return (
+        workspaces.find(
+          (workspace) =>
+            workspace.id ===
+            workspaceId,
+        ) ?? null
+      );
+    }, [
+      workspaceId,
+      workspaces,
+    ]);
+
+  const currentMode:
+    WorkspaceMode =
+    currentWorkspace?.mode ||
+    (searchParams.get("mode") ===
+    "team"
+      ? "team"
+      : searchParams.get(
+            "view",
+          ) === "team"
+        ? "team"
+        : "personal");
+
+  const isTeam =
+    currentMode === "team";
+
+  const currentRole =
+    normalizeWorkspaceRole(
+      currentWorkspace?.role,
+    );
+
+  const ownerMember =
+    useMemo(() => {
+      return (
+        teamMembers.find(
+          (member) =>
+            getMemberRole(member) ===
+            "OWNER",
+        ) ?? null
+      );
+    }, [teamMembers]);
+
+  const myMember =
+    useMemo(() => {
+      if (!currentUserId) {
+        return null;
+      }
+
+      return (
+        teamMembers.find(
+          (member) =>
+            member.userId ===
+            currentUserId,
+        ) ?? null
+      );
+    }, [
+      currentUserId,
+      teamMembers,
+    ]);
+
+  /* =====================================================
+     LOAD CURRENT USER
+     ===================================================== */
+
+  useEffect(() => {
+    if (
+      typeof window ===
+      "undefined"
+    ) {
       return;
     }
 
-    try {
-      setAllTodayLoading(true);
-      setAllTodayErrorMessage("");
-
-      const results = await Promise.allSettled(
-        workspaceList.map((workspace) =>
-          fetchWorkspaceSchedulesApi({ workspaceId: workspace.id }),
-        ),
+    const storedId =
+      localStorage.getItem(
+        "userId",
       );
 
-      const merged = results.flatMap((result) => {
-        if (result.status !== "fulfilled") return [];
-        return result.value.map(mapScheduleFromApi);
-      });
+    const parsed =
+      Number(storedId);
 
-      const todayItems = merged
-        .filter((item) => isDateInScheduleRange(item, todayDate))
-        .sort((a, b) => {
-          const statusOrder: Record<ScheduleStatus, number> = {
-            delayed: 0,
-            progress: 1,
-            todo: 2,
-            done: 3,
-          };
-
-          const statusCompare = statusOrder[a.status] - statusOrder[b.status];
-          if (statusCompare !== 0) return statusCompare;
-
-          return getScheduleStartDate(a).localeCompare(getScheduleStartDate(b));
-        });
-
-      setAllProjectTodaySchedules(todayItems);
-    } catch {
-      setAllTodayErrorMessage("전체 프로젝트의 오늘 일정을 불러오지 못했습니다.");
-    } finally {
-      setAllTodayLoading(false);
+    if (
+      Number.isFinite(parsed)
+    ) {
+      setCurrentUserId(
+        parsed,
+      );
     }
-  };
+  }, []);
 
-  const loadWorkspaces = async () => {
-    try {
-      setWorkspaceLoading(true);
-      setWorkspaceErrorMessage("");
+  /* =====================================================
+     LOAD ALL TODAY
+     ===================================================== */
 
-      const response = await getMyWorkspacesByTokenApi();
-      const mapped = extractWorkspaceList(response)
-        .map(mapWorkspaceFromApi)
-        .filter((item): item is WorkspaceSidebarItem => Boolean(item));
-
-      setWorkspaces(mapped);
-      void loadAllProjectTodaySchedules(mapped);
-
-      const matchedWorkspace = mapped.find(
-        (workspace) => workspace.id === workspaceId,
-      );
-
-      if (matchedWorkspace) {
-        setWorkspaceName(matchedWorkspace.name);
+  const loadAllProjectTodaySchedules =
+    async (
+      workspaceList: WorkspaceSidebarItem[],
+    ) => {
+      if (
+        workspaceList.length ===
+        0
+      ) {
+        setAllProjectTodaySchedules(
+          [],
+        );
         return;
       }
 
-      if (!workspaceId && mapped[0]) {
-        const params = new URLSearchParams(searchParams.toString());
+      try {
+        setAllTodayLoading(true);
 
-        params.set("workspaceId", mapped[0].id);
-        params.set("mode", mapped[0].mode);
+        const results =
+          await Promise.allSettled(
+            workspaceList.map(
+              (workspace) =>
+                fetchWorkspaceSchedulesApi(
+                  {
+                    workspaceId:
+                      workspace.id,
+                  },
+                ),
+            ),
+          );
 
-        setWorkspaceName(mapped[0].name);
-        router.replace(`${pathname}?${params.toString()}`);
+        const merged =
+          results.flatMap(
+            (result) => {
+              if (
+                result.status !==
+                "fulfilled"
+              ) {
+                return [];
+              }
+
+              return result.value.map(
+                mapScheduleFromApi,
+              );
+            },
+          );
+
+        const todayItems =
+          merged
+            .filter((item) =>
+              isDateInScheduleRange(
+                item,
+                todayDate,
+              ),
+            )
+            .sort((a, b) =>
+              a.startDate.localeCompare(
+                b.startDate,
+              ),
+            );
+
+        setAllProjectTodaySchedules(
+          todayItems,
+        );
+      } finally {
+        setAllTodayLoading(false);
       }
-    } catch {
-      setWorkspaceErrorMessage("프로젝트 목록을 불러오지 못했습니다.");
-      setAllTodayLoading(false);
-    } finally {
-      setWorkspaceLoading(false);
-    }
-  };
+    };
 
-  const loadSchedules = async () => {
-    if (!workspaceId) {
-      setLoading(false);
-      setErrorMessage(
-        "workspaceId가 없습니다. 왼쪽 프로젝트 목록에서 프로젝트를 선택해주세요.",
-      );
-      return;
-    }
+  /* =====================================================
+     LOAD WORKSPACES
+     ===================================================== */
 
-    try {
-      setLoading(true);
-      setErrorMessage("");
+  const loadWorkspaces =
+    async () => {
+      try {
+        setWorkspaceLoading(
+          true,
+        );
 
-      const data = await fetchWorkspaceSchedulesApi({ workspaceId });
-      const mapped = data.map(mapScheduleFromApi);
+        setWorkspaceErrorMessage(
+          "",
+        );
 
-      setSchedules(mapped);
+        const response =
+          await getMyWorkspacesByTokenApi();
 
-      const currentProjectName =
-        mapped[0]?.customProjectName || mapped[0]?.projectName;
+        const mapped =
+          extractWorkspaceList(
+            response,
+          )
+            .map(
+              mapWorkspaceFromApi,
+            )
+            .filter(
+              (
+                item,
+              ): item is WorkspaceSidebarItem =>
+                Boolean(item),
+            );
 
-      if (currentProjectName) {
-        setWorkspaceName(currentProjectName);
+        setWorkspaces(mapped);
+
+        void loadAllProjectTodaySchedules(
+          mapped,
+        );
+
+        const matched =
+          mapped.find(
+            (workspace) =>
+              workspace.id ===
+              workspaceId,
+          );
+
+        if (matched) {
+          setWorkspaceName(
+            matched.name,
+          );
+
+          if (
+            typeof window !==
+            "undefined"
+          ) {
+            localStorage.setItem(
+              "currentWorkspaceId",
+              matched.id,
+            );
+
+            localStorage.setItem(
+              "currentWorkspaceMode",
+              matched.mode,
+            );
+          }
+
+          return;
+        }
+
+        if (
+          !workspaceId &&
+          mapped[0]
+        ) {
+          const first =
+            mapped[0];
+
+          const params =
+            new URLSearchParams(
+              searchParams.toString(),
+            );
+
+          params.set(
+            "workspaceId",
+            first.id,
+          );
+
+          params.set(
+            "mode",
+            first.mode,
+          );
+
+          params.set(
+            "view",
+            first.mode,
+          );
+
+          setWorkspaceName(
+            first.name,
+          );
+
+          router.replace(
+            `${pathname}?${params.toString()}`,
+          );
+        }
+      } catch (error) {
+        setWorkspaceErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "프로젝트 목록을 불러오지 못했습니다.",
+        );
+      } finally {
+        setWorkspaceLoading(
+          false,
+        );
+      }
+    };
+
+  /* =====================================================
+     LOAD SCHEDULES
+     ===================================================== */
+
+  const loadSchedules =
+    async () => {
+      if (!workspaceId) {
+        setSchedules([]);
+
+        setLoading(false);
+
+        return;
       }
 
-      setSelectedScheduleId((prev) => {
-        if (prev && mapped.some((item) => item.id === prev)) return prev;
-        return mapped[0]?.id ?? null;
-      });
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "일정 목록을 불러오지 못했습니다.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        setLoading(true);
+
+        setErrorMessage("");
+
+        const data =
+          await fetchWorkspaceSchedulesApi(
+            {
+              workspaceId,
+            },
+          );
+
+        const mapped =
+          data.map(
+            mapScheduleFromApi,
+          );
+
+        setSchedules(mapped);
+
+        const projectName =
+          mapped[0]
+            ?.customProjectName ||
+          mapped[0]
+            ?.projectName;
+
+        if (projectName) {
+          setWorkspaceName(
+            projectName,
+          );
+        }
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "일정 목록을 불러오지 못했습니다.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  /* =====================================================
+     LOAD MEMBERS
+     ===================================================== */
+
+  const loadTeamMembers =
+    async () => {
+      if (
+        !workspaceId ||
+        !isTeam
+      ) {
+        setTeamMembers([]);
+        setMemberErrorMessage(
+          "",
+        );
+        return;
+      }
+
+      try {
+        setTeamMemberLoading(
+          true,
+        );
+
+        setMemberErrorMessage(
+          "",
+        );
+
+        const response =
+          await getWorkspaceMembersApi(
+            workspaceId,
+          );
+
+        const array =
+          Array.isArray(response)
+            ? response
+            : [];
+
+        const mapped =
+          array
+            .map(normalizeMember)
+            .filter(
+              (
+                item,
+              ): item is WorkspaceMember =>
+                Boolean(item),
+            );
+
+        mapped.sort(
+          (a, b) => {
+            const aOwner =
+              getMemberRole(a) ===
+              "OWNER";
+
+            const bOwner =
+              getMemberRole(b) ===
+              "OWNER";
+
+            if (
+              aOwner !==
+              bOwner
+            ) {
+              return aOwner
+                ? -1
+                : 1;
+            }
+
+            return getMemberName(
+              a,
+            ).localeCompare(
+              getMemberName(b),
+            );
+          },
+        );
+
+        setTeamMembers(mapped);
+      } catch (error) {
+        setTeamMembers([]);
+
+        setMemberErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "팀원 목록을 불러오지 못했습니다.",
+        );
+      } finally {
+        setTeamMemberLoading(
+          false,
+        );
+      }
+    };
+
+  /* =====================================================
+     LOAD EFFECT
+     ===================================================== */
 
   useEffect(() => {
     void loadWorkspaces();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const matchedWorkspace = workspaces.find(
-      (workspace) => workspace.id === workspaceId,
-    );
+    const matched =
+      workspaces.find(
+        (workspace) =>
+          workspace.id ===
+          workspaceId,
+      );
 
-    if (matchedWorkspace) {
-      setWorkspaceName(matchedWorkspace.name);
+    if (matched) {
+      setWorkspaceName(
+        matched.name,
+      );
     }
 
+    setAssigneeFilter("all");
+    setSmartFilter("all");
+
     void loadSchedules();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
-  const filteredSchedules = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
+  useEffect(() => {
+    void loadTeamMembers();
 
-    return schedules.filter((item) => {
-      const projectName = getProjectName(item);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    workspaceId,
+    isTeam,
+  ]);
 
-      return (
-        !keyword ||
-        item.title.toLowerCase().includes(keyword) ||
-        item.description.toLowerCase().includes(keyword) ||
-        projectName.toLowerCase().includes(keyword)
+  /* =====================================================
+     SIDEBAR DATA
+     ===================================================== */
+
+  const personalCount =
+    workspaces.filter(
+      (workspace) =>
+        workspace.mode ===
+        "personal",
+    ).length;
+
+  const teamCount =
+    workspaces.filter(
+      (workspace) =>
+        workspace.mode ===
+        "team",
+    ).length;
+
+  const filteredSidebarWorkspaces =
+    useMemo(() => {
+      const keyword =
+        projectSearch
+          .trim()
+          .toLowerCase();
+
+      return workspaces.filter(
+        (workspace) => {
+          const matchesMode =
+            projectFilter ===
+              "all" ||
+            workspace.mode ===
+              projectFilter;
+
+          const matchesKeyword =
+            !keyword ||
+            workspace.name
+              .toLowerCase()
+              .includes(keyword);
+
+          return (
+            matchesMode &&
+            matchesKeyword
+          );
+        },
       );
-    });
-  }, [schedules, query]);
+    }, [
+      projectFilter,
+      projectSearch,
+      workspaces,
+    ]);
 
-  const selectedSchedule =
-    schedules.find((item) => item.id === selectedScheduleId) ?? null;
+  const personalWorkspaces =
+    filteredSidebarWorkspaces.filter(
+      (workspace) =>
+        workspace.mode ===
+        "personal",
+    );
 
-  const selectedProjectName =
-    selectedSchedule?.projectName ||
-    schedules[0]?.projectName ||
-    workspaceName ||
-    "프로젝트";
+  const teamWorkspaces =
+    filteredSidebarWorkspaces.filter(
+      (workspace) =>
+        workspace.mode ===
+        "team",
+    );
 
-  const totalCount = filteredSchedules.length;
-  const progressCount = filteredSchedules.filter(
-    (item) => item.status === "progress",
-  ).length;
-  const doneCount = filteredSchedules.filter(
-    (item) => item.status === "done",
-  ).length;
-  const delayedCount = filteredSchedules.filter(
-    (item) => item.status === "delayed",
-  ).length;
+  /* =====================================================
+     SOURCE DATA
+     ===================================================== */
+
+  const sourceSchedules =
+    useMemo(() => {
+      if (
+        smartFilter ===
+          "today" &&
+        todayScope === "all"
+      ) {
+        return allProjectTodaySchedules;
+      }
+
+      return schedules;
+    }, [
+      allProjectTodaySchedules,
+      schedules,
+      smartFilter,
+      todayScope,
+    ]);
+
+  const filteredSchedules =
+    useMemo(() => {
+      const keyword =
+        query
+          .trim()
+          .toLowerCase();
+
+      return sourceSchedules.filter(
+        (schedule) => {
+          if (
+            statusFilter !==
+              "all" &&
+            schedule.status !==
+              statusFilter
+          ) {
+            return false;
+          }
+
+          if (
+            smartFilter ===
+              "today" &&
+            todayScope ===
+              "selected" &&
+            !isDateInScheduleRange(
+              schedule,
+              todayDate,
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            smartFilter ===
+              "noDevlog" &&
+            schedule.hasDevlog
+          ) {
+            return false;
+          }
+
+          if (
+            smartFilter ===
+            "mine"
+          ) {
+            if (
+              !currentUserId
+            ) {
+              return false;
+            }
+
+            const idMatched =
+              schedule.assigneeUserId ===
+              currentUserId;
+
+            const nameMatched =
+              myMember &&
+              schedule.assigneeName &&
+              schedule.assigneeName ===
+                getMemberName(
+                  myMember,
+                );
+
+            if (
+              !idMatched &&
+              !nameMatched
+            ) {
+              return false;
+            }
+          }
+
+          if (
+            assigneeFilter !==
+            "all"
+          ) {
+            const targetId =
+              Number(
+                assigneeFilter,
+              );
+
+            const targetMember =
+              teamMembers.find(
+                (member) =>
+                  member.userId ===
+                  targetId,
+              );
+
+            const idMatched =
+              schedule.assigneeUserId ===
+              targetId;
+
+            const nameMatched =
+              targetMember &&
+              schedule.assigneeName ===
+                getMemberName(
+                  targetMember,
+                );
+
+            if (
+              !idMatched &&
+              !nameMatched
+            ) {
+              return false;
+            }
+          }
+
+          if (
+            keyword &&
+            !schedule.title
+              .toLowerCase()
+              .includes(keyword) &&
+            !schedule.description
+              .toLowerCase()
+              .includes(keyword) &&
+            !getProjectName(
+              schedule,
+            )
+              .toLowerCase()
+              .includes(keyword) &&
+            !schedule.assigneeName
+              ?.toLowerCase()
+              .includes(keyword)
+          ) {
+            return false;
+          }
+
+          return true;
+        },
+      );
+    }, [
+      assigneeFilter,
+      currentUserId,
+      myMember,
+      query,
+      smartFilter,
+      sourceSchedules,
+      statusFilter,
+      teamMembers,
+      todayDate,
+      todayScope,
+    ]);
+
+  /* =====================================================
+     SUMMARY
+     ===================================================== */
+
+  const totalCount =
+    schedules.length;
+
+  const todoCount =
+    schedules.filter(
+      (schedule) =>
+        schedule.status ===
+        "todo",
+    ).length;
+
+  const progressCount =
+    schedules.filter(
+      (schedule) =>
+        schedule.status ===
+        "progress",
+    ).length;
+
+  const doneCount =
+    schedules.filter(
+      (schedule) =>
+        schedule.status ===
+        "done",
+    ).length;
+
+  const delayedCount =
+    schedules.filter(
+      (schedule) =>
+        schedule.status ===
+        "delayed",
+    ).length;
+
+  const noDevlogCount =
+    schedules.filter(
+      (schedule) =>
+        !schedule.hasDevlog,
+    ).length;
+
+  const todayCount =
+    schedules.filter(
+      (schedule) =>
+        isDateInScheduleRange(
+          schedule,
+          todayDate,
+        ),
+    ).length;
 
   const progressRate =
-    totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+    totalCount === 0
+      ? 0
+      : Math.round(
+          (doneCount /
+            totalCount) *
+            100,
+        );
 
-  const todayTodos = filteredSchedules.filter(
-    (item) => isDateInScheduleRange(item, todayDate) && item.status !== "done",
-  );
-    const selectedProjectTodaySchedules = schedules
-    .filter((item) => isDateInScheduleRange(item, todayDate))
-    .sort((a, b) => {
-      const statusOrder: Record<ScheduleStatus, number> = {
-        delayed: 0,
-        progress: 1,
-        todo: 2,
-        done: 3,
-      };
+  /* =====================================================
+     SELECTED SCHEDULE
+     ===================================================== */
 
-      const statusCompare = statusOrder[a.status] - statusOrder[b.status];
-      if (statusCompare !== 0) return statusCompare;
+  const selectedSchedule =
+    useMemo(() => {
+      if (
+        !selectedScheduleId
+      ) {
+        return null;
+      }
 
-      return getScheduleStartDate(a).localeCompare(getScheduleStartDate(b));
-    });
+      return (
+        schedules.find(
+          (schedule) =>
+            schedule.id ===
+            selectedScheduleId,
+        ) ??
+        allProjectTodaySchedules.find(
+          (schedule) =>
+            schedule.id ===
+            selectedScheduleId,
+        ) ??
+        null
+      );
+    }, [
+      allProjectTodaySchedules,
+      schedules,
+      selectedScheduleId,
+    ]);
 
-  const noDevlogSchedules = filteredSchedules.filter((item) => !item.hasDevlog);
+  /* =====================================================
+     ACTION: WORKSPACE
+     ===================================================== */
 
-  const recentDoneSchedule =
-    filteredSchedules.find((item) => item.status === "done") ?? null;
-
-  const shouldShowDetailSidebar = Boolean(isDetailSidebarOpen && selectedSchedule);
-
-  const layoutGridTemplateColumns = useMemo(() => {
-    const leftColumn = isProjectSidebarOpen ? "300px" : "84px";
-
-    if (shouldShowDetailSidebar) {
-      return `${leftColumn} minmax(0, 1fr) ${detailSidebarWidth}px`;
-    }
-
-    return `${leftColumn} minmax(0, 1fr)`;
-  }, [detailSidebarWidth, isProjectSidebarOpen, shouldShowDetailSidebar]);
-
-  const handleDetailSidebarResizeStart = (
-    event: React.PointerEvent<HTMLDivElement>,
+  const handleSelectWorkspace = (
+    workspace: WorkspaceSidebarItem,
   ) => {
-    event.preventDefault();
-    setIsDetailSidebarResizing(true);
-  };
-
-  useEffect(() => {
-    if (!isDetailSidebarResizing) return;
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const nextWidth = window.innerWidth - event.clientX;
-      const limitedWidth = Math.min(
-        DETAIL_SIDEBAR_MAX_WIDTH,
-        Math.max(DETAIL_SIDEBAR_MIN_WIDTH, nextWidth),
+    const params =
+      new URLSearchParams(
+        searchParams.toString(),
       );
 
-      setDetailSidebarWidth(limitedWidth);
-    };
+    params.set(
+      "workspaceId",
+      workspace.id,
+    );
 
-    const handlePointerUp = () => {
-      setIsDetailSidebarResizing(false);
-    };
+    params.set(
+      "mode",
+      workspace.mode,
+    );
 
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+    params.set(
+      "view",
+      workspace.mode,
+    );
 
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
+    if (
+      typeof window !==
+      "undefined"
+    ) {
+      localStorage.setItem(
+        "currentWorkspaceId",
+        workspace.id,
+      );
 
-    return () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      localStorage.setItem(
+        "currentWorkspaceMode",
+        workspace.mode,
+      );
+    }
 
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-  }, [isDetailSidebarResizing]);
-
-  const weekDays = getWeekDays(baseWeekDate);
-  const weekStart = weekDays[0];
-  const weekEnd = weekDays[6];
-
-  const handleSelectWorkspace = (workspace: WorkspaceSidebarItem) => {
-    const params = new URLSearchParams(searchParams.toString());
-
-    params.set("workspaceId", workspace.id);
-    params.set("mode", workspace.mode);
-
-    router.push(`${pathname}?${params.toString()}`);
+    router.push(
+      `${pathname}?${params.toString()}`,
+    );
   };
 
-  const updateScheduleInState = (updated: ProjectScheduleItem) => {
+  const handleToggleSidebar =
+    () => {
+      if (
+        isSidebarPinned
+      ) {
+        setIsSidebarPinned(
+          false,
+        );
+
+        setIsSidebarHovered(
+          false,
+        );
+
+        setCanSidebarHoverExpand(
+          false,
+        );
+
+        return;
+      }
+
+      setIsSidebarPinned(true);
+
+      setCanSidebarHoverExpand(
+        true,
+      );
+    };
+
+  /* =====================================================
+     STATE UPDATE HELPERS
+     ===================================================== */
+
+  const updateScheduleInState = (
+    updated: ProjectScheduleItem,
+  ) => {
     setSchedules((prev) =>
-      prev.map((item) => (item.id === updated.id ? updated : item)),
+      prev.map((schedule) =>
+        schedule.id ===
+        updated.id
+          ? updated
+          : schedule,
+      ),
     );
 
-    setAllProjectTodaySchedules((prev) => {
-      const isTodaySchedule = isDateInScheduleRange(updated, todayDate);
-      const exists = prev.some((item) => item.id === updated.id);
+    setAllProjectTodaySchedules(
+      (prev) => {
+        const isToday =
+          isDateInScheduleRange(
+            updated,
+            todayDate,
+          );
 
-      if (!isTodaySchedule) {
-        return prev.filter((item) => item.id !== updated.id);
-      }
+        const exists =
+          prev.some(
+            (schedule) =>
+              schedule.id ===
+              updated.id,
+          );
 
-      if (exists) {
-        return prev.map((item) => (item.id === updated.id ? updated : item));
-      }
+        if (!isToday) {
+          return prev.filter(
+            (schedule) =>
+              schedule.id !==
+              updated.id,
+          );
+        }
 
-      return [updated, ...prev];
-    });
-  };
+        if (exists) {
+          return prev.map(
+            (schedule) =>
+              schedule.id ===
+              updated.id
+                ? updated
+                : schedule,
+          );
+        }
 
-  const removeScheduleFromState = (scheduleId: string) => {
-    setSchedules((prev) => {
-      const next = prev.filter((item) => item.id !== scheduleId);
-
-      setSelectedScheduleId((currentId) => {
-        if (currentId !== scheduleId) return currentId;
-        return next[0]?.id ?? null;
-      });
-
-      if (next.length === 0) {
-        setIsDetailSidebarOpen(false);
-      }
-
-      return next;
-    });
-
-    setAllProjectTodaySchedules((prev) =>
-      prev.filter((item) => item.id !== scheduleId),
+        return [
+          updated,
+          ...prev,
+        ];
+      },
     );
   };
 
-  const openScheduleDetail = (id: string) => {
-    setSelectedScheduleId(id);
-    setIsDetailSidebarOpen(true);
-  };
-
-  const changeStatus = async (id: string, status: ScheduleStatus) => {
-    try {
-      const updated = await updateScheduleStatusApi({
-        scheduleId: id,
-        status,
-      });
-
-      updateScheduleInState(mapScheduleFromApi(updated));
-    } catch (error) {
-      alert(
-        error instanceof Error
-          ? error.message
-          : "일정 상태 변경에 실패했습니다.",
+  const removeScheduleFromState =
+    (
+      scheduleId: string,
+    ) => {
+      setSchedules((prev) =>
+        prev.filter(
+          (schedule) =>
+            schedule.id !==
+            scheduleId,
+        ),
       );
-    }
-  };
 
-  const moveScheduleDate = async (id: string, nextStartDate: string) => {
-    const target = schedules.find((item) => item.id === id);
-    if (!target) return;
-
-    const currentStartDate = getScheduleStartDate(target);
-    const currentEndDate = getScheduleEndDate(target);
-
-    const startTime = new Date(currentStartDate).getTime();
-    const endTime = new Date(currentEndDate).getTime();
-
-    const durationDays = Math.max(
-      0,
-      Math.round((endTime - startTime) / (1000 * 60 * 60 * 24)),
-    );
-
-    const nextStart = new Date(nextStartDate);
-    const nextEnd = new Date(nextStart);
-    nextEnd.setDate(nextStart.getDate() + durationDays);
-
-    const nextEndDate = formatDateKey(
-      nextEnd.getFullYear(),
-      nextEnd.getMonth(),
-      nextEnd.getDate(),
-    );
-
-    try {
-      const updated = await updateSchedulePeriodApi({
-        scheduleId: id,
-        startDate: nextStartDate,
-        endDate: nextEndDate,
-      });
-
-      updateScheduleInState(mapScheduleFromApi(updated));
-    } catch (error) {
-      alert(
-        error instanceof Error
-          ? error.message
-          : "일정 날짜 변경에 실패했습니다.",
+      setAllProjectTodaySchedules(
+        (prev) =>
+          prev.filter(
+            (schedule) =>
+              schedule.id !==
+              scheduleId,
+          ),
       );
-    }
+
+      if (
+        selectedScheduleId ===
+        scheduleId
+      ) {
+        setSelectedScheduleId(
+          null,
+        );
+
+        setIsDetailModalOpen(
+          false,
+        );
+      }
+    };
+
+  /* =====================================================
+     OPEN DETAIL
+     ===================================================== */
+
+  const openScheduleDetail = (
+    schedule: ProjectScheduleItem,
+  ) => {
+    setSelectedScheduleId(
+      schedule.id,
+    );
+
+    setIsDetailModalOpen(
+      true,
+    );
   };
 
-  const openCreateModal = () => {
-    const defaultDate =
-      viewMode === "month"
-        ? formatDateKey(currentYear, currentMonth, 1)
-        : getDateKeyFromDate(baseWeekDate);
+  /* =====================================================
+     STATUS
+     ===================================================== */
+
+  const changeStatus =
+    async (
+      scheduleId: string,
+      status: ScheduleStatus,
+    ) => {
+      try {
+        const updated =
+          await updateScheduleStatusApi(
+            {
+              scheduleId,
+              status,
+            },
+          );
+
+        updateScheduleInState(
+          mapScheduleFromApi(
+            updated,
+          ),
+        );
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "일정 상태 변경에 실패했습니다.",
+        );
+      }
+    };
+
+  /* =====================================================
+     MOVE DATE
+     ===================================================== */
+
+  const moveScheduleDate =
+    async (
+      scheduleId: string,
+      nextStartDate: string,
+    ) => {
+      const target =
+        [
+          ...schedules,
+          ...allProjectTodaySchedules,
+        ].find(
+          (schedule) =>
+            schedule.id ===
+            scheduleId,
+        );
+
+      if (!target) {
+        return;
+      }
+
+      const start =
+        parseDateKey(
+          target.startDate,
+        );
+
+      const end =
+        parseDateKey(
+          target.endDate,
+        );
+
+      const duration =
+        Math.max(
+          0,
+          getDayDifference(
+            start,
+            end,
+          ),
+        );
+
+      const nextStart =
+        parseDateKey(
+          nextStartDate,
+        );
+
+      const nextEnd =
+        addDays(
+          nextStart,
+          duration,
+        );
+
+      const nextEndDate =
+        getDateKeyFromDate(
+          nextEnd,
+        );
+
+      if (
+        target.startDate ===
+          nextStartDate &&
+        target.endDate ===
+          nextEndDate
+      ) {
+        return;
+      }
+
+      try {
+        const updated =
+          await updateSchedulePeriodApi(
+            {
+              scheduleId,
+              startDate:
+                nextStartDate,
+              endDate:
+                nextEndDate,
+            },
+          );
+
+        updateScheduleInState(
+          mapScheduleFromApi(
+            updated,
+          ),
+        );
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "일정 날짜 변경에 실패했습니다.",
+        );
+      }
+    };
+
+  /* =====================================================
+     CREATE
+     ===================================================== */
+
+  const openCreateModal = (
+    defaultDate = todayDate,
+  ) => {
+    const defaultAssignee =
+      isTeam
+        ? ownerMember?.userId ??
+          null
+        : null;
 
     setCreateForm({
       title: "",
-      startDate: defaultDate,
-      endDate: defaultDate,
-      status: "todo",
       description: "",
+      startDate:
+        defaultDate,
+      endDate:
+        defaultDate,
+      status: "todo",
+      assigneeUserId:
+        defaultAssignee,
     });
 
-    setIsCreateModalOpen(true);
+    setIsCreateModalOpen(
+      true,
+    );
   };
 
-  const createSchedule = async () => {
-    if (!workspaceId) {
-      alert(
-        "workspaceId가 없습니다. 왼쪽 프로젝트 목록에서 프로젝트를 선택해주세요.",
-      );
-      return;
-    }
+  const createSchedule =
+    async () => {
+      if (!workspaceId) {
+        alert(
+          "프로젝트를 먼저 선택해주세요.",
+        );
 
-    if (!createForm.title.trim()) {
-      alert("일정 제목을 입력해주세요.");
-      return;
-    }
-
-    if (!createForm.startDate) {
-      alert("시작일을 선택해주세요.");
-      return;
-    }
-
-    if (!createForm.endDate) {
-      alert("종료일을 선택해주세요.");
-      return;
-    }
-
-    if (createForm.startDate > createForm.endDate) {
-      alert("종료일은 시작일보다 빠를 수 없습니다.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const created = await createWorkspaceScheduleApi({
-        workspaceId,
-        title: createForm.title.trim(),
-        description:
-          createForm.description.trim() || "등록된 상세 내용이 없습니다.",
-        startDate: createForm.startDate,
-        endDate: createForm.endDate,
-        status: createForm.status,
-      });
-
-      const mapped = mapScheduleFromApi(created);
-
-      setSchedules((prev) => [mapped, ...prev]);
-
-      if (isDateInScheduleRange(mapped, todayDate)) {
-        setAllProjectTodaySchedules((prev) => [mapped, ...prev]);
+        return;
       }
 
-      setWorkspaceName(mapped.projectName || workspaceName);
-      setSelectedScheduleId(mapped.id);
-      setIsDetailSidebarOpen(true);
-      setIsCreateModalOpen(false);
-    } catch (error) {
-      alert(
-        error instanceof Error ? error.message : "일정 생성에 실패했습니다.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+      if (
+        !createForm.title.trim()
+      ) {
+        alert(
+          "일정 제목을 입력해주세요.",
+        );
 
-  const openEditModal = (schedule: ProjectScheduleItem) => {
-    setEditingSchedule(schedule);
+        return;
+      }
+
+      if (
+        !createForm.startDate ||
+        !createForm.endDate
+      ) {
+        alert(
+          "시작일과 종료일을 입력해주세요.",
+        );
+
+        return;
+      }
+
+      if (
+        createForm.startDate >
+        createForm.endDate
+      ) {
+        alert(
+          "종료일은 시작일보다 빠를 수 없습니다.",
+        );
+
+        return;
+      }
+
+      const assignee =
+        teamMembers.find(
+          (member) =>
+            member.userId ===
+            createForm.assigneeUserId,
+        );
+
+      try {
+        setSaving(true);
+
+        /*
+         * 기존 일정 API 필드는 그대로 유지.
+         *
+         * assigneeUserId / assigneeUserIds / participants는
+         * 현재 백엔드가 담당자 필드를 지원하는 경우 바로 사용할 수 있게
+         * 추가 payload로 같이 전달한다.
+         */
+        type CreatePayload =
+          Parameters<
+            typeof createWorkspaceScheduleApi
+          >[0] & {
+            assigneeUserId?: number | null;
+            assigneeUserIds?: number[];
+            participants?: string;
+          };
+
+        const payload: CreatePayload =
+          {
+            workspaceId,
+
+            title:
+              createForm.title.trim(),
+
+            description:
+              createForm.description.trim() ||
+              "등록된 상세 내용이 없습니다.",
+
+            startDate:
+              createForm.startDate,
+
+            endDate:
+              createForm.endDate,
+
+            status:
+              createForm.status,
+
+            assigneeUserId:
+              createForm.assigneeUserId,
+
+            assigneeUserIds:
+              createForm.assigneeUserId
+                ? [
+                    createForm.assigneeUserId,
+                  ]
+                : [],
+
+            participants:
+              assignee
+                ? getMemberName(
+                    assignee,
+                  )
+                : "",
+          };
+
+        const created =
+          await createWorkspaceScheduleApi(
+            payload,
+          );
+
+        const mapped =
+          mapScheduleFromApi(
+            created,
+          );
+
+        /*
+         * API 응답에서 아직 담당자 필드를 반환하지 않는 경우에도
+         * 현재 UI에는 선택한 담당자를 즉시 반영한다.
+         */
+        const nextSchedule: ProjectScheduleItem =
+          {
+            ...mapped,
+
+            assigneeUserId:
+              mapped.assigneeUserId ??
+              createForm.assigneeUserId,
+
+            assigneeName:
+              mapped.assigneeName ||
+              (assignee
+                ? getMemberName(
+                    assignee,
+                  )
+                : ""),
+          };
+
+        setSchedules(
+          (prev) => [
+            nextSchedule,
+            ...prev,
+          ],
+        );
+
+        if (
+          isDateInScheduleRange(
+            nextSchedule,
+            todayDate,
+          )
+        ) {
+          setAllProjectTodaySchedules(
+            (prev) => [
+              nextSchedule,
+              ...prev,
+            ],
+          );
+        }
+
+        setSelectedScheduleId(
+          nextSchedule.id,
+        );
+
+        setIsCreateModalOpen(
+          false,
+        );
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "일정 생성에 실패했습니다.",
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /* =====================================================
+     EDIT
+     ===================================================== */
+
+  const openEditModal = (
+    schedule: ProjectScheduleItem,
+  ) => {
+    setEditingSchedule(
+      schedule,
+    );
+
     setEditForm({
       title: schedule.title,
-      startDate: getScheduleStartDate(schedule),
-      endDate: getScheduleEndDate(schedule),
-      status: schedule.status,
-      description: schedule.description || "",
+      description:
+        schedule.description || "",
+      startDate:
+        schedule.startDate,
+      endDate:
+        schedule.endDate,
+      status:
+        schedule.status,
+      assigneeUserId:
+        schedule.assigneeUserId ??
+        null,
     });
-    setIsEditModalOpen(true);
-  };
 
-  const updateSchedule = async () => {
-    if (!editingSchedule) return;
-
-    if (!editForm.title.trim()) {
-      alert("일정 제목을 입력해주세요.");
-      return;
-    }
-
-    if (!editForm.startDate) {
-      alert("시작일을 선택해주세요.");
-      return;
-    }
-
-    if (!editForm.endDate) {
-      alert("종료일을 선택해주세요.");
-      return;
-    }
-
-    if (editForm.startDate > editForm.endDate) {
-      alert("종료일은 시작일보다 빠를 수 없습니다.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const updated = await updateScheduleApi({
-        scheduleId: editingSchedule.id,
-        title: editForm.title.trim(),
-        description:
-          editForm.description.trim() || "등록된 상세 내용이 없습니다.",
-        startDate: editForm.startDate,
-        endDate: editForm.endDate,
-        status: editForm.status,
-      });
-
-      const mapped = mapScheduleFromApi(updated);
-      updateScheduleInState(mapped);
-      setSelectedScheduleId(mapped.id);
-      setIsDetailSidebarOpen(true);
-      setIsEditModalOpen(false);
-      setEditingSchedule(null);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "일정 수정에 실패했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteSchedule = async (scheduleId: string) => {
-    const target = schedules.find((item) => item.id === scheduleId);
-    const title = target?.title ?? "선택한 일정";
-
-    if (!window.confirm(`'${title}' 일정을 삭제할까요? 삭제 후 복구할 수 없습니다.`)) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteScheduleApi({ scheduleId });
-      removeScheduleFromState(scheduleId);
-      setIsEditModalOpen(false);
-
-      if (editingSchedule?.id === scheduleId) {
-        setEditingSchedule(null);
-      }
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "일정 삭제에 실패했습니다.");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const markDevlogWritten = () => {
-    alert("개발일지 작성은 개발일지 화면에서 연결 일정으로 작성해주세요.");
-  };
-
-  const moveWeek = (amount: number) => {
-    const nextDate = new Date(baseWeekDate);
-    nextDate.setDate(baseWeekDate.getDate() + amount * 7);
-    setBaseWeekDate(nextDate);
-  };
-
-  const moveMonth = (amount: number) => {
-    const nextDate = new Date(currentYear, currentMonth + amount, 1);
-    setCurrentYear(nextDate.getFullYear());
-    setCurrentMonth(nextDate.getMonth());
-  };
-
-  const goToday = () => {
-    const nextToday = getTodayLocalDate();
-
-    if (viewMode === "month") {
-      setCurrentYear(nextToday.getFullYear());
-      setCurrentMonth(nextToday.getMonth());
-    } else {
-      setBaseWeekDate(nextToday);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#f5f6fa] text-slate-900">
-      <div
-        className={[
-          "grid min-h-[calc(100vh-72px)]",
-          isDetailSidebarResizing
-            ? "transition-none"
-            : "transition-[grid-template-columns] duration-300",
-        ].join(" ")}
-        style={{
-          gridTemplateColumns: layoutGridTemplateColumns,
-        }}
-      >
-        <ScheduleProjectSidebar
-          isOpen={isProjectSidebarOpen}
-          panelMode={sidebarPanelMode}
-          workspaces={workspaces}
-          selectedWorkspaceId={workspaceId}
-          workspaceLoading={workspaceLoading}
-          workspaceErrorMessage={workspaceErrorMessage}
-          todayTodos={todayTodos}
-          noDevlogSchedules={noDevlogSchedules}
-          onToggleOpen={() => setIsProjectSidebarOpen((prev) => !prev)}
-          onChangePanelMode={(mode) => {
-            setSidebarPanelMode(mode);
-            setIsProjectSidebarOpen(true);
-          }}
-          onSelectWorkspace={handleSelectWorkspace}
-          onSelectSchedule={openScheduleDetail}
-          onMarkDevlogWritten={markDevlogWritten}
-        />
-
-        {viewMode === "month" ? (
-          <MonthlySchedulePageView
-            currentYear={currentYear}
-            currentMonth={currentMonth}
-            todayDate={todayDate}
-            schedules={filteredSchedules}
-            selectedScheduleId={selectedScheduleId}
-            loading={loading}
-            errorMessage={errorMessage}
-            onReload={loadSchedules}
-            onBackToWeek={() => setViewMode("calendar")}
-            onCreateSchedule={openCreateModal}
-            onMoveMonth={moveMonth}
-            onGoToday={goToday}
-            onSelectSchedule={openScheduleDetail}
-            onMoveScheduleDate={moveScheduleDate}
-          />
-        ) : (
-                   <WeeklySchedulePageView
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            query={query}
-            setQuery={setQuery}
-            selectedProjectName={selectedProjectName}
-            totalCount={totalCount}
-            progressCount={progressCount}
-            doneCount={doneCount}
-            delayedCount={delayedCount}
-            progressRate={progressRate}
-            recentDoneSchedule={recentDoneSchedule}
-            filteredSchedules={filteredSchedules}
-            selectedScheduleId={selectedScheduleId}
-            selectedProjectTodaySchedules={selectedProjectTodaySchedules}
-            allProjectTodaySchedules={allProjectTodaySchedules}
-            allTodayLoading={allTodayLoading}
-            allTodayErrorMessage={allTodayErrorMessage}
-            todayDate={todayDate}
-            weekDays={weekDays}
-            weekStartLabel={`${weekStart.month + 1}월 ${weekStart.date}일`}
-            weekEndLabel={`${weekEnd.month + 1}월 ${weekEnd.date}일`}
-            loading={loading}
-            errorMessage={errorMessage}
-            onOpenMonth={() => setViewMode("month")}
-            onCreateSchedule={openCreateModal}
-            onMoveWeek={moveWeek}
-            onGoToday={goToday}
-            onSelectSchedule={openScheduleDetail}
-            onMoveScheduleDate={moveScheduleDate}
-            onChangeStatus={changeStatus}
-            onEditSchedule={openEditModal}
-            onDeleteSchedule={deleteSchedule}
-          />
-        )}
-
-        {shouldShowDetailSidebar && (
-          <ScheduleDetailAside
-            selectedSchedule={selectedSchedule}
-            onResizeStart={handleDetailSidebarResizeStart}
-            onClose={() => setIsDetailSidebarOpen(false)}
-            onChangeStatus={changeStatus}
-            onEditSchedule={openEditModal}
-            onDeleteSchedule={deleteSchedule}
-            deleting={deleting}
-            onMarkDevlogWritten={markDevlogWritten}
-          />
-        )}
-      </div>
-
-      {isCreateModalOpen && (
-        <CreateScheduleModal
-          form={createForm}
-          saving={saving}
-          projectName={selectedProjectName}
-          onChange={setCreateForm}
-          onClose={() => setIsCreateModalOpen(false)}
-          onSubmit={createSchedule}
-        />
-      )}
-
-      {isEditModalOpen && editingSchedule && (
-        <ScheduleFormModal
-          mode="edit"
-          form={editForm}
-          saving={saving}
-          projectName={getProjectName(editingSchedule)}
-          onChange={setEditForm}
-          onClose={() => {
-            if (saving) return;
-            setIsEditModalOpen(false);
-            setEditingSchedule(null);
-          }}
-          onSubmit={updateSchedule}
-        />
-      )}
-    </div>
-  );
-}
-
-function ScheduleProjectSidebar({
-  isOpen,
-  panelMode,
-  workspaces,
-  selectedWorkspaceId,
-  workspaceLoading,
-  workspaceErrorMessage,
-  todayTodos,
-  noDevlogSchedules,
-  onToggleOpen,
-  onChangePanelMode,
-  onSelectWorkspace,
-  onSelectSchedule,
-  onMarkDevlogWritten,
-}: {
-  isOpen: boolean;
-  panelMode: SidebarPanelMode;
-  workspaces: WorkspaceSidebarItem[];
-  selectedWorkspaceId: string;
-  workspaceLoading: boolean;
-  workspaceErrorMessage: string;
-  todayTodos: ProjectScheduleItem[];
-  noDevlogSchedules: ProjectScheduleItem[];
-  onToggleOpen: () => void;
-  onChangePanelMode: (mode: SidebarPanelMode) => void;
-  onSelectWorkspace: (workspace: WorkspaceSidebarItem) => void;
-  onSelectSchedule: (id: string) => void;
-  onMarkDevlogWritten: () => void;
-}) {
-  if (!isOpen) {
-    return (
-      <aside className="sticky top-[72px] h-[calc(100vh-72px)] bg-[#f5f6fa] px-6 pb-6 pt-4 pr-0">
-        <div className="flex h-full w-[60px] flex-col items-center gap-3 rounded-[24px] border border-slate-200 bg-white py-4 shadow-sm">
-          <button
-            type="button"
-            onClick={onToggleOpen}
-            className="grid h-10 w-10 place-items-center rounded-2xl text-slate-600 hover:bg-slate-100"
-            title="프로젝트 사이드바 펼치기"
-          >
-            <Menu size={19} />
-          </button>
-
-          <div className="h-px w-8 bg-slate-200" />
-
-          <CollapsedSidebarButton
-            active={panelMode === "projects"}
-            icon={<FolderOpen size={18} />}
-            title="프로젝트 목록"
-            onClick={() => onChangePanelMode("projects")}
-          />
-
-          <CollapsedSidebarButton
-            active={panelMode === "today"}
-            icon={<ListTodo size={18} />}
-            title="오늘 할 일"
-            count={todayTodos.length}
-            onClick={() => onChangePanelMode("today")}
-          />
-
-          <CollapsedSidebarButton
-            active={panelMode === "devlog"}
-            icon={<FilePenLine size={18} />}
-            title="일지 미작성 일정"
-            count={noDevlogSchedules.length}
-            onClick={() => onChangePanelMode("devlog")}
-          />
-        </div>
-      </aside>
+    setIsDetailModalOpen(
+      false,
     );
-  }
+
+    setIsEditModalOpen(
+      true,
+    );
+  };
+
+  const updateSchedule =
+    async () => {
+      if (
+        !editingSchedule
+      ) {
+        return;
+      }
+
+      if (
+        !editForm.title.trim()
+      ) {
+        alert(
+          "일정 제목을 입력해주세요.",
+        );
+
+        return;
+      }
+
+      if (
+        editForm.startDate >
+        editForm.endDate
+      ) {
+        alert(
+          "종료일은 시작일보다 빠를 수 없습니다.",
+        );
+
+        return;
+      }
+
+      const assignee =
+        teamMembers.find(
+          (member) =>
+            member.userId ===
+            editForm.assigneeUserId,
+        );
+
+      try {
+        setSaving(true);
+
+        type UpdatePayload =
+          Parameters<
+            typeof updateScheduleApi
+          >[0] & {
+            assigneeUserId?: number | null;
+            assigneeUserIds?: number[];
+            participants?: string;
+          };
+
+        const payload: UpdatePayload =
+          {
+            scheduleId:
+              editingSchedule.id,
+
+            title:
+              editForm.title.trim(),
+
+            description:
+              editForm.description.trim() ||
+              "등록된 상세 내용이 없습니다.",
+
+            startDate:
+              editForm.startDate,
+
+            endDate:
+              editForm.endDate,
+
+            status:
+              editForm.status,
+
+            assigneeUserId:
+              editForm.assigneeUserId,
+
+            assigneeUserIds:
+              editForm.assigneeUserId
+                ? [
+                    editForm.assigneeUserId,
+                  ]
+                : [],
+
+            participants:
+              assignee
+                ? getMemberName(
+                    assignee,
+                  )
+                : "",
+          };
+
+        const updated =
+          await updateScheduleApi(
+            payload,
+          );
+
+        const mapped =
+          mapScheduleFromApi(
+            updated,
+          );
+
+        const nextSchedule: ProjectScheduleItem =
+          {
+            ...mapped,
+
+            assigneeUserId:
+              mapped.assigneeUserId ??
+              editForm.assigneeUserId,
+
+            assigneeName:
+              mapped.assigneeName ||
+              (assignee
+                ? getMemberName(
+                    assignee,
+                  )
+                : ""),
+          };
+
+        updateScheduleInState(
+          nextSchedule,
+        );
+
+        setSelectedScheduleId(
+          nextSchedule.id,
+        );
+
+        setEditingSchedule(
+          null,
+        );
+
+        setIsEditModalOpen(
+          false,
+        );
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "일정 수정에 실패했습니다.",
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /* =====================================================
+     DELETE
+     ===================================================== */
+
+  const deleteSchedule =
+    async (
+      scheduleId: string,
+    ) => {
+      const target =
+        [
+          ...schedules,
+          ...allProjectTodaySchedules,
+        ].find(
+          (schedule) =>
+            schedule.id ===
+            scheduleId,
+        );
+
+      if (
+        !window.confirm(
+          `"${target?.title || "선택한 일정"}" 일정을 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.`,
+        )
+      ) {
+        return;
+      }
+
+      try {
+        setDeleting(true);
+
+        await deleteScheduleApi({
+          scheduleId,
+        });
+
+        removeScheduleFromState(
+          scheduleId,
+        );
+
+        setIsEditModalOpen(
+          false,
+        );
+
+        setEditingSchedule(
+          null,
+        );
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "일정 삭제에 실패했습니다.",
+        );
+      } finally {
+        setDeleting(false);
+      }
+    };
+
+  /* =====================================================
+     DEVLOG
+     ===================================================== */
+
+  const goToDevlogWrite = (
+    schedule: ProjectScheduleItem,
+  ) => {
+    const workspace =
+      workspaces.find(
+        (item) =>
+          item.id ===
+          schedule.workspaceId,
+      );
+
+    const mode =
+      workspace?.mode ||
+      currentMode;
+
+    const params =
+      new URLSearchParams();
+
+    params.set(
+      "workspaceId",
+      schedule.workspaceId ||
+        workspaceId,
+    );
+
+    params.set(
+      "mode",
+      mode,
+    );
+
+    params.set(
+      "create",
+      "1",
+    );
+
+    params.set(
+      "scheduleId",
+      String(schedule.id),
+    );
+
+    router.push(
+      `/devlogs?${params.toString()}`,
+    );
+  };
+
+  const goToDevlogs = (
+    schedule: ProjectScheduleItem,
+  ) => {
+    const workspace =
+      workspaces.find(
+        (item) =>
+          item.id ===
+          schedule.workspaceId,
+      );
+
+    const mode =
+      workspace?.mode ||
+      currentMode;
+
+    router.push(
+      `/devlogs?workspaceId=${encodeURIComponent(
+        schedule.workspaceId ||
+          workspaceId,
+      )}&mode=${mode}`,
+    );
+  };
+
+  /* =====================================================
+     DRAG
+     ===================================================== */
+
+  const handleDragStart = (
+    event: React.DragEvent,
+    schedule: ProjectScheduleItem,
+  ) => {
+    event.dataTransfer.effectAllowed =
+      "move";
+
+    event.dataTransfer.setData(
+      "text/schedule-id",
+      schedule.id,
+    );
+  };
+
+  const getDraggedScheduleId = (
+    event: React.DragEvent,
+  ) => {
+    return (
+      event.dataTransfer.getData(
+        "text/schedule-id",
+      ) ||
+      event.dataTransfer.getData(
+        "text/plain",
+      )
+    );
+  };
+
+  /* =====================================================
+     CALENDAR
+     ===================================================== */
+
+  const monthCells =
+    useMemo(
+      () =>
+        buildMonthCells(
+          currentYear,
+          currentMonth,
+        ),
+      [
+        currentMonth,
+        currentYear,
+      ],
+    );
+
+  const moveMonth = (
+    amount: number,
+  ) => {
+    const date = new Date(
+      currentYear,
+      currentMonth + amount,
+      1,
+    );
+
+    setCurrentYear(
+      date.getFullYear(),
+    );
+
+    setCurrentMonth(
+      date.getMonth(),
+    );
+  };
+
+  const moveMonthToday =
+    () => {
+      const now =
+        getTodayLocalDate();
+
+      setCurrentYear(
+        now.getFullYear(),
+      );
+
+      setCurrentMonth(
+        now.getMonth(),
+      );
+    };
+
+  /* =====================================================
+     GANTT
+     ===================================================== */
+
+  const ganttDays =
+    useMemo(() => {
+      return Array.from(
+        { length: 28 },
+        (_, index) =>
+          addDays(
+            ganttStartDate,
+            index,
+          ),
+      );
+    }, [ganttStartDate]);
+
+  const ganttStartKey =
+    getDateKeyFromDate(
+      ganttDays[0],
+    );
+
+  const ganttEndKey =
+    getDateKeyFromDate(
+      ganttDays[
+        ganttDays.length - 1
+      ],
+    );
+
+  const ganttSchedules =
+    filteredSchedules.filter(
+      (schedule) =>
+        schedule.startDate <=
+          ganttEndKey &&
+        schedule.endDate >=
+          ganttStartKey,
+    );
+
+  /* =====================================================
+     MODAL ESC
+     ===================================================== */
+
+  useEffect(() => {
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key !== "Escape"
+      ) {
+        return;
+      }
+
+      if (!saving) {
+        setIsCreateModalOpen(
+          false,
+        );
+
+        setIsEditModalOpen(
+          false,
+        );
+
+        setIsDetailModalOpen(
+          false,
+        );
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+  }, [saving]);
+
+  /* =====================================================
+     RENDER
+     ===================================================== */
 
   return (
-    <aside className="sticky top-[72px] h-[calc(100vh-72px)] bg-[#f5f6fa] px-6 pb-6 pt-2 pr-0">
-      <div className="flex h-full overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
-        <div className="flex w-[52px] shrink-0 flex-col items-center gap-3 border-r border-slate-100 bg-white py-4">
-          <button
-            type="button"
-            onClick={onToggleOpen}
-            className="grid h-9 w-9 place-items-center rounded-xl text-slate-600 hover:bg-slate-100"
-            title="프로젝트 사이드바 접기"
-          >
-            <Menu size={18} />
-          </button>
-
-          <div className="h-px w-7 bg-slate-200" />
-
-          <CollapsedSidebarButton
-            active={panelMode === "projects"}
-            icon={<FolderOpen size={17} />}
-            title="프로젝트 목록"
-            onClick={() => onChangePanelMode("projects")}
-          />
-
-          <CollapsedSidebarButton
-            active={panelMode === "today"}
-            icon={<ListTodo size={17} />}
-            title="오늘 할 일"
-            count={todayTodos.length}
-            onClick={() => onChangePanelMode("today")}
-          />
-
-          <CollapsedSidebarButton
-            active={panelMode === "devlog"}
-            icon={<FilePenLine size={17} />}
-            title="일지 미작성 일정"
-            count={noDevlogSchedules.length}
-            onClick={() => onChangePanelMode("devlog")}
-          />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          {panelMode === "projects" && (
-            <MainStyleProjectListPanel
-              workspaces={workspaces}
-              selectedWorkspaceId={selectedWorkspaceId}
-              loading={workspaceLoading}
-              errorMessage={workspaceErrorMessage}
-              onSelectWorkspace={onSelectWorkspace}
-              onClose={onToggleOpen}
-            />
-          )}
-
-          {panelMode === "today" && (
-            <ScheduleSideTaskPanel
-              label="TODAY"
-              title="오늘 할 일"
-              description="오늘 날짜에 남아 있는 일정입니다."
-              schedules={todayTodos}
-              emptyText="오늘 남은 일정 없음"
-              onSelectSchedule={onSelectSchedule}
-            />
-          )}
-
-          {panelMode === "devlog" && (
-            <ScheduleSideTaskPanel
-              label="DEVLOG"
-              title="일지 미작성 일정"
-              description="작업은 있지만 수행 기록이 없는 일정입니다."
-              schedules={noDevlogSchedules}
-              emptyText="모든 일정에 일지가 작성됨"
-              onSelectSchedule={onSelectSchedule}
-              onMarkDevlogWritten={onMarkDevlogWritten}
-            />
-          )}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function CollapsedSidebarButton({
-  active,
-  icon,
-  title,
-  count,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  title: string;
-  count?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`relative grid h-9 w-9 place-items-center rounded-xl transition ${
-        active
-          ? "bg-blue-50 text-blue-700"
-          : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-      }`}
-    >
-      {icon}
-
-      {typeof count === "number" && count > 0 && (
-        <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-blue-600 px-1 text-[10px] font-black text-white">
-          {count > 9 ? "9+" : count}
-        </span>
+    <main className="waivs-page min-h-[calc(100dvh-72px)] bg-[#F7F8FA] p-4 text-slate-950 md:p-5">
+      <div className="mx-auto flex max-w-[1880px] gap-4">
+     {/* =================================================
+    PROJECT SIDEBAR
+   ================================================= */}
+<aside
+  onMouseEnter={() => {
+    if (
+      !isSidebarPinned &&
+      canSidebarHoverExpand
+    ) {
+      setIsSidebarHovered(true);
+    }
+  }}
+  onMouseLeave={() => {
+    setIsSidebarHovered(false);
+    setCanSidebarHoverExpand(true);
+  }}
+  className={cn(
+    "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
+    isPageScrolled
+      ? "top-[88px]"
+      : "top-4",
+    sidebarExpanded
+      ? "w-[288px]"
+      : "w-16",
+  )}
+>
+  {/* =================================================
+      SIDEBAR HEADER
+     ================================================= */}
+  <div
+    className={cn(
+      "border-b border-slate-100",
+      sidebarExpanded
+        ? "p-3"
+        : "flex h-[64px] items-center justify-center p-0",
+    )}
+  >
+    <div
+      className={cn(
+        "flex items-center",
+        sidebarExpanded
+          ? "justify-between gap-2"
+          : "justify-center",
       )}
-    </button>
-  );
-}
+    >
+      {sidebarExpanded && (
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
+              <FolderOpen
+                size={16}
+                strokeWidth={2.4}
+              />
+            </div>
 
-function MainStyleProjectListPanel({
-  workspaces,
-  selectedWorkspaceId,
-  loading,
-  errorMessage,
-  onSelectWorkspace,
-  onClose,
-}: {
-  workspaces: WorkspaceSidebarItem[];
-  selectedWorkspaceId: string;
-  loading: boolean;
-  errorMessage: string;
-  onSelectWorkspace: (workspace: WorkspaceSidebarItem) => void;
-  onClose: () => void;
-}) {
-  const [projectQuery, setProjectQuery] = useState("");
-  const [filter, setFilter] = useState<ProjectFilter>("all");
+            <div>
+              <p className="text-sm font-black text-slate-900">
+                프로젝트
+              </p>
 
-  const totalCount = workspaces.length;
-  const personalCount = workspaces.filter(
-    (workspace) => workspace.mode === "personal",
-  ).length;
-  const teamCount = workspaces.filter(
-    (workspace) => workspace.mode === "team",
-  ).length;
-
-  const filteredWorkspaces = useMemo(() => {
-    const keyword = projectQuery.trim().toLowerCase();
-
-    return workspaces.filter((workspace) => {
-      const matchFilter = filter === "all" || workspace.mode === filter;
-      const matchKeyword =
-        !keyword ||
-        workspace.name.toLowerCase().includes(keyword) ||
-        workspace.mode.toLowerCase().includes(keyword) ||
-        workspace.role?.toLowerCase().includes(keyword);
-
-      return matchFilter && matchKeyword;
-    });
-  }, [workspaces, projectQuery, filter]);
-
-  return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-slate-100 p-4">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-black text-slate-950">프로젝트</h2>
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              전체 {totalCount}개 · 개인 {personalCount}개 · 팀 {teamCount}개
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            title="프로젝트 사이드바 접기"
-          >
-            <ChevronLeft size={16} />
-          </button>
-        </div>
-
-        <div className="relative">
-          <Search
-            size={17}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            value={projectQuery}
-            onChange={(event) => setProjectQuery(event.target.value)}
-            placeholder="프로젝트 검색"
-            className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none focus:border-blue-400"
-          />
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 rounded-2xl bg-slate-100 p-1">
-          <ProjectFilterButton
-            active={filter === "all"}
-            label="전체"
-            onClick={() => setFilter("all")}
-          />
-          <ProjectFilterButton
-            active={filter === "personal"}
-            label="개인"
-            onClick={() => setFilter("personal")}
-          />
-          <ProjectFilterButton
-            active={filter === "team"}
-            label="팀"
-            onClick={() => setFilter("team")}
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3">
-        {loading ? (
-          <div className="grid h-40 place-items-center text-sm font-bold text-slate-400">
-            <div className="flex items-center gap-2">
-              <Loader2 size={16} className="animate-spin" />
-              프로젝트 불러오는 중
+              <p className="text-[10px] font-semibold text-slate-400">
+                전체 {workspaces.length}
+                {" · "}
+                개인 {personalCount}
+                {" · "}
+                팀 {teamCount}
+              </p>
             </div>
           </div>
-        ) : errorMessage ? (
-          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-xs font-bold leading-5 text-rose-700">
-            {errorMessage}
-          </div>
-        ) : filteredWorkspaces.length === 0 ? (
-          <EmptyBox text="조건에 맞는 프로젝트가 없습니다." />
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleToggleSidebar}
+        className={cn(
+          "grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700",
+          sidebarExpanded
+            ? "h-8 w-8"
+            : "h-9 w-9",
+        )}
+        title={
+          isSidebarPinned
+            ? "사이드바 접기"
+            : "사이드바 펼치기"
+        }
+      >
+        {sidebarExpanded ? (
+          <PanelLeftClose size={17} />
         ) : (
-          <div className="flex flex-col gap-1">
-            {filteredWorkspaces.map((workspace) => {
-              const selected = workspace.id === selectedWorkspaceId;
+          <PanelLeftOpen size={18} />
+        )}
+      </button>
+    </div>
 
-              return (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  onClick={() => onSelectWorkspace(workspace)}
-                  className={`flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                    selected
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span
-                    className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
-                      selected
-                        ? "bg-white text-blue-700"
-                        : "bg-slate-100 text-blue-600"
-                    }`}
-                  >
-                    {workspace.mode === "team" ? (
-                      <UsersRound size={17} />
-                    ) : (
-                      <UserRound size={17} />
-                    )}
-                  </span>
+    {sidebarExpanded && (
+      <>
+        {/* 프로젝트 검색 */}
+        <div className="relative mt-3">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
 
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black">
-                      {workspace.name}
-                    </span>
-                    <span className="mt-1 block truncate text-xs font-medium text-slate-400">
-                      {workspace.mode === "team" ? "팀" : "개인"} · 작업 폴더{" "}
-                      {workspace.childCount}개
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <input
+            ref={projectSearchInputRef}
+            value={projectSearch}
+            onChange={(event) =>
+              setProjectSearch(
+                event.target.value,
+              )
+            }
+            placeholder="프로젝트 검색"
+            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+          />
+        </div>
+
+        {/* 전체 / 개인 / 팀 */}
+        <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+          {(
+            [
+              ["all", "전체"],
+              ["personal", "개인"],
+              ["team", "팀"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                setProjectFilter(value)
+              }
+              className={cn(
+                "rounded-lg px-2 py-1.5 text-[11px] font-black transition",
+                projectFilter === value
+                  ? "bg-white text-[#5873F9] shadow-sm"
+                  : "text-slate-400 hover:text-slate-700",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </>
+    )}
+  </div>
+
+  {/* =================================================
+      SIDEBAR BODY
+     ================================================= */}
+  <div
+    className={cn(
+      "min-h-0 flex-1",
+      sidebarExpanded
+        ? "overflow-y-auto p-3"
+        : "overflow-hidden",
+    )}
+  >
+    {workspaceLoading ? (
+      <div className="grid h-32 place-items-center">
+        <Loader2
+          size={18}
+          className="animate-spin text-[#5873F9]"
+        />
+      </div>
+    ) : workspaceErrorMessage ? (
+      sidebarExpanded ? (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-600">
+          {workspaceErrorMessage}
+        </div>
+      ) : null
+    ) : sidebarExpanded ? (
+      /* ===============================================
+         펼쳐진 상태
+         기존 프로젝트 목록 그대로
+         =============================================== */
+      <div className="space-y-5">
+        {projectFilter !== "team" && (
+          <WorkspaceSection
+            title="개인 프로젝트"
+            mode="personal"
+            items={personalWorkspaces}
+            selectedWorkspaceId={
+              workspaceId
+            }
+            sidebarExpanded
+            onSelect={
+              handleSelectWorkspace
+            }
+          />
+        )}
+
+        {projectFilter !==
+          "personal" && (
+          <WorkspaceSection
+            title="팀 프로젝트"
+            mode="team"
+            items={teamWorkspaces}
+            selectedWorkspaceId={
+              workspaceId
+            }
+            sidebarExpanded
+            onSelect={
+              handleSelectWorkspace
+            }
+          />
         )}
       </div>
-    </div>
-  );
-}
+    ) : (
+      /* ===============================================
+         접힌 상태
+         Dashboard Sidebar와 동일
+         =============================================== */
+      <div className="flex h-full flex-col items-center pt-4">
+        {/* 검색 */}
+        <button
+          type="button"
+          onClick={
+            openSidebarForSearch
+          }
+          className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+          title="프로젝트 검색"
+        >
+          <Search
+            size={19}
+            strokeWidth={2}
+          />
+        </button>
 
-function ProjectFilterButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`h-8 rounded-xl text-xs font-black transition ${
-        active
-          ? "bg-white text-slate-950 shadow-sm"
-          : "text-slate-500 hover:text-slate-900"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
+        {/* 프로젝트 */}
+        <button
+          type="button"
+          onClick={
+            openSidebarForProjects
+          }
+          className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+          title="프로젝트 목록"
+        >
+          <FolderOpen
+            size={19}
+            strokeWidth={2}
+          />
+        </button>
 
-function ScheduleSideTaskPanel({
-  label,
-  title,
-  description,
-  schedules,
-  emptyText,
-  onSelectSchedule,
-  onMarkDevlogWritten,
-}: {
-  label: string;
-  title: string;
-  description: string;
-  schedules: ProjectScheduleItem[];
-  emptyText: string;
-  onSelectSchedule: (id: string) => void;
-  onMarkDevlogWritten?: () => void;
-}) {
-  return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-slate-100 p-4">
-        <p className="text-[11px] font-black uppercase tracking-wide text-blue-600">
-          {label}
-        </p>
-        <h2 className="mt-1 text-sm font-black text-slate-950">{title}</h2>
-        <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
+        {/* Dashboard와 동일한 구분선 */}
+        <div className="my-3 h-px w-8 bg-slate-100" />
+
+        {/* 전체 프로젝트 수 */}
+        <div
+          className="flex h-8 w-8 items-center justify-center text-xs font-black text-slate-300"
+          title={`전체 프로젝트 ${workspaces.length}개`}
+        >
+          {workspaces.length}
+        </div>
       </div>
+    )}
+  </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        {schedules.length === 0 ? (
-          <EmptyBox text={emptyText} />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {schedules.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectSchedule(item.id)}
-                  className="block w-full text-left"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="line-clamp-2 text-sm font-black leading-5 text-slate-900">
-                      {item.title}
+  {/* =================================================
+      SIDEBAR FOOTER
+     ================================================= */}
+  {sidebarExpanded && (
+    <div className="border-t border-slate-100 p-3">
+      <button
+        type="button"
+        onClick={() =>
+          router.push("/main")
+        }
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
+      >
+        전체 프로젝트
+
+        <ArrowRight size={14} />
+      </button>
+    </div>
+  )}
+</aside>
+
+        {/* =================================================
+            MAIN WORKSPACE
+           ================================================= */}
+        <section className="min-w-0 flex-1">
+          <div className="waivs-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {/* ===============================================
+                COMPACT HEADER
+               =============================================== */}
+            <div className="border-b border-slate-100 px-5 py-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#5873F9]">
+                      Schedule
                     </p>
 
                     <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-                        statusBadgeStyle[item.status]
-                      }`}
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-black",
+                        isTeam
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-blue-50 text-blue-700",
+                      )}
                     >
-                      {scheduleStatusLabel[item.status]}
+                      {isTeam
+                        ? "TEAM"
+                        : "PERSONAL"}
+                    </span>
+
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">
+                      {
+                        currentRole
+                      }
                     </span>
                   </div>
 
-                  <p className="mt-2 text-xs font-medium text-slate-500">
-                    {getSchedulePeriodText(item)}
-                  </p>
+                  <div className="mt-1 flex min-w-0 items-end gap-3">
+                    <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
+                      {
+                        workspaceName
+                      }
+                    </h1>
 
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
-                    {item.description || "등록된 상세 내용이 없습니다."}
-                  </p>
-                </button>
+                    <span className="hidden pb-0.5 text-xs font-semibold text-slate-400 sm:inline">
+                      일정 관리
+                    </span>
+                  </div>
+                </div>
 
-                {onMarkDevlogWritten && !item.hasDevlog && (
+                <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
-                    onClick={onMarkDevlogWritten}
-                    className="mt-3 flex h-8 w-full items-center justify-center gap-1 rounded-xl bg-blue-50 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                    onClick={() => {
+                      void loadSchedules();
+
+                      void loadTeamMembers();
+
+                      void loadAllProjectTodaySchedules(
+                        workspaces,
+                      );
+                    }}
+                    className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                    title="새로고침"
                   >
-                    <FilePenLine size={14} />
-                    개발일지에서 작성
+                    <RefreshCw
+                      size={15}
+                    />
                   </button>
-                )}
+
+                  <button
+                    type="button"
+                    disabled={
+                      !workspaceId
+                    }
+                    onClick={() =>
+                      openCreateModal()
+                    }
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Plus
+                      size={15}
+                    />
+                    새 일정
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-function MonthlySchedulePageView({
-  currentYear,
-  currentMonth,
-  todayDate,
-  schedules,
-  selectedScheduleId,
-  loading,
-  errorMessage,
-  onReload,
-  onBackToWeek,
-  onCreateSchedule,
-  onMoveMonth,
-  onGoToday,
-  onSelectSchedule,
-  onMoveScheduleDate,
-}: {
-  currentYear: number;
-  currentMonth: number;
-  todayDate: string;
-  schedules: ProjectScheduleItem[];
-  selectedScheduleId: string | null;
-  loading: boolean;
-  errorMessage: string;
-  onReload: () => void;
-  onBackToWeek: () => void;
-  onCreateSchedule: () => void;
-  onMoveMonth: (amount: number) => void;
-  onGoToday: () => void;
-  onSelectSchedule: (id: string) => void;
-  onMoveScheduleDate: (id: string, nextDate: string) => void;
-}) {
-  return (
-    <main className="min-w-0 bg-[#f5f6fa] p-3 xl:p-5">
-      <section className="min-w-0 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm xl:p-5">
-        <div className="mb-5 flex min-w-0 flex-col justify-between gap-4 2xl:flex-row 2xl:items-center">
-          <div className="min-w-0 shrink-0">
-            <p className="text-sm font-bold text-blue-600">Schedule</p>
-            <h1 className="mt-2 whitespace-nowrap text-2xl font-black text-slate-950 xl:text-3xl">
-              {currentYear}년 {currentMonth + 1}월
-            </h1>
-          </div>
+              {/* compact stats */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
+                <HeaderMetric
+                  label="전체"
+                  value={
+                    totalCount
+                  }
+                />
 
-          <div className="flex min-w-0 flex-wrap items-center gap-2 2xl:justify-end">
-            <button
-              type="button"
-              onClick={onBackToWeek}
-              className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 hover:bg-slate-50"
-            >
-              주간으로 돌아가기
-            </button>
+                <HeaderMetric
+                  label="할 일"
+                  value={
+                    todoCount
+                  }
+                />
 
-            <button
-              type="button"
-              onClick={onCreateSchedule}
-              className="flex h-10 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              <Plus size={17} />새 일정 추가
-            </button>
+                <HeaderMetric
+                  label="진행"
+                  value={
+                    progressCount
+                  }
+                  active
+                />
 
-            <button
-              type="button"
-              onClick={onReload}
-              className="grid h-10 w-10 place-items-center rounded-2xl border border-slate-200 hover:bg-slate-50"
-              title="새로고침"
-            >
-              <RefreshCw size={17} />
-            </button>
+                <HeaderMetric
+                  label="완료"
+                  value={
+                    doneCount
+                  }
+                />
 
-            <button
-              type="button"
-              onClick={onGoToday}
-              className="h-10 rounded-2xl border border-slate-200 px-4 text-xs font-bold hover:bg-slate-50"
-            >
-              오늘
-            </button>
+                <HeaderMetric
+                  label="지연"
+                  value={
+                    delayedCount
+                  }
+                  danger
+                />
 
-            <button
-              type="button"
-              onClick={() => onMoveMonth(-1)}
-              className="grid h-10 w-10 place-items-center rounded-2xl border border-slate-200 hover:bg-slate-50"
-            >
-              <ChevronLeft size={18} />
-            </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400">
+                    진행률
+                  </span>
 
-            <button
-              type="button"
-              onClick={() => onMoveMonth(1)}
-              className="grid h-10 w-10 place-items-center rounded-2xl border border-slate-200 hover:bg-slate-50"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
+                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-[#5873F9] transition-all"
+                      style={{
+                        width: `${progressRate}%`,
+                      }}
+                    />
+                  </div>
 
-        <DataState loading={loading} errorMessage={errorMessage}>
-          <div className="min-w-0 overflow-x-auto pb-2">
-            <div className="min-w-[860px]">
-              <MonthlyCalendarBarView
-                schedules={schedules}
-                selectedScheduleId={selectedScheduleId}
-                currentYear={currentYear}
-                currentMonth={currentMonth}
-                todayDate={todayDate}
-                onSelectSchedule={onSelectSchedule}
-                onMoveScheduleDate={onMoveScheduleDate}
-              />
-            </div>
-          </div>
-        </DataState>
-      </section>
-    </main>
-  );
-}
-
-function WeeklySchedulePageView({
-  viewMode,
-  setViewMode,
-  query,
-  setQuery,
-  selectedProjectName,
-  totalCount,
-  progressCount,
-  doneCount,
-  delayedCount,
-  progressRate,
-  recentDoneSchedule,
-  filteredSchedules,
-  selectedScheduleId,
-  selectedProjectTodaySchedules,
-  allProjectTodaySchedules,
-  allTodayLoading,
-  allTodayErrorMessage,
-  weekDays,
-  weekStartLabel,
-  weekEndLabel,
-  todayDate,
-  loading,
-  errorMessage,
-  onOpenMonth,
-  onCreateSchedule,
-  onMoveWeek,
-  onGoToday,
-  onSelectSchedule,
-  onMoveScheduleDate,
-  onChangeStatus,
-  onEditSchedule,
-  onDeleteSchedule,
-}: {
-  viewMode: ScheduleViewMode;
-  setViewMode: (mode: ScheduleViewMode) => void;
-  query: string;
-  setQuery: (value: string) => void;
-  selectedProjectName: string;
-  totalCount: number;
-  progressCount: number;
-  doneCount: number;
-  delayedCount: number;
-  progressRate: number;
-  recentDoneSchedule: ProjectScheduleItem | null;
-  filteredSchedules: ProjectScheduleItem[];
-  selectedScheduleId: string | null;
-  selectedProjectTodaySchedules: ProjectScheduleItem[];
-  allProjectTodaySchedules: ProjectScheduleItem[];
-  allTodayLoading: boolean;
-  allTodayErrorMessage: string;
-  weekDays: ReturnType<typeof getWeekDays>;
-  weekStartLabel: string;
-  weekEndLabel: string;
-  todayDate: string;
-  loading: boolean;
-  errorMessage: string;
-  onOpenMonth: () => void;
-  onCreateSchedule: () => void;
-  onMoveWeek: (amount: number) => void;
-  onGoToday: () => void;
-  onSelectSchedule: (id: string) => void;
-  onMoveScheduleDate: (id: string, nextDate: string) => void;
-  onChangeStatus: (id: string, status: ScheduleStatus) => void;
-  onEditSchedule: (schedule: ProjectScheduleItem) => void;
-  onDeleteSchedule: (id: string) => void;
-}) {
-  const [todayScope, setTodayScope] =
-    useState<TodayScheduleScope>("selected");
-
-  const visibleTodaySchedules =
-    todayScope === "selected"
-      ? selectedProjectTodaySchedules
-      : allProjectTodaySchedules;
-
-  const todayTitle =
-    todayScope === "selected"
-      ? `${selectedProjectName} 오늘 일정`
-      : "전체 프로젝트 오늘 일정";
-
-  const todayDescription =
-    todayScope === "selected"
-      ? "현재 선택된 프로젝트에 등록된 오늘 날짜의 일정입니다."
-      : "모든 프로젝트에 등록된 오늘 날짜의 일정을 한눈에 확인합니다.";
-
-  return (
-    <main className="min-w-0 bg-[#f5f6fa] p-3 xl:p-5">
-      <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm xl:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-blue-600">Today Schedule</p>
-            <h1 className="line-clamp-2 break-keep text-xl font-black leading-snug text-slate-950 xl:text-2xl">
-              {todayTitle}
-            </h1>
-            <p className="truncate text-sm text-slate-500">
-              {todayDescription}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="flex rounded-2xl bg-slate-100 p-1">
-              <TodayScopeButton
-                active={todayScope === "selected"}
-                label="선택 프로젝트"
-                onClick={() => setTodayScope("selected")}
-              />
-              <TodayScopeButton
-                active={todayScope === "all"}
-                label="전체"
-                onClick={() => setTodayScope("all")}
-              />
-            </div>
-          </div>
-        </div>
-
-        <TodayAllProjectSchedulePager
-          schedules={visibleTodaySchedules}
-          loading={todayScope === "all" ? allTodayLoading : loading}
-          errorMessage={todayScope === "all" ? allTodayErrorMessage : errorMessage}
-          todayDate={todayDate}
-          scope={todayScope}
-          selectedProjectName={selectedProjectName}
-          onSelectSchedule={onSelectSchedule}
-        />
-      </section>
-
-      <section className="mt-4 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm xl:p-5">
-        <ProjectScheduleSummary
-          selectedProjectName={selectedProjectName}
-          totalCount={totalCount}
-          progressCount={progressCount}
-          doneCount={doneCount}
-          delayedCount={delayedCount}
-          progressRate={progressRate}
-          onOpenMonth={onOpenMonth}
-          onCreateSchedule={onCreateSchedule}
-        />
-
-        <div className="mb-5 mt-5 flex flex-col gap-4 border-t border-slate-100 pt-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex rounded-2xl bg-slate-100 p-1">
-              <ViewButton
-                active={viewMode === "calendar"}
-                onClick={() => setViewMode("calendar")}
-                label="주간"
-              />
-              <ViewButton
-                active={viewMode === "month"}
-                onClick={onOpenMonth}
-                label="월간"
-              />
-              <ViewButton
-                active={viewMode === "board"}
-                onClick={() => setViewMode("board")}
-                label="보드"
-              />
-              <ViewButton
-                active={viewMode === "list"}
-                onClick={() => setViewMode("list")}
-                label="리스트"
-              />
+                  <span className="text-xs font-black text-[#5873F9]">
+                    {
+                      progressRate
+                    }
+                    %
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {viewMode === "calendar" && (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => onMoveWeek(-1)}
-                  className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100"
-                >
-                  <ChevronLeft size={18} />
-                </button>
+            {/* ===============================================
+                VIEW BAR
+               =============================================== */}
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+                <ViewButton
+                  active={
+                    viewMode ===
+                    "board"
+                  }
+                  label="보드"
+                  icon={
+                    ListTodo
+                  }
+                  onClick={() =>
+                    setViewMode(
+                      "board",
+                    )
+                  }
+                />
 
-                <button
-                  type="button"
-                  onClick={onGoToday}
-                  className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold hover:bg-slate-50"
-                >
-                  오늘
-                </button>
+                <ViewButton
+                  active={
+                    viewMode ===
+                    "calendar"
+                  }
+                  label="캘린더"
+                  icon={
+                    CalendarDays
+                  }
+                  onClick={() =>
+                    setViewMode(
+                      "calendar",
+                    )
+                  }
+                />
 
-                <button
-                  type="button"
-                  onClick={() => onMoveWeek(1)}
-                  className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100"
-                >
-                  <ChevronRight size={18} />
-                </button>
+                <ViewButton
+                  active={
+                    viewMode ===
+                    "gantt"
+                  }
+                  label="간트"
+                  icon={
+                    Clock3
+                  }
+                  onClick={() =>
+                    setViewMode(
+                      "gantt",
+                    )
+                  }
+                />
+
+                <ViewButton
+                  active={
+                    viewMode ===
+                    "list"
+                  }
+                  label="리스트"
+                  icon={
+                    FilePenLine
+                  }
+                  onClick={() =>
+                    setViewMode(
+                      "list",
+                    )
+                  }
+                />
+              </div>
+
+              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+                {/* smart filter */}
+                <SmartFilterButton
+                  active={
+                    smartFilter ===
+                    "today"
+                  }
+                  label={`오늘 ${todayCount}`}
+                  onClick={() =>
+                    setSmartFilter(
+                      smartFilter ===
+                        "today"
+                        ? "all"
+                        : "today",
+                    )
+                  }
+                />
+
+                {isTeam && (
+                  <SmartFilterButton
+                    active={
+                      smartFilter ===
+                      "mine"
+                    }
+                    label="내 작업"
+                    onClick={() =>
+                      setSmartFilter(
+                        smartFilter ===
+                          "mine"
+                          ? "all"
+                          : "mine",
+                      )
+                    }
+                  />
+                )}
+
+                <SmartFilterButton
+                  active={
+                    smartFilter ===
+                    "noDevlog"
+                  }
+                  label={`일지 미작성 ${noDevlogCount}`}
+                  warning
+                  onClick={() =>
+                    setSmartFilter(
+                      smartFilter ===
+                        "noDevlog"
+                        ? "all"
+                        : "noDevlog",
+                    )
+                  }
+                />
+
+                <div className="relative">
+                  <Filter
+                    size={13}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <select
+                    value={
+                      statusFilter
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setStatusFilter(
+                        event.target
+                          .value as StatusFilter,
+                      )
+                    }
+                    className="h-9 rounded-xl border border-slate-200 bg-white pl-8 pr-7 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF]"
+                  >
+                    <option value="all">
+                      모든 상태
+                    </option>
+
+                    <option value="todo">
+                      할 일
+                    </option>
+
+                    <option value="progress">
+                      진행 중
+                    </option>
+
+                    <option value="done">
+                      완료
+                    </option>
+
+                    <option value="delayed">
+                      지연
+                    </option>
+                  </select>
+                </div>
+
+                <div className="relative min-w-[170px] flex-1 xl:max-w-[240px]">
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    value={query}
+                    onChange={(
+                      event,
+                    ) =>
+                      setQuery(
+                        event.target
+                          .value,
+                      )
+                    }
+                    placeholder="일정 검색"
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-semibold outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ===============================================
+                TODAY SCOPE
+               =============================================== */}
+            {smartFilter ===
+              "today" && (
+              <div className="flex items-center gap-2 border-b border-slate-100 bg-[#FBFCFF] px-5 py-2.5">
+                <CalendarDays
+                  size={14}
+                  className="text-[#5873F9]"
+                />
+
+                <span className="text-[11px] font-black text-slate-500">
+                  오늘 일정
+                </span>
+
+                <div className="ml-2 flex rounded-lg bg-slate-100 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTodayScope(
+                        "selected",
+                      )
+                    }
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-[10px] font-black transition",
+                      todayScope ===
+                        "selected"
+                        ? "bg-white text-[#5873F9] shadow-sm"
+                        : "text-slate-400",
+                    )}
+                  >
+                    선택 프로젝트
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTodayScope(
+                        "all",
+                      );
+
+                      setAssigneeFilter(
+                        "all",
+                      );
+                    }}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-[10px] font-black transition",
+                      todayScope ===
+                        "all"
+                        ? "bg-white text-[#5873F9] shadow-sm"
+                        : "text-slate-400",
+                    )}
+                  >
+                    전체 프로젝트
+                  </button>
+                </div>
+
+                {allTodayLoading &&
+                  todayScope ===
+                    "all" && (
+                    <Loader2
+                      size={13}
+                      className="ml-1 animate-spin text-slate-400"
+                    />
+                  )}
               </div>
             )}
+
+            {/* ===============================================
+                TEAM MEMBER BAR
+               =============================================== */}
+            {isTeam &&
+              !(
+                smartFilter ===
+                  "today" &&
+                todayScope ===
+                  "all"
+              ) && (
+                <div className="border-b border-slate-100 bg-white px-5 py-2.5">
+                  <div className="flex items-center gap-2 overflow-x-auto">
+                    <div className="mr-1 flex shrink-0 items-center gap-1.5 text-[11px] font-black text-slate-400">
+                      <UsersRound
+                        size={14}
+                      />
+                      담당자
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAssigneeFilter(
+                          "all",
+                        )
+                      }
+                      className={cn(
+                        "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black transition",
+                        assigneeFilter ===
+                          "all"
+                          ? "border-[#C9D2FF] bg-[#EEF3FF] text-[#5873F9]"
+                          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                      )}
+                    >
+                      전체
+                    </button>
+
+                    {teamMemberLoading ? (
+                      <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-400">
+                        <Loader2
+                          size={13}
+                          className="animate-spin"
+                        />
+                        팀원 조회 중
+                      </div>
+                    ) : (
+                      teamMembers.map(
+                        (member) => (
+                          <MemberFilterChip
+                            key={
+                              member.userId
+                            }
+                            member={
+                              member
+                            }
+                            active={
+                              assigneeFilter ===
+                              String(
+                                member.userId,
+                              )
+                            }
+                            currentUserId={
+                              currentUserId
+                            }
+                            onClick={() =>
+                              setAssigneeFilter(
+                                String(
+                                  member.userId,
+                                ),
+                              )
+                            }
+                          />
+                        ),
+                      )
+                    )}
+
+                    {memberErrorMessage && (
+                      <span className="ml-2 shrink-0 text-[10px] font-semibold text-rose-500">
+                        {
+                          memberErrorMessage
+                        }
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            {/* ===============================================
+                CONTENT
+               =============================================== */}
+            <div className="min-h-[580px] bg-[#FBFCFE] p-4">
+              {loading ? (
+                <LoadingBox />
+              ) : errorMessage ? (
+                <ErrorBox
+                  message={
+                    errorMessage
+                  }
+                />
+              ) : !workspaceId ? (
+                <EmptyBox
+                  title="프로젝트를 선택해주세요."
+                  description="왼쪽 프로젝트 목록에서 일정을 확인할 프로젝트를 선택해주세요."
+                />
+              ) : filteredSchedules.length ===
+                  0 ? (
+                <EmptyBox
+                  title="표시할 일정이 없습니다."
+                  description="현재 검색 또는 필터 조건에 맞는 일정이 없습니다."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openCreateModal()
+                      }
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#5873F9] px-4 py-2 text-xs font-black text-white"
+                    >
+                      <Plus
+                        size={14}
+                      />
+                      일정 만들기
+                    </button>
+                  }
+                />
+              ) : (
+                <>
+                  {viewMode ===
+                    "board" && (
+                    <BoardView
+                      schedules={
+                        filteredSchedules
+                      }
+                      teamMembers={
+                        teamMembers
+                      }
+                      isTeam={
+                        isTeam
+                      }
+                      onOpen={
+                        openScheduleDetail
+                      }
+                      onDragStart={
+                        handleDragStart
+                      }
+                      onStatusDrop={(
+                        event,
+                        status,
+                      ) => {
+                        event.preventDefault();
+
+                        const id =
+                          getDraggedScheduleId(
+                            event,
+                          );
+
+                        if (id) {
+                          void changeStatus(
+                            id,
+                            status,
+                          );
+                        }
+                      }}
+                      onWriteDevlog={
+                        goToDevlogWrite
+                      }
+                    />
+                  )}
+
+                  {viewMode ===
+                    "calendar" && (
+                    <CalendarView
+                      year={
+                        currentYear
+                      }
+                      month={
+                        currentMonth
+                      }
+                      todayDate={
+                        todayDate
+                      }
+                      cells={
+                        monthCells
+                      }
+                      schedules={
+                        filteredSchedules
+                      }
+                      onPrev={() =>
+                        moveMonth(
+                          -1,
+                        )
+                      }
+                      onNext={() =>
+                        moveMonth(
+                          1,
+                        )
+                      }
+                      onToday={
+                        moveMonthToday
+                      }
+                      onOpen={
+                        openScheduleDetail
+                      }
+                      onCreateForDate={
+                        openCreateModal
+                      }
+                      onDragStart={
+                        handleDragStart
+                      }
+                      onWriteDevlog={
+                        goToDevlogWrite
+                      }
+                      onDateDrop={(
+                        event,
+                        dateKey,
+                      ) => {
+                        event.preventDefault();
+
+                        const id =
+                          getDraggedScheduleId(
+                            event,
+                          );
+
+                        if (id) {
+                          void moveScheduleDate(
+                            id,
+                            dateKey,
+                          );
+                        }
+                      }}
+                    />
+                  )}
+
+                  {viewMode ===
+                    "gantt" && (
+                    <GanttView
+                      startDate={
+                        ganttStartDate
+                      }
+                      days={
+                        ganttDays
+                      }
+                      schedules={
+                        ganttSchedules
+                      }
+                      teamMembers={
+                        teamMembers
+                      }
+                      isTeam={
+                        isTeam
+                      }
+                      onPrev={() =>
+                        setGanttStartDate(
+                          (prev) =>
+                            addDays(
+                              prev,
+                              -14,
+                            ),
+                        )
+                      }
+                      onNext={() =>
+                        setGanttStartDate(
+                          (prev) =>
+                            addDays(
+                              prev,
+                              14,
+                            ),
+                        )
+                      }
+                      onToday={() => {
+                        const now =
+                          getTodayLocalDate();
+
+                        const day =
+                          now.getDay();
+
+                        now.setDate(
+                          now.getDate() +
+                            (day ===
+                            0
+                              ? -6
+                              : 1 -
+                                day),
+                        );
+
+                        setGanttStartDate(
+                          now,
+                        );
+                      }}
+                      onOpen={
+                        openScheduleDetail
+                      }
+                      onDragStart={
+                        handleDragStart
+                      }
+                      onWriteDevlog={
+                        goToDevlogWrite
+                      }
+                      onDateDrop={(
+                        event,
+                        dateKey,
+                      ) => {
+                        event.preventDefault();
+
+                        const id =
+                          getDraggedScheduleId(
+                            event,
+                          );
+
+                        if (id) {
+                          void moveScheduleDate(
+                            id,
+                            dateKey,
+                          );
+                        }
+                      }}
+                    />
+                  )}
+
+                  {viewMode ===
+                    "list" && (
+                    <ListView
+                      schedules={
+                        filteredSchedules
+                      }
+                      teamMembers={
+                        teamMembers
+                      }
+                      isTeam={
+                        isTeam
+                      }
+                      onOpen={
+                        openScheduleDetail
+                      }
+                      onStatusChange={
+                        changeStatus
+                      }
+                      onWriteDevlog={
+                        goToDevlogWrite
+                      }
+                      onOpenDevlog={
+                        goToDevlogs
+                      }
+                    />
+                  )}
+                </>
+              )}
+            </div>
           </div>
+        </section>
+      </div>
 
-          <div className="relative w-full xl:w-[420px]">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="일정 검색"
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-blue-400"
-            />
-          </div>
-        </div>
-
-        <DataState loading={loading} errorMessage={errorMessage}>
-          {viewMode === "calendar" && (
-            <WeeklyCalendarBarView
-              schedules={filteredSchedules}
-              selectedScheduleId={selectedScheduleId}
-              weekDays={weekDays}
-              weekStartLabel={weekStartLabel}
-              weekEndLabel={weekEndLabel}
-              todayDate={todayDate}
-              onSelect={onSelectSchedule}
-              onMoveScheduleDate={onMoveScheduleDate}
-            />
-          )}
-
-          {viewMode === "board" && (
-            <HorizontalBoardView
-              schedules={filteredSchedules}
-              onSelect={onSelectSchedule}
-              onChangeStatus={onChangeStatus}
-            />
-          )}
-
-          {viewMode === "list" && (
-            <ListView
-              schedules={filteredSchedules}
-              onSelect={onSelectSchedule}
-              onChangeStatus={onChangeStatus}
-              onEditSchedule={onEditSchedule}
-              onDeleteSchedule={onDeleteSchedule}
-            />
-          )}
-
-          <ProgressRulePanel
-            totalCount={totalCount}
-            doneCount={doneCount}
-            progressRate={progressRate}
-            recentDoneSchedule={recentDoneSchedule}
-            selectedProjectName={selectedProjectName}
+      {/* =================================================
+          DETAIL MODAL
+         ================================================= */}
+      {isDetailModalOpen &&
+        selectedSchedule && (
+          <ScheduleDetailModal
+            schedule={
+              selectedSchedule
+            }
+            members={
+              teamMembers
+            }
+            isTeam={
+              workspaces.find(
+                (workspace) =>
+                  workspace.id ===
+                  selectedSchedule.workspaceId,
+              )?.mode ===
+                "team" ||
+              isTeam
+            }
+            deleting={
+              deleting
+            }
+            onClose={() =>
+              setIsDetailModalOpen(
+                false,
+              )
+            }
+            onEdit={() =>
+              openEditModal(
+                selectedSchedule,
+              )
+            }
+            onDelete={() =>
+              void deleteSchedule(
+                selectedSchedule.id,
+              )
+            }
+            onStatusChange={(
+              status,
+            ) =>
+              void changeStatus(
+                selectedSchedule.id,
+                status,
+              )
+            }
+            onWriteDevlog={() =>
+              goToDevlogWrite(
+                selectedSchedule,
+              )
+            }
+            onOpenDevlog={() =>
+              goToDevlogs(
+                selectedSchedule,
+              )
+            }
           />
-        </DataState>
-      </section>
+        )}
+
+      {/* =================================================
+          CREATE
+         ================================================= */}
+      {isCreateModalOpen && (
+        <ScheduleFormModal
+          mode="create"
+          title="새 일정 만들기"
+          description="작업 기간과 상태를 설정하고 프로젝트 일정에 추가합니다."
+          form={
+            createForm
+          }
+          setForm={
+            setCreateForm
+          }
+          members={
+            teamMembers
+          }
+          isTeam={isTeam}
+          saving={saving}
+          submitLabel="일정 생성"
+          onClose={() => {
+            if (!saving) {
+              setIsCreateModalOpen(
+                false,
+              );
+            }
+          }}
+          onSubmit={() =>
+            void createSchedule()
+          }
+        />
+      )}
+
+      {/* =================================================
+          EDIT
+         ================================================= */}
+      {isEditModalOpen &&
+        editingSchedule && (
+          <ScheduleFormModal
+            mode="edit"
+            title="일정 수정"
+            description="일정 내용, 기간, 상태와 담당자를 수정합니다."
+            form={
+              editForm
+            }
+            setForm={
+              setEditForm
+            }
+            members={
+              teamMembers
+            }
+            isTeam={isTeam}
+            saving={saving}
+            submitLabel="변경사항 저장"
+            onClose={() => {
+              if (!saving) {
+                setIsEditModalOpen(
+                  false,
+                );
+
+                setEditingSchedule(
+                  null,
+                );
+              }
+            }}
+            onSubmit={() =>
+              void updateSchedule()
+            }
+          />
+        )}
     </main>
   );
 }
 
-function TodayAllProjectSchedulePager({
-  schedules,
-  loading,
-  errorMessage,
-  todayDate,
-  scope,
-  selectedProjectName,
-  onSelectSchedule,
+/* =========================================================
+   PROJECT SIDEBAR
+   ========================================================= */
+
+function WorkspaceSection({
+  title,
+  mode,
+  items,
+  selectedWorkspaceId,
+  sidebarExpanded,
+  onSelect,
 }: {
-  schedules: ProjectScheduleItem[];
-  loading: boolean;
-  errorMessage: string;
-  todayDate: string;
-  scope: TodayScheduleScope;
-  selectedProjectName: string;
-  onSelectSchedule: (id: string) => void;
+  title: string;
+  mode: WorkspaceMode;
+  items: WorkspaceSidebarItem[];
+  selectedWorkspaceId: string;
+  sidebarExpanded: boolean;
+  onSelect: (
+    workspace: WorkspaceSidebarItem,
+  ) => void;
 }) {
-  const PAGE_SIZE = 3;
-  const [page, setPage] = useState(0);
-
-  const totalPages = Math.max(1, Math.ceil(schedules.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-
-  const pageItems = schedules.slice(
-    safePage * PAGE_SIZE,
-    safePage * PAGE_SIZE + PAGE_SIZE,
-  );
-
-  useEffect(() => {
-    setPage(0);
-  }, [schedules.length]);
+  if (!sidebarExpanded) {
+    return (
+      <div className="space-y-1">
+        {items.map(
+          (workspace) => (
+            <WorkspaceButton
+              key={
+                workspace.id
+              }
+              workspace={
+                workspace
+              }
+              selected={
+                workspace.id ===
+                selectedWorkspaceId
+              }
+              sidebarExpanded={
+                false
+              }
+              onClick={() =>
+                onSelect(
+                  workspace,
+                )
+              }
+            />
+          ),
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-      <div className="mb-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-blue-600">
-            {todayDate}
-          </p>
-                    <h2 className="mt-1 text-base font-black text-slate-950">
-            {scope === "selected" ? "오늘 진행할 선택 프로젝트 일정" : "오늘 진행할 전체 일정"}
-          </h2>
+    <section>
+      <div className="mb-2 flex items-center justify-between px-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
+          {mode ===
+          "team" ? (
+            <UsersRound
+              size={13}
+            />
+          ) : (
+            <UserRound
+              size={13}
+            />
+          )}
+
+          {title}
         </div>
 
-        <span className="w-fit rounded-full bg-white px-4 py-2 text-xs font-black text-slate-600">
-          전체 {schedules.length}개
+        <span className="text-[10px] font-black text-slate-400">
+          {items.length}
         </span>
       </div>
 
-      {loading ? (
-                <div className="grid h-[132px] place-items-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm font-bold text-slate-400">
-          {scope === "selected"
-            ? `${selectedProjectName}에 오늘 등록된 일정이 없습니다.`
-            : "오늘 등록된 전체 일정이 없습니다."}
-        </div>
-      ) : errorMessage ? (
-        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-bold text-rose-700">
-          {errorMessage}
-        </div>
-      ) : schedules.length === 0 ? (
-        <div className="grid h-[132px] place-items-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm font-bold text-slate-400">
-          오늘 등록된 일정이 없습니다.
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-3 xl:grid-cols-3">
-            {pageItems.map((item) => {
-              const projectName = getProjectName(item);
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelectSchedule(item.id)}
-                  className="min-h-[132px] rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-1 text-xs font-black text-blue-600">
-                        {projectName}
-                      </p>
-                      <h3 className="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-950">
-                        {item.title}
-                      </h3>
-                    </div>
-
-                    <span
-                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
-                        statusBadgeStyle[item.status]
-                      }`}
-                    >
-                      {scheduleStatusLabel[item.status]}
-                    </span>
-                  </div>
-
-                  <p className="mt-3 text-xs font-bold text-slate-500">
-                    {getSchedulePeriodText(item)}
-                  </p>
-
-                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">
-                    {item.description || "등록된 상세 내용이 없습니다."}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-
-          {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-1.5">
-              {Array.from({ length: totalPages }).map((_, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => setPage(index)}
-                  className={`h-8 min-w-8 rounded-xl px-2 text-xs font-black transition ${
-                    safePage === index
-                      ? "bg-blue-600 text-white"
-                      : "bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                >
-                  {index + 1}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function ProjectScheduleSummary({
-  selectedProjectName,
-  totalCount,
-  progressCount,
-  doneCount,
-  delayedCount,
-  progressRate,
-  onOpenMonth,
-  onCreateSchedule,
-}: {
-  selectedProjectName: string;
-  totalCount: number;
-  progressCount: number;
-  doneCount: number;
-  delayedCount: number;
-  progressRate: number;
-  onOpenMonth: () => void;
-  onCreateSchedule: () => void;
-}) {
-  return (
-    <div>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-blue-600">Schedule</p>
-          <h1 className="mt-1 line-clamp-2 break-keep text-xl font-black leading-snug text-slate-950 xl:text-2xl">
-            {selectedProjectName}
-          </h1>
-          <p className="mt-1 truncate text-sm text-slate-500">
-            현재 선택된 프로젝트의 일정 현황입니다.
+      <div className="space-y-1">
+        {items.length === 0 ? (
+          <p className="px-2 py-2 text-[11px] font-medium text-slate-400">
+            프로젝트가 없습니다.
           </p>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
-          <button
-            type="button"
-            onClick={onOpenMonth}
-            className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <CalendarDays size={17} />
-            월간 캘린더
-          </button>
-
-          <button
-            type="button"
-            onClick={onCreateSchedule}
-            className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            <Plus size={17} />
-            새 일정 추가
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-sm font-bold text-slate-500">
-            <span>
-              전체 <strong className="text-slate-950">{totalCount}개</strong>
-            </span>
-            <span className="text-slate-300">·</span>
-            <span>
-              진행 중{" "}
-              <strong className="text-slate-950">{progressCount}개</strong>
-            </span>
-            <span className="text-slate-300">·</span>
-            <span>
-              완료 <strong className="text-slate-950">{doneCount}개</strong>
-            </span>
-            <span className="text-slate-300">·</span>
-            <span>
-              지연 <strong className="text-slate-950">{delayedCount}개</strong>
-            </span>
-            <span className="text-slate-300">·</span>
-            <span>
-              진행률 <strong className="text-blue-600">{progressRate}%</strong>
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-blue-600 transition-all"
-            style={{ width: `${progressRate}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-function DataState({
-  loading,
-  errorMessage,
-  children,
-}: {
-  loading: boolean;
-  errorMessage: string;
-  children: React.ReactNode;
-}) {
-  if (loading) {
-    return (
-      <div className="grid min-h-[360px] place-items-center rounded-3xl border border-dashed border-slate-200 bg-slate-50">
-        <div className="flex items-center gap-3 text-sm font-bold text-slate-500">
-          <Loader2 className="animate-spin" size={18} />
-          일정 데이터를 불러오는 중입니다.
-        </div>
-      </div>
-    );
-  }
-
-  if (errorMessage) {
-    return (
-      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-sm font-bold text-rose-700">
-        {errorMessage}
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-function WeeklyCalendarBarView({
-  schedules,
-  selectedScheduleId,
-  weekDays,
-  weekStartLabel,
-  weekEndLabel,
-  todayDate,
-  onSelect,
-  onMoveScheduleDate,
-}: {
-  schedules: ProjectScheduleItem[];
-  selectedScheduleId: string | null;
-  weekDays: ReturnType<typeof getWeekDays>;
-  weekStartLabel: string;
-  weekEndLabel: string;
-  todayDate: string;
-  onSelect: (id: string) => void;
-  onMoveScheduleDate: (id: string, nextDate: string) => void;
-}) {
-  const weekStartKey = weekDays[0]?.key ?? "";
-  const weekEndKey = weekDays[6]?.key ?? "";
-
-  const visibleSchedules = schedules.filter((item) =>
-    isScheduleVisibleInWeek(item, weekStartKey, weekEndKey),
-  );
-
-  const getColumnRange = (item: ProjectScheduleItem) => {
-    const startDate = getScheduleStartDate(item);
-    const endDate = getScheduleEndDate(item);
-
-    const startIndex = weekDays.findIndex((day) => day.key >= startDate);
-    const endIndexFromRight = [...weekDays]
-      .reverse()
-      .findIndex((day) => day.key <= endDate);
-
-    const safeStartIndex = startIndex === -1 ? 0 : startIndex;
-    const safeEndIndex = endIndexFromRight === -1 ? 6 : 6 - endIndexFromRight;
-
-    return {
-      gridColumnStart: safeStartIndex + 1,
-      gridColumnEnd: safeEndIndex + 2,
-    };
-  };
-
-  const handleDrop = (
-    event: React.DragEvent<HTMLDivElement>,
-    nextDate: string,
-  ) => {
-    event.preventDefault();
-
-    const scheduleId = event.dataTransfer.getData("scheduleId");
-    if (!scheduleId) return;
-
-    onMoveScheduleDate(scheduleId, nextDate);
-  };
-
-  return (
-    <div>
-      <div className="mb-6 flex items-center gap-2">
-        <CalendarDays size={20} className="text-slate-600" />
-        <h2 className="text-lg font-bold">
-          {weekStartLabel} - {weekEndLabel}
-        </h2>
-      </div>
-
-      <section className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-          {weekDays.map((day) => {
-            const isToday = day.key === todayDate;
-
-            return (
-              <div
-                key={day.key}
-                className={`border-r border-slate-100 p-3 last:border-r-0 ${
-                  isToday ? "bg-blue-50" : ""
-                }`}
-              >
-                <p className="text-xs font-bold text-slate-500">{day.label}</p>
-                <p
-                  className={`mt-1 text-lg font-black ${
-                    isToday ? "text-blue-600" : "text-slate-900"
-                  }`}
-                >
-                  {day.date}일
-                </p>
-
-                {isToday && (
-                  <p className="mt-1 w-fit rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                    오늘
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="relative min-h-[460px] bg-white">
-          <div className="absolute inset-0 grid grid-cols-7">
-            {weekDays.map((day) => {
-              const isToday = day.key === todayDate;
-
-              return (
-                <div
-                  key={day.key}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => handleDrop(event, day.key)}
-                  className={`border-r border-slate-100 p-3 last:border-r-0 ${
-                    isToday ? "bg-blue-50/30" : "bg-white"
-                  }`}
-                >
-                  <p className="text-xs font-medium text-slate-300">
-                    {day.date}일
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="relative z-10 grid grid-cols-7 gap-x-2 gap-y-3 p-3 pt-12">
-            {visibleSchedules.length === 0 ? (
-              <div className="col-span-7">
-                <EmptyBox text="이번 주에 표시할 일정이 없습니다." />
-              </div>
-            ) : (
-              visibleSchedules.map((item) => {
-                const { gridColumnStart, gridColumnEnd } = getColumnRange(item);
-                const projectName = getProjectName(item);
-
-                return (
-                  <button
-                    key={item.id}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData("scheduleId", item.id);
-                    }}
-                    onClick={() => onSelect(item.id)}
-                    className={`min-w-0 cursor-grab rounded-2xl border px-4 py-3 text-left shadow-sm transition hover:shadow-md active:cursor-grabbing ${
-                      calendarEventStyle[item.status]
-                    } ${
-                      selectedScheduleId === item.id
-                        ? "ring-2 ring-blue-300"
-                        : ""
-                    }`}
-                    style={{
-                      gridColumn: `${gridColumnStart} / ${gridColumnEnd}`,
-                    }}
-                    title={item.description}
-                  >
-                    <div className="flex min-w-0 items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black">
-                          {item.title}
-                        </p>
-                        <p className="mt-1 truncate text-[11px] font-semibold opacity-70">
-                          {projectName} · {getSchedulePeriodText(item)}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
-                          statusBadgeStyle[item.status]
-                        }`}
-                      >
-                        {scheduleStatusLabel[item.status]}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </section>
-
-      <p className="mt-4 text-sm text-slate-500">
-        기간 일정은 시작일과 종료일에 맞춰 하나의 바 형태로 표시됩니다. 바를
-        드래그해서 다른 날짜 칸에 놓으면 기간 길이를 유지한 채 이동됩니다.
-      </p>
-    </div>
-  );
-}
-
-function HorizontalBoardView({
-  schedules,
-  onSelect,
-  onChangeStatus,
-}: {
-  schedules: ProjectScheduleItem[];
-  onSelect: (id: string) => void;
-  onChangeStatus: (id: string, status: ScheduleStatus) => void;
-}) {
-  const columns: ScheduleStatus[] = ["todo", "progress", "done", "delayed"];
-
-  const handleDrop = (
-    event: React.DragEvent<HTMLDivElement>,
-    nextStatus: ScheduleStatus,
-  ) => {
-    event.preventDefault();
-
-    const scheduleId = event.dataTransfer.getData("scheduleId");
-    if (!scheduleId) return;
-
-    onChangeStatus(scheduleId, nextStatus);
-  };
-
-  return (
-    <div className="overflow-x-auto pb-3">
-      <div className="flex min-w-max gap-4">
-        {columns.map((status) => {
-          const items = schedules.filter((item) => item.status === status);
-
-          return (
-            <div
-              key={status}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleDrop(event, status)}
-              className={`w-[320px] shrink-0 rounded-2xl border p-4 ${boardColumnStyle[status]}`}
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-bold">{scheduleStatusLabel[status]}</h3>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500">
-                  {items.length}
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {items.length === 0 ? (
-                  <EmptyBox text="여기로 드래그 가능" compact />
-                ) : (
-                  items.map((item) => (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={(event) => {
-                        event.dataTransfer.setData("scheduleId", item.id);
-                      }}
-                      onClick={() => onSelect(item.id)}
-                      className="cursor-grab rounded-2xl border border-slate-200 bg-white p-4 hover:border-blue-300 active:cursor-grabbing"
-                    >
-                      <p className="text-sm font-bold">{item.title}</p>
-                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
-                        {item.description}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span
-                          className={`rounded-full border px-2 py-1 text-[11px] font-bold ${
-                            statusBadgeStyle[item.status]
-                          }`}
-                        >
-                          {scheduleStatusLabel[item.status]}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <p className="mt-4 text-sm text-slate-500">
-        보드에서도 일정을 드래그해서 다른 상태 칸으로 옮길 수 있습니다.
-      </p>
-    </div>
-  );
-}
-
-function ListView({
-  schedules,
-  onSelect,
-  onChangeStatus,
-  onEditSchedule,
-  onDeleteSchedule,
-}: {
-  schedules: ProjectScheduleItem[];
-  onSelect: (id: string) => void;
-  onChangeStatus: (id: string, status: ScheduleStatus) => void;
-  onEditSchedule: (schedule: ProjectScheduleItem) => void;
-  onDeleteSchedule: (id: string) => void;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200">
-      <table className="w-full min-w-[780px] text-left text-sm">
-        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-          <tr>
-            <th className="px-4 py-3">일정</th>
-            <th className="px-4 py-3">프로젝트</th>
-            <th className="px-4 py-3">기간</th>
-            <th className="px-4 py-3">상태</th>
-            <th className="px-4 py-3">일지</th>
-            <th className="px-4 py-3">상태 변경</th>
-            <th className="px-4 py-3">관리</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {schedules.map((item) => {
-            const projectName = getProjectName(item);
-
-            return (
-              <tr
-                key={item.id}
-                onClick={() => onSelect(item.id)}
-                className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
-              >
-                <td className="px-4 py-4">
-                  <p className="font-bold">{item.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {item.description}
-                  </p>
-                </td>
-
-                <td className="px-4 py-4 text-slate-500">{projectName}</td>
-                <td className="px-4 py-4 text-slate-500">
-                  {getSchedulePeriodText(item)}
-                </td>
-
-                <td className="px-4 py-4">
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                      statusBadgeStyle[item.status]
-                    }`}
-                  >
-                    {scheduleStatusLabel[item.status]}
-                  </span>
-                </td>
-
-                <td className="px-4 py-4 text-slate-500">
-                  {item.hasDevlog ? "작성됨" : "미작성"}
-                </td>
-
-                <td className="px-4 py-4">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onChangeStatus(item.id, "progress");
-                      }}
-                      className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700"
-                    >
-                      진행
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onChangeStatus(item.id, "done");
-                      }}
-                      className="rounded-lg bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700"
-                    >
-                      완료
-                    </button>
-                  </div>
-                </td>
-
-                <td className="px-4 py-4">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEditSchedule(item);
-                      }}
-                      className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200"
-                    >
-                      수정
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDeleteSchedule(item.id);
-                      }}
-                      className="rounded-lg bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-
-          {schedules.length === 0 && (
-            <tr>
-              <td colSpan={7} className="px-4 py-10">
-                <EmptyBox text="조건에 맞는 일정이 없습니다." />
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ScheduleDetailAside({
-  selectedSchedule,
-  onResizeStart,
-  onClose,
-  onChangeStatus,
-  onEditSchedule,
-  onDeleteSchedule,
-  deleting,
-  onMarkDevlogWritten,
-}: {
-  selectedSchedule: ProjectScheduleItem | null;
-  onResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onClose: () => void;
-  onChangeStatus: (id: string, status: ScheduleStatus) => void;
-  onEditSchedule: (schedule: ProjectScheduleItem) => void;
-  onDeleteSchedule: (id: string) => void;
-  deleting: boolean;
-  onMarkDevlogWritten: () => void;
-}) {
-  if (!selectedSchedule) return null;
-
-  const projectName = getProjectName(selectedSchedule);
-  const periodText = getSchedulePeriodText(selectedSchedule);
-
-  return (
-    <aside className="relative min-w-0 border-l border-slate-200 bg-white">
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        title="사이드바 너비 조절"
-        onPointerDown={onResizeStart}
-        className="absolute left-0 top-0 z-30 h-full w-3 -translate-x-1/2 cursor-col-resize touch-none"
-      >
-        <div className="mx-auto h-full w-px bg-transparent transition hover:bg-blue-400" />
-      </div>
-
-      <div className="sticky top-[72px] flex h-[calc(100vh-72px)] flex-col overflow-hidden">
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-wide text-blue-600">
-              Selected Schedule
-            </p>
-            <h2 className="truncate text-sm font-black text-slate-900">
-              일정 상세
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-3 overflow-y-auto p-3">
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <div className=" flex gap-2">
-              <h3 className="min-w-0 text-lg items-center justify-center font-black leading-snug text-slate-900">
-                {selectedSchedule.title}
-              </h3>
-
-              <span
-                className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
-                  statusBadgeStyle[selectedSchedule.status]
-                }`}
-              >
-                {scheduleStatusLabel[selectedSchedule.status]}
-              </span>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h3 className="mb-2 text-xs font-black text-slate-800">
-              일정 정보
-            </h3>
-
-            <div className="space-y-2 text-xs">
-              <InfoRow label="프로젝트" value={projectName} />
-              <InfoRow label="기간" value={periodText} />
-              <InfoRow
-                label="상태"
-                value={scheduleStatusLabel[selectedSchedule.status]}
-              />
-              <InfoRow
-                label="개발일지"
-                value={selectedSchedule.hasDevlog ? "작성됨" : "미작성"}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h3 className="text-xs font-black text-slate-800">일정 상세</h3>
-
-            <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-5 text-slate-600">
-              {selectedSchedule.description || "등록된 상세 내용이 없습니다."}
-            </p>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h3 className="text-xs font-black text-slate-800">일정 관리</h3>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500">
-              제목, 기간, 상태, 상세 내용을 수정하거나 일정을 삭제할 수 있습니다.
-            </p>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onEditSchedule(selectedSchedule)}
-                className="flex h-9 items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-xs font-bold text-slate-700 hover:bg-slate-200"
-              >
-                <Pencil size={14} />
-                수정
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onDeleteSchedule(selectedSchedule.id)}
-                disabled={deleting}
-                className="flex h-9 items-center justify-center gap-1.5 rounded-xl bg-rose-50 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-              >
-                {deleting ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Trash2 size={14} />
-                )}
-                삭제
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h3 className="text-xs font-black text-slate-800">상태 변경</h3>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500">
-              완료 상태로 변경하면 프로젝트 진행률에 반영됩니다.
-            </p>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onChangeStatus(selectedSchedule.id, "todo")}
-                className="h-9 rounded-xl bg-slate-100 text-xs font-bold text-slate-700 hover:bg-slate-200"
-              >
-                할 일
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onChangeStatus(selectedSchedule.id, "progress")}
-                className="h-9 rounded-xl bg-blue-50 text-xs font-bold text-blue-700 hover:bg-blue-100"
-              >
-                진행 중
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onChangeStatus(selectedSchedule.id, "done")}
-                className="h-9 rounded-xl bg-purple-50 text-xs font-bold text-purple-700 hover:bg-purple-100"
-              >
-                완료
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onChangeStatus(selectedSchedule.id, "delayed")}
-                className="h-9 rounded-xl bg-rose-50 text-xs font-bold text-rose-700 hover:bg-rose-100"
-              >
-                지연
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h3 className="text-xs font-black text-slate-800">개발일지 연결</h3>
-
-            {selectedSchedule.hasDevlog ? (
-              <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-xs font-semibold leading-5 text-emerald-700">
-                개발일지가 작성된 일정입니다.
-                <br />
-                수행 기록이 있어 진행 근거로 사용할 수 있습니다.
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onMarkDevlogWritten}
-                className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-blue-50 text-xs font-bold text-blue-700 hover:bg-blue-100"
-              >
-                <FilePenLine size={14} />
-                개발일지 화면에서 작성
-              </button>
-            )}
-          </section>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function CreateScheduleModal(props: {
-  form: CreateScheduleForm;
-  saving: boolean;
-  projectName: string;
-  onChange: React.Dispatch<React.SetStateAction<CreateScheduleForm>>;
-  onClose: () => void;
-  onSubmit: () => void;
-}) {
-  return <ScheduleFormModal mode="create" {...props} />;
-}
-
-function ScheduleFormModal({
-  mode,
-  form,
-  saving,
-  projectName,
-  onChange,
-  onClose,
-  onSubmit,
-}: {
-  mode: "create" | "edit";
-  form: CreateScheduleForm;
-  saving: boolean;
-  projectName: string;
-  onChange: React.Dispatch<React.SetStateAction<CreateScheduleForm>>;
-  onClose: () => void;
-  onSubmit: () => void;
-}) {
-  const updateField = (
-    key: keyof CreateScheduleForm,
-    value: string | ScheduleStatus,
-  ) => {
-    onChange((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-
-    const scrollbarWidth =
-      window.innerWidth - document.documentElement.clientWidth;
-
-    document.body.style.overflow = "hidden";
-
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
-    };
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/35 p-4">
-      <div className="flex max-h-[calc(100vh-32px)] w-full max-w-[620px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-blue-600">
-              {mode === "create" ? "New Schedule" : "Edit Schedule"}
-            </p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">
-              {mode === "create" ? "새 일정 추가" : "일정 수정"}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-            aria-label={mode === "create" ? "일정 추가 모달 닫기" : "일정 수정 모달 닫기"}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                프로젝트
-              </label>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
-                {projectName}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                일정 제목
-              </label>
-              <input
-                value={form.title}
-                onChange={(event) => updateField("title", event.target.value)}
-                placeholder="예: 로그인 API 구현"
-                className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
-                  시작일
-                </label>
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(event) =>
-                    updateField("startDate", event.target.value)
-                  }
-                  className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
-                  종료일
-                </label>
-                <input
-                  type="date"
-                  value={form.endDate}
-                  onChange={(event) =>
-                    updateField("endDate", event.target.value)
-                  }
-                  className="h-11 w-full rounded-2xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                상태
-              </label>
-
-              <div className="grid grid-cols-4 gap-2">
-                <StatusSelectButton
-                  active={form.status === "todo"}
-                  label="할 일"
-                  onClick={() => updateField("status", "todo")}
-                />
-                <StatusSelectButton
-                  active={form.status === "progress"}
-                  label="진행 중"
-                  onClick={() => updateField("status", "progress")}
-                />
-                <StatusSelectButton
-                  active={form.status === "done"}
-                  label="완료"
-                  onClick={() => updateField("status", "done")}
-                />
-                <StatusSelectButton
-                  active={form.status === "delayed"}
-                  label="지연"
-                  onClick={() => updateField("status", "delayed")}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                일정 상세
-              </label>
-              <textarea
-                value={form.description}
-                onChange={(event) =>
-                  updateField("description", event.target.value)
+        ) : (
+          items.map(
+            (workspace) => (
+              <WorkspaceButton
+                key={
+                  workspace.id
                 }
-                placeholder="일정에 대한 상세 내용을 입력하세요."
-                rows={4}
-                className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-blue-400"
+                workspace={
+                  workspace
+                }
+                selected={
+                  workspace.id ===
+                  selectedWorkspaceId
+                }
+                sidebarExpanded
+                onClick={() =>
+                  onSelect(
+                    workspace,
+                  )
+                }
               />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="h-10 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-          >
-            취소
-          </button>
-
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={saving}
-            className="flex h-10 items-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {saving && <Loader2 size={16} className="animate-spin" />}
-            {mode === "create" ? "일정 추가" : "수정 완료"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatusSelectButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`h-10 rounded-xl text-xs font-bold transition ${
-        active
-          ? "bg-blue-600 text-white"
-          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ProgressRulePanel({
-  totalCount,
-  doneCount,
-  progressRate,
-  recentDoneSchedule,
-  selectedProjectName,
-}: {
-  totalCount: number;
-  doneCount: number;
-  progressRate: number;
-  recentDoneSchedule: ProjectScheduleItem | null;
-  selectedProjectName: string;
-}) {
-  return (
-    <section className="mt-5 rounded-[24px] border border-slate-200 bg-white p-5">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <h2 className="text-lg font-bold">진행률 계산 기준</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            현재 선택된 범위는{" "}
-            <span className="font-bold text-slate-700">
-              {selectedProjectName}
-            </span>
-            입니다. 진행률은 선택 범위 안의 완료 일정 수를 전체 일정 수로 나누어
-            계산합니다.
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 px-5 py-4 text-right">
-          <p className="text-sm font-semibold text-slate-500">
-            완료 {doneCount} / 전체 {totalCount}
-          </p>
-          <p className="mt-1 text-2xl font-black text-blue-600">
-            {progressRate}%
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs font-bold text-slate-400">계산식</p>
-          <p className="mt-2 text-sm font-bold text-slate-700">
-            완료된 일정 수 / 전체 일정 수 × 100
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs font-bold text-slate-400">최근 완료</p>
-          <p className="mt-2 text-sm font-bold text-slate-700">
-            {recentDoneSchedule ? recentDoneSchedule.title : "완료된 일정 없음"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs font-bold text-slate-400">일반 개발일지</p>
-          <p className="mt-2 text-sm font-bold text-slate-700">
-            진행률에는 미포함
-          </p>
-        </div>
+            ),
+          )
+        )}
       </div>
     </section>
   );
 }
 
-function ViewButton({
-  active,
-  label,
+function WorkspaceButton({
+  workspace,
+  selected,
+  sidebarExpanded,
   onClick,
 }: {
-  active: boolean;
-  label: string;
+  workspace: WorkspaceSidebarItem;
+  selected: boolean;
+  sidebarExpanded: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      title={
+        !sidebarExpanded
+          ? workspace.name
+          : undefined
+      }
       onClick={onClick}
-      className={`rounded-xl px-5 py-2.5 text-sm font-bold ${
-        active
-          ? "bg-white text-slate-900 shadow-sm"
-          : "text-slate-500 hover:text-slate-900"
-      }`}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition",
+        selected
+          ? "bg-[#5873F9] text-white shadow-sm"
+          : "text-slate-700 hover:bg-slate-100",
+        !sidebarExpanded &&
+          "justify-center",
+      )}
     >
-      {label}
-    </button>
-  );
-}
-function TodayScopeButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`h-9 rounded-xl px-4 text-xs font-black transition ${
-        active
-          ? "bg-white text-slate-950 shadow-sm"
-          : "text-slate-500 hover:text-slate-900"
-      }`}
-    >
-      {label}
+      <div
+        className={cn(
+          "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
+          selected
+            ? "bg-white/15 text-white"
+            : workspace.mode ===
+                "team"
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-blue-50 text-blue-700",
+        )}
+      >
+        {workspace.mode ===
+        "team" ? (
+          <UsersRound
+            size={15}
+          />
+        ) : (
+          <UserRound
+            size={15}
+          />
+        )}
+      </div>
+
+      {sidebarExpanded && (
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-black">
+            {workspace.name}
+          </p>
+
+          <p
+            className={cn(
+              "mt-0.5 truncate text-[10px] font-semibold",
+              selected
+                ? "text-white/70"
+                : "text-slate-400",
+            )}
+          >
+            {workspace.mode ===
+            "team"
+              ? "팀 프로젝트"
+              : "개인 프로젝트"}
+            {" · "}
+            {
+              normalizeWorkspaceRole(
+                workspace.role,
+              )
+            }
+          </p>
+        </div>
+      )}
     </button>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+function HeaderMetric({
+  label,
+  value,
+  active,
+  danger,
+}: {
+  label: string;
+  value: number;
+  active?: boolean;
+  danger?: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-slate-400">{label}</span>
-      <span className="truncate text-right font-bold text-slate-700">
+    <div className="flex items-center gap-1.5">
+      <span className="text-[11px] font-bold text-slate-400">
+        {label}
+      </span>
+
+      <span
+        className={cn(
+          "text-sm font-black",
+          active
+            ? "text-[#5873F9]"
+            : danger
+              ? "text-rose-500"
+              : "text-slate-800",
+        )}
+      >
         {value}
       </span>
     </div>
   );
 }
 
-function EmptyBox({
-  text,
-  compact = false,
+function ViewButton({
+  active,
+  label,
+  icon: Icon,
+  onClick,
 }: {
-  text: string;
-  compact?: boolean;
+  active: boolean;
+  label: string;
+  icon: React.ComponentType<{
+    size?: number;
+  }>;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition",
+        active
+          ? "bg-white text-[#5873F9] shadow-sm"
+          : "text-slate-500 hover:text-slate-800",
+      )}
+    >
+      <Icon size={13} />
+      {label}
+    </button>
+  );
+}
+
+function SmartFilterButton({
+  active,
+  label,
+  warning,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  warning?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-9 rounded-xl border px-3 text-[11px] font-black transition",
+        active
+          ? warning
+            ? "border-amber-200 bg-amber-50 text-amber-700"
+            : "border-[#C9D2FF] bg-[#EEF3FF] text-[#5873F9]"
+          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* =========================================================
+   TEAM FILTER
+   ========================================================= */
+
+function MemberFilterChip({
+  member,
+  active,
+  currentUserId,
+  onClick,
+}: {
+  member: WorkspaceMember;
+  active: boolean;
+  currentUserId: number | null;
+  onClick: () => void;
+}) {
+  const name =
+    getMemberName(member);
+
+  const role =
+    getMemberRole(member);
+
+  const mine =
+    currentUserId ===
+    member.userId;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 transition",
+        active
+          ? "border-[#C9D2FF] bg-[#EEF3FF]"
+          : "border-slate-200 bg-white hover:bg-slate-50",
+      )}
+    >
+      <span
+        className={cn(
+          "grid h-6 w-6 place-items-center rounded-full text-[9px] font-black",
+          active
+            ? "bg-[#5873F9] text-white"
+            : "bg-slate-100 text-slate-600",
+        )}
+      >
+        {getInitial(name)}
+      </span>
+
+      <span className="text-[11px] font-black text-slate-700">
+        {name}
+        {mine && (
+          <span className="ml-1 text-[#5873F9]">
+            나
+          </span>
+        )}
+      </span>
+
+      <span
+        className={cn(
+          "text-[8px] font-black",
+          role ===
+            "OWNER"
+            ? "text-[#5873F9]"
+            : "text-slate-400",
+        )}
+      >
+        {role}
+      </span>
+    </button>
+  );
+}
+
+/* =========================================================
+   BOARD VIEW
+   ========================================================= */
+
+function BoardView({
+  schedules,
+  teamMembers,
+  isTeam,
+  onOpen,
+  onDragStart,
+  onStatusDrop,
+  onWriteDevlog,
+}: {
+  schedules: ProjectScheduleItem[];
+  teamMembers: WorkspaceMember[];
+  isTeam: boolean;
+  onOpen: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onDragStart: (
+    event: React.DragEvent,
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onStatusDrop: (
+    event: React.DragEvent,
+    status: ScheduleStatus,
+  ) => void;
+  onWriteDevlog: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+}) {
+  return (
+    <div className="grid min-h-[550px] grid-cols-1 gap-3 xl:grid-cols-4">
+      {BOARD_STATUSES.map(
+        (status) => {
+          const meta =
+            STATUS_META[status];
+
+          const items =
+            schedules.filter(
+              (schedule) =>
+                schedule.status ===
+                status,
+            );
+
+          return (
+            <section
+              key={status}
+              onDragOver={(
+                event,
+              ) => {
+                event.preventDefault();
+
+                event.dataTransfer.dropEffect =
+                  "move";
+              }}
+              onDrop={(
+                event,
+              ) =>
+                onStatusDrop(
+                  event,
+                  status,
+                )
+              }
+              className={cn(
+                "flex min-h-[500px] min-w-0 flex-col rounded-xl border",
+                meta.board,
+              )}
+            >
+              <div className="flex items-center justify-between border-b border-black/5 px-3.5 py-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "h-2 w-2 rounded-full",
+                      meta.dot,
+                    )}
+                  />
+
+                  <h3 className="text-xs font-black text-slate-800">
+                    {
+                      meta.label
+                    }
+                  </h3>
+
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black text-slate-400">
+                    {
+                      items.length
+                    }
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-2 p-2.5">
+                {items.map(
+                  (schedule) => (
+                    <ScheduleBoardCard
+                      key={
+                        schedule.id
+                      }
+                      schedule={
+                        schedule
+                      }
+                      members={
+                        teamMembers
+                      }
+                      isTeam={
+                        isTeam
+                      }
+                      onOpen={() =>
+                        onOpen(
+                          schedule,
+                        )
+                      }
+                      onDragStart={(
+                        event,
+                      ) =>
+                        onDragStart(
+                          event,
+                          schedule,
+                        )
+                      }
+                      onWriteDevlog={() =>
+                        onWriteDevlog(
+                          schedule,
+                        )
+                      }
+                    />
+                  ),
+                )}
+
+                {items.length ===
+                  0 && (
+                  <div className="grid min-h-[120px] place-items-center rounded-xl border border-dashed border-slate-200 bg-white/50 text-center">
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      여기에 작업을
+                      드래그하세요.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        },
+      )}
+    </div>
+  );
+}
+
+function ScheduleBoardCard({
+  schedule,
+  members,
+  isTeam,
+  onOpen,
+  onDragStart,
+  onWriteDevlog,
+}: {
+  schedule: ProjectScheduleItem;
+  members: WorkspaceMember[];
+  isTeam: boolean;
+  onOpen: () => void;
+  onDragStart: (
+    event: React.DragEvent,
+  ) => void;
+  onWriteDevlog: () => void;
+}) {
+  const member =
+    members.find(
+      (item) =>
+        item.userId ===
+        schedule.assigneeUserId,
+    );
+
+  const assigneeName =
+    member
+      ? getMemberName(member)
+      : schedule.assigneeName ||
+        "";
+
+  return (
+    <article
+      draggable
+      onDragStart={
+        onDragStart
+      }
+      onClick={onOpen}
+      className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-[#C9D2FF] hover:shadow-md"
+    >
+      <div className="flex items-start gap-2">
+        <GripVertical
+          size={14}
+          className="mt-0.5 shrink-0 cursor-grab text-slate-300 group-hover:text-slate-400"
+        />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="line-clamp-2 text-[13px] font-black leading-5 text-slate-900">
+              {schedule.title}
+            </h4>
+
+            {!schedule.hasDevlog && (
+              <span
+                title="개발일지 미작성"
+                className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-400"
+              />
+            )}
+          </div>
+
+          <p className="mt-2 text-[10px] font-bold text-slate-400">
+            {formatCompactDate(
+              schedule.startDate,
+            )}
+            {schedule.startDate !==
+              schedule.endDate &&
+              ` ~ ${formatCompactDate(
+                schedule.endDate,
+              )}`}
+          </p>
+
+          <div className="mt-3 flex min-w-0 items-center justify-between gap-2">
+            {isTeam ? (
+              assigneeName ? (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[9px] font-black text-[#5873F9]">
+                    {getInitial(
+                      assigneeName,
+                    )}
+                  </span>
+
+                  <span className="truncate text-[10px] font-bold text-slate-500">
+                    {
+                      assigneeName
+                    }
+                  </span>
+                </div>
+              ) : (
+                <span className="text-[10px] font-bold text-slate-400">
+                  담당자 미지정
+                </span>
+              )
+            ) : (
+              <span className="truncate text-[10px] font-semibold text-slate-400">
+                {getProjectName(
+                  schedule,
+                )}
+              </span>
+            )}
+          </div>
+
+          {!schedule.hasDevlog && (
+            <button
+              type="button"
+              onClick={(
+                event,
+              ) => {
+                event.stopPropagation();
+
+                onWriteDevlog();
+              }}
+              onMouseDown={(
+                event,
+              ) =>
+                event.stopPropagation()
+              }
+              className="mt-3 flex w-full items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-2 text-[10px] font-black text-amber-700 transition hover:bg-amber-100"
+            >
+              <span className="flex items-center gap-1.5">
+                <FilePenLine
+                  size={12}
+                />
+                개발일지 미작성
+              </span>
+
+              <ArrowRight
+                size={12}
+              />
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* =========================================================
+   CALENDAR VIEW
+   - 기간 일정은 날짜마다 쪼개지 않고 주 단위의 긴 Bar로 표시
+   - 주가 넘어가는 경우에만 다음 주 행으로 자연스럽게 이어짐
+   - 일정 Bar Drag & Drop으로 시작일 이동
+   - 개발일지 미작성 일정은 Bar 내부 아이콘으로 바로 일지 작성 이동
+   ========================================================= */
+
+type CalendarWeekSegment = {
+  schedule: ProjectScheduleItem;
+  startIndex: number;
+  endIndex: number;
+  lane: number;
+  continuesFromPreviousWeek: boolean;
+  continuesToNextWeek: boolean;
+};
+
+function buildCalendarWeekSegments(
+  weekDates: Date[],
+  schedules: ProjectScheduleItem[],
+  maxVisibleLanes = 4,
+) {
+  const weekStartKey =
+    getDateKeyFromDate(
+      weekDates[0],
+    );
+
+  const weekEndKey =
+    getDateKeyFromDate(
+      weekDates[
+        weekDates.length - 1
+      ],
+    );
+
+  const candidates =
+    schedules
+      .filter(
+        (schedule) =>
+          schedule.endDate >=
+            weekStartKey &&
+          schedule.startDate <=
+            weekEndKey,
+      )
+      .map((schedule) => {
+        const visibleStart =
+          schedule.startDate <
+          weekStartKey
+            ? weekStartKey
+            : schedule.startDate;
+
+        const visibleEnd =
+          schedule.endDate >
+          weekEndKey
+            ? weekEndKey
+            : schedule.endDate;
+
+        const startIndex =
+          getDayDifference(
+            weekDates[0],
+            parseDateKey(
+              visibleStart,
+            ),
+          );
+
+        const endIndex =
+          getDayDifference(
+            weekDates[0],
+            parseDateKey(
+              visibleEnd,
+            ),
+          );
+
+        return {
+          schedule,
+          startIndex,
+          endIndex,
+          continuesFromPreviousWeek:
+            schedule.startDate <
+            weekStartKey,
+          continuesToNextWeek:
+            schedule.endDate >
+            weekEndKey,
+        };
+      })
+      .sort((a, b) => {
+        if (
+          a.startIndex !==
+          b.startIndex
+        ) {
+          return (
+            a.startIndex -
+            b.startIndex
+          );
+        }
+
+        const aLength =
+          a.endIndex -
+          a.startIndex;
+
+        const bLength =
+          b.endIndex -
+          b.startIndex;
+
+        return bLength - aLength;
+      });
+
+  const laneEndIndexes:
+    number[] = [];
+
+  const segments:
+    CalendarWeekSegment[] = [];
+
+  let hiddenCount = 0;
+
+  for (
+    const candidate of
+      candidates
+  ) {
+    let lane =
+      laneEndIndexes.findIndex(
+        (endIndex) =>
+          endIndex <
+          candidate.startIndex,
+      );
+
+    if (lane === -1) {
+      lane =
+        laneEndIndexes.length;
+    }
+
+    if (
+      lane >=
+      maxVisibleLanes
+    ) {
+      hiddenCount += 1;
+      continue;
+    }
+
+    laneEndIndexes[lane] =
+      candidate.endIndex;
+
+    segments.push({
+      ...candidate,
+      lane,
+    });
+  }
+
+  return {
+    segments,
+    laneCount:
+      Math.min(
+        maxVisibleLanes,
+        Math.max(
+          1,
+          laneEndIndexes.length,
+        ),
+      ),
+    hiddenCount,
+  };
+}
+
+function CalendarView({
+  year,
+  month,
+  todayDate,
+  cells,
+  schedules,
+  onPrev,
+  onNext,
+  onToday,
+  onOpen,
+  onCreateForDate,
+  onDragStart,
+  onWriteDevlog,
+  onDateDrop,
+}: {
+  year: number;
+  month: number;
+  todayDate: string;
+  cells: Date[];
+  schedules: ProjectScheduleItem[];
+  onPrev: () => void;
+  onNext: () => void;
+  onToday: () => void;
+  onOpen: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onCreateForDate: (
+    dateKey: string,
+  ) => void;
+  onDragStart: (
+    event: React.DragEvent,
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onWriteDevlog: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onDateDrop: (
+    event: React.DragEvent,
+    dateKey: string,
+  ) => void;
+}) {
+  const weeks = [
+    "일",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+  ];
+
+  const calendarWeeks =
+    useMemo(() => {
+      return Array.from(
+        { length: 6 },
+        (_, weekIndex) =>
+          cells.slice(
+            weekIndex * 7,
+            weekIndex * 7 + 7,
+          ),
+      );
+    }, [cells]);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onPrev}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+            aria-label="이전 달"
+          >
+            <ChevronLeft
+              size={15}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={onNext}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+            aria-label="다음 달"
+          >
+            <ChevronRight
+              size={15}
+            />
+          </button>
+
+          <div className="ml-1">
+            <h3 className="text-sm font-black tracking-tight text-slate-900">
+              {year}년 {month + 1}월
+            </h3>
+
+            {/* <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+              기간 일정은 하나의 Bar로 이어서 표시됩니다.
+            </p> */}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onToday}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+        >
+          오늘
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 border-b border-slate-100 bg-[#FAFBFD]">
+        {weeks.map(
+          (day, index) => (
+            <div
+              key={day}
+              className={cn(
+                "px-2 py-2.5 text-center text-[10px] font-black",
+                index === 0
+                  ? "text-rose-400"
+                  : index === 6
+                    ? "text-blue-500"
+                    : "text-slate-400",
+              )}
+            >
+              {day}
+            </div>
+          ),
+        )}
+      </div>
+
+      <div>
+        {calendarWeeks.map(
+          (
+            weekDates,
+            weekIndex,
+          ) => {
+            const {
+              segments,
+              laneCount,
+              hiddenCount,
+            } =
+              buildCalendarWeekSegments(
+                weekDates,
+                schedules,
+              );
+
+            const rowHeight =
+              Math.max(
+                122,
+                45 +
+                  laneCount * 27 +
+                  (hiddenCount > 0
+                    ? 18
+                    : 0),
+              );
+
+            return (
+              <div
+                key={
+                  getDateKeyFromDate(
+                    weekDates[0],
+                  )
+                }
+                className={cn(
+                  "relative border-b border-slate-100 last:border-b-0",
+                  weekIndex % 2 === 1 &&
+                    "bg-slate-50/15",
+                )}
+                style={{
+                  height:
+                    rowHeight,
+                }}
+              >
+                {/* 날짜 셀 / Drop zone */}
+                <div className="absolute inset-0 grid grid-cols-7">
+                  {weekDates.map(
+                    (
+                      date,
+                      dayIndex,
+                    ) => {
+                      const dateKey =
+                        getDateKeyFromDate(
+                          date,
+                        );
+
+                      const currentMonth =
+                        date.getMonth() ===
+                        month;
+
+                      const isToday =
+                        dateKey ===
+                        todayDate;
+
+                      return (
+                        <div
+                          key={
+                            dateKey
+                          }
+                          onDragOver={(
+                            event,
+                          ) => {
+                            event.preventDefault();
+
+                            event.dataTransfer.dropEffect =
+                              "move";
+                          }}
+                          onDrop={(
+                            event,
+                          ) =>
+                            onDateDrop(
+                              event,
+                              dateKey,
+                            )
+                          }
+                          onDoubleClick={() =>
+                            onCreateForDate(
+                              dateKey,
+                            )
+                          }
+                          className={cn(
+                            "group/day relative border-r border-slate-100 transition last:border-r-0 hover:bg-[#F8FAFF]",
+                            !currentMonth &&
+                              "bg-slate-50/55",
+                            isToday &&
+                              "bg-[#F4F7FF]",
+                          )}
+                        >
+                          <div className="flex h-[38px] items-center justify-between px-2 pt-1">
+                            <span
+                              className={cn(
+                                "grid h-6 w-6 place-items-center rounded-full text-[10px] font-black",
+                                isToday
+                                  ? "bg-[#5873F9] text-white shadow-sm"
+                                  : currentMonth
+                                    ? dayIndex === 0
+                                      ? "text-rose-400"
+                                      : dayIndex === 6
+                                        ? "text-blue-500"
+                                        : "text-slate-600"
+                                    : "text-slate-300",
+                              )}
+                            >
+                              {date.getDate()}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={(
+                                event,
+                              ) => {
+                                event.stopPropagation();
+
+                                onCreateForDate(
+                                  dateKey,
+                                );
+                              }}
+                              className="grid h-5 w-5 place-items-center rounded-md text-slate-300 opacity-0 transition hover:bg-white hover:text-[#5873F9] hover:shadow-sm group-hover/day:opacity-100"
+                              aria-label={`${dateKey} 일정 추가`}
+                            >
+                              <Plus
+                                size={11}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+
+                {/* 주 단위 Schedule Bar */}
+                <div className="pointer-events-none absolute inset-x-0 top-[39px] bottom-1">
+                  {segments.map(
+                    (segment) => {
+                      const spanDays =
+                        segment.endIndex -
+                        segment.startIndex +
+                        1;
+
+                      const startPercent =
+                        (segment.startIndex /
+                          7) *
+                        100;
+
+                      const widthPercent =
+                        (spanDays / 7) *
+                        100;
+
+                      const leftInset =
+                        segment.continuesFromPreviousWeek
+                          ? 0
+                          : 6;
+
+                      const rightInset =
+                        segment.continuesToNextWeek
+                          ? 0
+                          : 6;
+
+                      const schedule =
+                        segment.schedule;
+
+                      return (
+                        <div
+                          key={`${schedule.id}-${weekIndex}`}
+                          draggable
+                          role="button"
+                          tabIndex={0}
+                          onDragStart={(
+                            event,
+                          ) =>
+                            onDragStart(
+                              event,
+                              schedule,
+                            )
+                          }
+                          onClick={() =>
+                            onOpen(
+                              schedule,
+                            )
+                          }
+                          onKeyDown={(
+                            event,
+                          ) => {
+                            if (
+                              event.key ===
+                                "Enter" ||
+                              event.key ===
+                                " "
+                            ) {
+                              event.preventDefault();
+
+                              onOpen(
+                                schedule,
+                              );
+                            }
+                          }}
+                          className={cn(
+                            "pointer-events-auto absolute flex h-[22px] cursor-grab items-center gap-1.5 overflow-hidden border px-2 text-[9px] font-black shadow-[0_1px_2px_rgba(15,23,42,0.08)] transition hover:z-20 hover:-translate-y-[1px] hover:brightness-[0.98] hover:shadow-md active:cursor-grabbing",
+                            STATUS_META[
+                              schedule.status
+                            ].badge,
+                            segment.continuesFromPreviousWeek
+                              ? "rounded-l-none border-l-0"
+                              : "rounded-l-md",
+                            segment.continuesToNextWeek
+                              ? "rounded-r-none border-r-0"
+                              : "rounded-r-md",
+                          )}
+                          style={{
+                            left: `calc(${startPercent}% + ${leftInset}px)`,
+                            width: `calc(${widthPercent}% - ${leftInset + rightInset}px)`,
+                            top:
+                              segment.lane *
+                              27,
+                          }}
+                          title={`${schedule.title} · ${getSchedulePeriodText(
+                            schedule,
+                          )}`}
+                        >
+                          {!segment.continuesFromPreviousWeek && (
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 shrink-0 rounded-full",
+                                STATUS_META[
+                                  schedule.status
+                                ].dot,
+                              )}
+                            />
+                          )}
+
+                          <span className="min-w-0 flex-1 truncate">
+                            {schedule.title}
+                          </span>
+
+                          {!schedule.hasDevlog &&
+                            spanDays >= 2 && (
+                              <button
+                                type="button"
+                                onClick={(
+                                  event,
+                                ) => {
+                                  event.stopPropagation();
+
+                                  onWriteDevlog(
+                                    schedule,
+                                  );
+                                }}
+                                onMouseDown={(
+                                  event,
+                                ) =>
+                                  event.stopPropagation()
+                                }
+                                className="grid h-4 w-4 shrink-0 place-items-center rounded bg-white/80 text-amber-600 transition hover:bg-amber-100"
+                                title="이 일정으로 개발일지 작성"
+                              >
+                                <FilePenLine
+                                  size={10}
+                                />
+                              </button>
+                            )}
+                        </div>
+                      );
+                    },
+                  )}
+
+                  {hiddenCount > 0 && (
+                    <div
+                      className="absolute left-2 text-[9px] font-black text-slate-400"
+                      style={{
+                        top:
+                          laneCount *
+                            27 +
+                          1,
+                      }}
+                    >
+                      +{hiddenCount}개 일정 더 있음
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          },
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-[#FBFCFE] px-4 py-2.5">
+        <p className="text-[10px] font-semibold text-slate-400">
+          일정 Bar를 다른 날짜로 드래그하면 기간 길이를 유지한 채 이동합니다.
+        </p>
+
+        <div className="flex items-center gap-3 text-[9px] font-bold text-slate-400">
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            완료
+          </span>
+
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-[#5873F9]" />
+            진행 중
+          </span>
+
+          <span className="flex items-center gap-1">
+            <FilePenLine
+              size={10}
+              className="text-amber-500"
+            />
+            일지 미작성
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   GANTT VIEW
+   ========================================================= */
+
+function GanttView({
+  startDate,
+  days,
+  schedules,
+  teamMembers,
+  isTeam,
+  onPrev,
+  onNext,
+  onToday,
+  onOpen,
+  onDragStart,
+  onWriteDevlog,
+  onDateDrop,
+}: {
+  startDate: Date;
+  days: Date[];
+  schedules: ProjectScheduleItem[];
+  teamMembers: WorkspaceMember[];
+  isTeam: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onToday: () => void;
+  onOpen: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onDragStart: (
+    event: React.DragEvent,
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onWriteDevlog: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onDateDrop: (
+    event: React.DragEvent,
+    dateKey: string,
+  ) => void;
+}) {
+  const cellWidth = 38;
+
+  const timelineWidth =
+    days.length * cellWidth;
+
+  const rangeStart =
+    days[0];
+
+  const rangeEnd =
+    days[
+      days.length - 1
+    ];
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onPrev}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+          >
+            <ChevronLeft
+              size={15}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={onNext}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+          >
+            <ChevronRight
+              size={15}
+            />
+          </button>
+
+          <div className="ml-1">
+            <p className="text-xs font-black text-slate-800">
+              프로젝트 타임라인
+            </p>
+
+            <p className="text-[10px] font-semibold text-slate-400">
+              {formatCompactDate(
+                getDateKeyFromDate(
+                  startDate,
+                ),
+              )}
+              {" ~ "}
+              {formatCompactDate(
+                getDateKeyFromDate(
+                  rangeEnd,
+                ),
+              )}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onToday}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-slate-500 hover:bg-slate-50"
+        >
+          오늘 기준
+        </button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div
+          style={{
+            minWidth:
+              220 +
+              timelineWidth,
+          }}
+        >
+          {/* header */}
+          <div className="flex border-b border-slate-100 bg-slate-50">
+            <div className="w-[220px] shrink-0 border-r border-slate-200 px-4 py-2 text-[10px] font-black text-slate-400">
+              작업
+            </div>
+
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `repeat(${days.length}, ${cellWidth}px)`,
+              }}
+            >
+              {days.map(
+                (date) => {
+                  const weekend =
+                    date.getDay() ===
+                      0 ||
+                    date.getDay() ===
+                      6;
+
+                  return (
+                    <div
+                      key={getDateKeyFromDate(
+                        date,
+                      )}
+                      className={cn(
+                        "border-r border-slate-100 py-1.5 text-center",
+                        weekend &&
+                          "bg-slate-100/50",
+                      )}
+                    >
+                      <p className="text-[8px] font-bold text-slate-400">
+                        {
+                          [
+                            "일",
+                            "월",
+                            "화",
+                            "수",
+                            "목",
+                            "금",
+                            "토",
+                          ][
+                            date.getDay()
+                          ]
+                        }
+                      </p>
+
+                      <p className="mt-0.5 text-[9px] font-black text-slate-600">
+                        {
+                          date.getDate()
+                        }
+                      </p>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+          </div>
+
+          {/* rows */}
+          {schedules.map(
+            (schedule) => {
+              const scheduleStart =
+                parseDateKey(
+                  schedule.startDate,
+                );
+
+              const scheduleEnd =
+                parseDateKey(
+                  schedule.endDate,
+                );
+
+              const clippedStart =
+                scheduleStart <
+                rangeStart
+                  ? rangeStart
+                  : scheduleStart;
+
+              const clippedEnd =
+                scheduleEnd >
+                rangeEnd
+                  ? rangeEnd
+                  : scheduleEnd;
+
+              const left =
+                getDayDifference(
+                  rangeStart,
+                  clippedStart,
+                ) *
+                cellWidth;
+
+              const width =
+                (getDayDifference(
+                  clippedStart,
+                  clippedEnd,
+                ) +
+                  1) *
+                cellWidth;
+
+              const member =
+                teamMembers.find(
+                  (item) =>
+                    item.userId ===
+                    schedule.assigneeUserId,
+                );
+
+              const assigneeName =
+                member
+                  ? getMemberName(
+                      member,
+                    )
+                  : schedule.assigneeName;
+
+              return (
+                <div
+                  key={
+                    schedule.id
+                  }
+                  className="flex min-h-[54px] border-b border-slate-100"
+                >
+                  <div className="flex w-[220px] shrink-0 items-center border-r border-slate-200 hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpen(
+                          schedule,
+                        )
+                      }
+                      className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                    >
+                      <span
+                        className={cn(
+                          "h-2 w-2 shrink-0 rounded-full",
+                          STATUS_META[
+                            schedule
+                              .status
+                          ].dot,
+                        )}
+                      />
+
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11px] font-black text-slate-800">
+                          {
+                            schedule.title
+                          }
+                        </span>
+
+                        <span className="mt-0.5 block truncate text-[9px] font-semibold text-slate-400">
+                          {isTeam
+                            ? assigneeName ||
+                              "담당자 미지정"
+                            : getSchedulePeriodText(
+                                schedule,
+                              )}
+                        </span>
+                      </span>
+                    </button>
+
+                    {!schedule.hasDevlog && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onWriteDevlog(
+                            schedule,
+                          )
+                        }
+                        className="mr-2 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 transition hover:bg-amber-100"
+                        title="이 일정으로 개발일지 작성"
+                      >
+                        <FilePenLine
+                          size={12}
+                        />
+                      </button>
+                    )}
+                  </div>
+
+                  <div
+                    className="relative"
+                    style={{
+                      width:
+                        timelineWidth,
+                    }}
+                  >
+                    <div
+                      className="absolute inset-0 grid"
+                      style={{
+                        gridTemplateColumns: `repeat(${days.length}, ${cellWidth}px)`,
+                      }}
+                    >
+                      {days.map(
+                        (
+                          date,
+                        ) => {
+                          const dateKey =
+                            getDateKeyFromDate(
+                              date,
+                            );
+
+                          return (
+                            <div
+                              key={
+                                dateKey
+                              }
+                              onDragOver={(
+                                event,
+                              ) => {
+                                event.preventDefault();
+
+                                event.dataTransfer.dropEffect =
+                                  "move";
+                              }}
+                              onDrop={(
+                                event,
+                              ) =>
+                                onDateDrop(
+                                  event,
+                                  dateKey,
+                                )
+                              }
+                              className={cn(
+                                "border-r border-slate-100 transition hover:bg-[#EEF3FF]/60",
+                                (date.getDay() ===
+                                  0 ||
+                                  date.getDay() ===
+                                    6) &&
+                                  "bg-slate-50",
+                              )}
+                            />
+                          );
+                        },
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(
+                        event,
+                      ) =>
+                        onDragStart(
+                          event,
+                          schedule,
+                        )
+                      }
+                      onClick={() =>
+                        onOpen(
+                          schedule,
+                        )
+                      }
+                      className={cn(
+                        "absolute top-[13px] z-10 flex h-7 items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[9px] font-black shadow-sm transition hover:brightness-95",
+                        STATUS_META[
+                          schedule
+                            .status
+                        ].badge,
+                      )}
+                      style={{
+                        left:
+                          left + 2,
+                        width:
+                          Math.max(
+                            width - 4,
+                            32,
+                          ),
+                      }}
+                    >
+                      <GripVertical
+                        size={10}
+                        className="shrink-0 opacity-50"
+                      />
+
+                      <span className="truncate">
+                        {
+                          schedule.title
+                        }
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            },
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   LIST VIEW
+   ========================================================= */
+
+function ListView({
+  schedules,
+  teamMembers,
+  isTeam,
+  onOpen,
+  onStatusChange,
+  onWriteDevlog,
+  onOpenDevlog,
+}: {
+  schedules: ProjectScheduleItem[];
+  teamMembers: WorkspaceMember[];
+  isTeam: boolean;
+  onOpen: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onStatusChange: (
+    scheduleId: string,
+    status: ScheduleStatus,
+  ) => Promise<void>;
+  onWriteDevlog: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+  onOpenDevlog: (
+    schedule: ProjectScheduleItem,
+  ) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div
+        className={cn(
+          "grid gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400",
+          isTeam
+            ? "grid-cols-[minmax(220px,1.7fr)_150px_110px_170px_130px]"
+            : "grid-cols-[minmax(260px,2fr)_110px_190px_130px]",
+        )}
+      >
+        <div>Task</div>
+
+        {isTeam && (
+          <div>
+            Assignee
+          </div>
+        )}
+
+        <div>Status</div>
+
+        <div>Period</div>
+
+        <div>Devlog</div>
+      </div>
+
+      {schedules.map(
+        (schedule) => {
+          const member =
+            teamMembers.find(
+              (item) =>
+                item.userId ===
+                schedule.assigneeUserId,
+            );
+
+          const assigneeName =
+            member
+              ? getMemberName(
+                  member,
+                )
+              : schedule.assigneeName;
+
+          return (
+            <div
+              key={
+                schedule.id
+              }
+              className={cn(
+                "grid items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-[#FBFCFF]",
+                isTeam
+                  ? "grid-cols-[minmax(220px,1.7fr)_150px_110px_170px_130px]"
+                  : "grid-cols-[minmax(260px,2fr)_110px_190px_130px]",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  onOpen(
+                    schedule,
+                  )
+                }
+                className="min-w-0 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "h-2 w-2 shrink-0 rounded-full",
+                      STATUS_META[
+                        schedule.status
+                      ].dot,
+                    )}
+                  />
+
+                  <span className="truncate text-xs font-black text-slate-800">
+                    {
+                      schedule.title
+                    }
+                  </span>
+                </div>
+
+                <p className="mt-1 truncate pl-4 text-[10px] font-semibold text-slate-400">
+                  {getProjectName(
+                    schedule,
+                  )}
+                </p>
+              </button>
+
+              {isTeam && (
+                <div>
+                  {assigneeName ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="grid h-6 w-6 place-items-center rounded-full bg-[#EEF3FF] text-[9px] font-black text-[#5873F9]">
+                        {getInitial(
+                          assigneeName,
+                        )}
+                      </span>
+
+                      <span className="truncate text-[10px] font-bold text-slate-600">
+                        {
+                          assigneeName
+                        }
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      미지정
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <select
+                  value={
+                    schedule.status
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    void onStatusChange(
+                      schedule.id,
+                      event.target
+                        .value as ScheduleStatus,
+                    )
+                  }
+                  className={cn(
+                    "h-8 rounded-lg border px-2 text-[10px] font-black outline-none",
+                    STATUS_META[
+                      schedule.status
+                    ].badge,
+                  )}
+                >
+                  <option value="todo">
+                    할 일
+                  </option>
+
+                  <option value="progress">
+                    진행 중
+                  </option>
+
+                  <option value="done">
+                    완료
+                  </option>
+
+                  <option value="delayed">
+                    지연
+                  </option>
+                </select>
+              </div>
+
+              <div className="text-[10px] font-bold text-slate-500">
+                {getSchedulePeriodText(
+                  schedule,
+                )}
+              </div>
+
+              <div>
+                {schedule.hasDevlog ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenDevlog(
+                        schedule,
+                      )
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] font-black text-emerald-700"
+                  >
+                    <CheckCircle2
+                      size={11}
+                    />
+                    작성 완료
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onWriteDevlog(
+                        schedule,
+                      )
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] font-black text-amber-700 transition hover:bg-amber-100"
+                  >
+                    <FilePenLine
+                      size={11}
+                    />
+                    작성하기
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        },
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
+   DETAIL MODAL
+   ========================================================= */
+
+function ScheduleDetailModal({
+  schedule,
+  members,
+  isTeam,
+  deleting,
+  onClose,
+  onEdit,
+  onDelete,
+  onStatusChange,
+  onWriteDevlog,
+  onOpenDevlog,
+}: {
+  schedule: ProjectScheduleItem;
+  members: WorkspaceMember[];
+  isTeam: boolean;
+  deleting: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onStatusChange: (
+    status: ScheduleStatus,
+  ) => void;
+  onWriteDevlog: () => void;
+  onOpenDevlog: () => void;
+}) {
+  const member =
+    members.find(
+      (item) =>
+        item.userId ===
+        schedule.assigneeUserId,
+    );
+
+  const assigneeName =
+    member
+      ? getMemberName(member)
+      : schedule.assigneeName ||
+        "";
+
+  const memberRole =
+    member
+      ? getMemberRole(member)
+      : null;
+
+  return (
+    <ModalShell
+      onClose={onClose}
+      width="max-w-[620px]"
+    >
+      <div className="border-b border-slate-100 px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <StatusBadge
+                status={
+                  schedule.status
+                }
+              />
+
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-500">
+                {getProjectName(
+                  schedule,
+                )}
+              </span>
+            </div>
+
+            <h2 className="text-lg font-black tracking-tight text-slate-950">
+              {schedule.title}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DetailValue
+            label="기간"
+            value={getSchedulePeriodText(
+              schedule,
+            )}
+          />
+
+          {isTeam && (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                담당자
+              </p>
+
+              {assigneeName ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-black text-[#5873F9]">
+                    {getInitial(
+                      assigneeName,
+                    )}
+                  </span>
+
+                  <div>
+                    <p className="text-xs font-black text-slate-800">
+                      {
+                        assigneeName
+                      }
+                    </p>
+
+                    {memberRole && (
+                      <p className="text-[9px] font-black text-[#5873F9]">
+                        {
+                          memberRole
+                        }
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs font-bold text-slate-400">
+                  담당자가 지정되지
+                  않았습니다.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+            설명
+          </p>
+
+          <div className="mt-2 min-h-[82px] whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs font-medium leading-6 text-slate-600">
+            {schedule.description ||
+              "등록된 상세 내용이 없습니다."}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">
+            상태
+          </p>
+
+          <div className="grid grid-cols-4 gap-2">
+            {BOARD_STATUSES.map(
+              (status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() =>
+                    onStatusChange(
+                      status,
+                    )
+                  }
+                  className={cn(
+                    "rounded-xl border px-2 py-2 text-[10px] font-black transition",
+                    schedule.status ===
+                      status
+                      ? STATUS_META[
+                          status
+                        ].badge
+                      : "border-slate-200 bg-white text-slate-400 hover:bg-slate-50",
+                  )}
+                >
+                  {
+                    STATUS_META[
+                      status
+                    ].label
+                  }
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+
+        {/* devlog */}
+        <div
+          className={cn(
+            "rounded-xl border p-4",
+            schedule.hasDevlog
+              ? "border-emerald-100 bg-emerald-50/60"
+              : "border-amber-100 bg-amber-50/60",
+          )}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                {schedule.hasDevlog ? (
+                  <CheckCircle2
+                    size={15}
+                    className="text-emerald-600"
+                  />
+                ) : (
+                  <FilePenLine
+                    size={15}
+                    className="text-amber-600"
+                  />
+                )}
+
+                <p
+                  className={cn(
+                    "text-xs font-black",
+                    schedule.hasDevlog
+                      ? "text-emerald-800"
+                      : "text-amber-800",
+                  )}
+                >
+                  개발일지
+                </p>
+              </div>
+
+              <p
+                className={cn(
+                  "mt-1 text-[10px] font-semibold",
+                  schedule.hasDevlog
+                    ? "text-emerald-600"
+                    : "text-amber-600",
+                )}
+              >
+                {schedule.hasDevlog
+                  ? "이 일정에 연결된 개발일지가 작성되어 있습니다."
+                  : "아직 이 일정에 연결된 개발일지가 없습니다."}
+              </p>
+            </div>
+
+            {schedule.hasDevlog ? (
+              <button
+                type="button"
+                onClick={
+                  onOpenDevlog
+                }
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-[10px] font-black text-emerald-700 shadow-sm"
+              >
+                개발일지 보기
+                <ArrowRight
+                  size={11}
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={
+                  onWriteDevlog
+                }
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-[10px] font-black text-white transition hover:bg-amber-600"
+              >
+                <FilePenLine
+                  size={11}
+                />
+                이 일정으로 일지 작성
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4">
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={onDelete}
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 text-[11px] font-black text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+        >
+          {deleting ? (
+            <Loader2
+              size={13}
+              className="animate-spin"
+            />
+          ) : (
+            <Trash2
+              size={13}
+            />
+          )}
+          삭제
+        </button>
+
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-[11px] font-black text-white transition hover:bg-[#4863E8]"
+        >
+          <Pencil
+            size={13}
+          />
+          일정 수정
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* =========================================================
+   FORM MODAL
+   ========================================================= */
+
+function ScheduleFormModal({
+  mode,
+  title,
+  description,
+  form,
+  setForm,
+  members,
+  isTeam,
+  saving,
+  submitLabel,
+  onClose,
+  onSubmit,
+}: {
+  mode: "create" | "edit";
+
+  title: string;
+  description: string;
+
+  form: ScheduleForm;
+
+  setForm: React.Dispatch<
+    React.SetStateAction<ScheduleForm>
+  >;
+
+  members: WorkspaceMember[];
+
+  isTeam: boolean;
+  saving: boolean;
+
+  submitLabel: string;
+
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const isEdit =
+    mode === "edit";
+
+  const selectedMember =
+    members.find(
+      (member) =>
+        member.userId ===
+        form.assigneeUserId,
+    ) ?? null;
+
+  return (
+    <ModalShell
+      onClose={onClose}
+      width="max-w-[720px]"
+    >
+      {/* =================================================
+          HEADER
+         ================================================= */}
+      <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-6 py-5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5873F9]">
+              Schedule
+            </span>
+
+            <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[9px] font-black text-[#5873F9]">
+              {isEdit
+                ? "EDIT"
+                : "NEW"}
+            </span>
+          </div>
+
+          <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+            {title}
+          </h2>
+
+          <p className="mt-1 text-xs font-medium text-slate-400">
+            {description}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onClose}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+          aria-label="일정 모달 닫기"
+        >
+          <X size={17} />
+        </button>
+      </header>
+
+      {/* =================================================
+          CONTENT
+         ================================================= */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="px-6 py-5">
+          {/* =============================================
+              TITLE
+             ============================================= */}
+          <div>
+            <div className="flex items-center gap-1">
+              <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                Title
+              </label>
+
+              <span className="text-[10px] font-black text-rose-500">
+                *
+              </span>
+            </div>
+
+            <input
+              value={form.title}
+              onChange={(event) =>
+                setForm(
+                  (prev) => ({
+                    ...prev,
+                    title:
+                      event.target.value,
+                  }),
+                )
+              }
+              placeholder="예: 로그인 API 구현"
+              autoFocus
+              className="mt-1 w-full border-0 border-b border-slate-200 bg-transparent px-0 pb-3 pt-1 text-[19px] font-black tracking-tight text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#5873F9]"
+            />
+          </div>
+
+          {/* =============================================
+              META INFORMATION
+             ============================================= */}
+          <section className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            {/* PERIOD */}
+            <ScheduleMetaRow
+              icon={
+                <CalendarDays
+                  size={15}
+                />
+              }
+              label="기간"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <input
+                  type="date"
+                  value={
+                    form.startDate
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setForm(
+                      (prev) => ({
+                        ...prev,
+
+                        startDate:
+                          event.target
+                            .value,
+
+                        endDate:
+                          prev.endDate <
+                          event.target
+                            .value
+                            ? event.target
+                                .value
+                            : prev.endDate,
+                      }),
+                    )
+                  }
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                />
+
+                <ArrowRight
+                  size={14}
+                  className="shrink-0 text-slate-300"
+                />
+
+                <input
+                  type="date"
+                  min={
+                    form.startDate
+                  }
+                  value={
+                    form.endDate
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setForm(
+                      (prev) => ({
+                        ...prev,
+
+                        endDate:
+                          event.target
+                            .value,
+                      }),
+                    )
+                  }
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                />
+              </div>
+            </ScheduleMetaRow>
+
+            {/* STATUS */}
+            <ScheduleMetaRow
+              icon={
+                <Clock3
+                  size={15}
+                />
+              }
+              label="상태"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {BOARD_STATUSES.map(
+                  (status) => (
+                    <ScheduleStatusButton
+                      key={status}
+                      status={status}
+                      active={
+                        form.status ===
+                        status
+                      }
+                      onClick={() =>
+                        setForm(
+                          (prev) => ({
+                            ...prev,
+                            status,
+                          }),
+                        )
+                      }
+                    />
+                  ),
+                )}
+              </div>
+            </ScheduleMetaRow>
+
+            {/* ASSIGNEE */}
+            {isTeam && (
+              <ScheduleMetaRow
+                icon={
+                  <UserRound
+                    size={15}
+                  />
+                }
+                label="담당자"
+                alignStart
+                last
+              >
+                <div className="min-w-0 flex-1">
+                  {members.length ===
+                  0 ? (
+                    <div className="py-2 text-xs font-semibold text-slate-400">
+                      조회된 팀원이 없습니다.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {members.map(
+                        (member) => {
+                          const active =
+                            form.assigneeUserId ===
+                            member.userId;
+
+                          const role =
+                            getMemberRole(
+                              member,
+                            );
+
+                          const name =
+                            getMemberName(
+                              member,
+                            );
+
+                          return (
+                            <button
+                              key={
+                                member.userId
+                              }
+                              type="button"
+                              onClick={() =>
+                                setForm(
+                                  (
+                                    prev,
+                                  ) => ({
+                                    ...prev,
+
+                                    assigneeUserId:
+                                      member.userId,
+                                  }),
+                                )
+                              }
+                              className={cn(
+                                "flex h-9 items-center gap-2 rounded-lg border py-1 pl-1.5 pr-3 transition",
+                                active
+                                  ? "border-[#BFCBFF] bg-[#EEF3FF]"
+                                  : "border-slate-200 bg-white hover:bg-slate-50",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-black",
+                                  active
+                                    ? "bg-[#5873F9] text-white"
+                                    : "bg-slate-100 text-slate-600",
+                                )}
+                              >
+                                {getInitial(
+                                  name,
+                                )}
+                              </span>
+
+                              <span className="text-[10px] font-black text-slate-700">
+                                {name}
+                              </span>
+
+                              <span
+                                className={cn(
+                                  "text-[8px] font-black",
+                                  role ===
+                                    "OWNER"
+                                    ? "text-[#5873F9]"
+                                    : "text-slate-400",
+                                )}
+                              >
+                                {role}
+                              </span>
+
+                              {active && (
+                                <CheckCircle2
+                                  size={12}
+                                  className="text-[#5873F9]"
+                                />
+                              )}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+
+                  {selectedMember && (
+                    <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                      현재 담당자{" "}
+                      <strong className="text-slate-600">
+                        {getMemberName(
+                          selectedMember,
+                        )}
+                      </strong>
+                      으로 설정되어 있습니다.
+                    </p>
+                  )}
+                </div>
+              </ScheduleMetaRow>
+            )}
+
+            {!isTeam && (
+              <ScheduleMetaRow
+                icon={
+                  <UserRound
+                    size={15}
+                  />
+                }
+                label="담당"
+                last
+              >
+                <span className="text-xs font-bold text-slate-500">
+                  개인 프로젝트 일정
+                </span>
+              </ScheduleMetaRow>
+            )}
+          </section>
+
+          {/* =============================================
+              DESCRIPTION
+             ============================================= */}
+          <section className="mt-5">
+            <div className="mb-2 flex items-end justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                  Detail
+                </span>
+
+                <p className="mt-0.5 text-xs font-bold text-slate-700">
+                  상세 내용
+                </p>
+              </div>
+
+              <span className="text-[10px] font-semibold text-slate-300">
+                {form.description.length}
+                자
+              </span>
+            </div>
+
+            <textarea
+              value={
+                form.description
+              }
+              onChange={(
+                event,
+              ) =>
+                setForm(
+                  (prev) => ({
+                    ...prev,
+
+                    description:
+                      event.target
+                        .value,
+                  }),
+                )
+              }
+              rows={7}
+              placeholder={`작업 내용이나 참고사항을 입력해주세요.\n\n예)\n- 로그인 API 구현\n- 인증 실패 예외 처리\n- Postman 테스트 진행`}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-[#FBFCFE] p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+            />
+          </section>
+        </div>
+      </div>
+
+      {/* =================================================
+          FOOTER
+         ================================================= */}
+      <footer className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-white px-6 py-4">
+        <p className="hidden text-[10px] font-medium text-slate-400 sm:block">
+          일정 제목과 기간은 필수입니다.
+        </p>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onClose}
+            className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            취소
+          </button>
+
+          <button
+            type="button"
+            disabled={
+              saving ||
+              !form.title.trim() ||
+              !form.startDate ||
+              !form.endDate
+            }
+            onClick={onSubmit}
+            className="inline-flex h-9 min-w-[110px] items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? (
+              <>
+                <Loader2
+                  size={14}
+                  className="animate-spin"
+                />
+
+                저장 중
+              </>
+            ) : (
+              <>
+                <CalendarDays
+                  size={14}
+                />
+
+                {submitLabel}
+              </>
+            )}
+          </button>
+        </div>
+      </footer>
+    </ModalShell>
+  );
+}
+
+/* =========================================================
+   SCHEDULE META ROW
+   ========================================================= */
+
+function ScheduleMetaRow({
+  icon,
+  label,
+  children,
+  last,
+  alignStart,
+}: {
+  icon: React.ReactNode;
+
+  label: string;
+
+  children: React.ReactNode;
+
+  last?: boolean;
+
+  alignStart?: boolean;
 }) {
   return (
     <div
-      className={`rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center text-sm text-slate-400 ${
-        compact ? "p-3" : "p-5"
-      }`}
+      className={cn(
+        "grid grid-cols-[92px_minmax(0,1fr)] gap-4 px-4 py-3",
+        !last &&
+          "border-b border-slate-100",
+      )}
     >
-      {text}
+      <div
+        className={cn(
+          "flex gap-2 text-slate-400",
+          alignStart
+            ? "items-start pt-2"
+            : "items-center",
+        )}
+      >
+        {icon}
+
+        <span className="text-[10px] font-black text-slate-500">
+          {label}
+        </span>
+      </div>
+
+      <div
+        className={cn(
+          "min-w-0",
+          !alignStart &&
+            "flex items-center",
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   SCHEDULE STATUS BUTTON
+   ========================================================= */
+
+function ScheduleStatusButton({
+  status,
+  active,
+  onClick,
+}: {
+  status: ScheduleStatus;
+
+  active: boolean;
+
+  onClick: () => void;
+}) {
+  const meta =
+    STATUS_META[status];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[10px] font-black transition",
+        active
+          ? meta.badge
+          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+      )}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          meta.dot,
+        )}
+      />
+
+      {meta.label}
+    </button>
+  );
+}
+
+/* =========================================================
+   GENERIC COMPONENTS
+   ========================================================= */
+
+/* =========================================================
+   MODAL SHELL
+   ========================================================= */
+
+function ModalShell({
+  children,
+  onClose,
+  width,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  width: string;
+}) {
+  /*
+   * 모달이 열려 있는 동안
+   * 뒤쪽 페이지(body)는 스크롤되지 않도록 잠금.
+   *
+   * 모달 내부의 overflow-y-auto는 그대로 동작함.
+   */
+  useEffect(() => {
+    const previousOverflow =
+      document.body.style.overflow;
+
+    const previousPaddingRight =
+      document.body.style.paddingRight;
+
+    /*
+     * body scrollbar가 사라질 때
+     * 화면이 좌우로 살짝 움직이는 현상 방지.
+     */
+    const scrollbarWidth =
+      window.innerWidth -
+      document.documentElement.clientWidth;
+
+    document.body.style.overflow =
+      "hidden";
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight =
+        `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
+      document.body.style.paddingRight =
+        previousPaddingRight;
+    };
+  }, []);
+
+  return (
+    <>
+      {/* =================================================
+          BACKDROP
+
+          전체 화면을 덮기 때문에
+          WAIVS 헤더까지 blur 처리
+         ================================================= */}
+
+      <div
+        className="fixed inset-0 z-[9998] bg-slate-950/30 backdrop-blur-[2px]"
+        onMouseDown={onClose}
+      />
+
+      {/* =================================================
+          MODAL POSITION
+
+          기존보다 위쪽 여백을 줄임.
+          뒤쪽 페이지는 스크롤되지 않고,
+          실제 모달 내부만 스크롤됨.
+         ================================================= */}
+
+   <div className="pointer-events-none fixed inset-x-0 bottom-0 top-[25px] z-[9999] flex items-start justify-center overflow-hidden px-4 pt-1 pb-2">
+  <div
+    onMouseDown={(event) =>
+      event.stopPropagation()
+    }
+    className={cn(
+      "pointer-events-auto flex max-h-[calc(100dvh-50px)] w-full flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]",
+      width,
+    )}
+  >
+    {children}
+  </div>
+</div>
+    </>
+  );
+}
+function StatusBadge({
+  status,
+}: {
+  status: ScheduleStatus;
+}) {
+  const meta =
+    STATUS_META[status];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black",
+        meta.badge,
+      )}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          meta.dot,
+        )}
+      />
+
+      {meta.label}
+    </span>
+  );
+}
+
+function DetailValue({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-2 text-xs font-black text-slate-700">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function LoadingBox() {
+  return (
+    <div className="grid min-h-[500px] place-items-center">
+      <div className="flex items-center gap-2 text-xs font-black text-slate-400">
+        <Loader2
+          size={16}
+          className="animate-spin text-[#5873F9]"
+        />
+
+        일정 불러오는 중
+      </div>
+    </div>
+  );
+}
+
+function ErrorBox({
+  message,
+}: {
+  message: string;
+}) {
+  return (
+    <div className="grid min-h-[500px] place-items-center">
+      <div className="max-w-md rounded-xl border border-rose-100 bg-rose-50 p-4 text-center">
+        <AlertTriangle
+          size={20}
+          className="mx-auto text-rose-500"
+        />
+
+        <p className="mt-2 text-xs font-black text-rose-700">
+          {message}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EmptyBox({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="grid min-h-[500px] place-items-center">
+      <div className="max-w-sm text-center">
+        <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-[#EEF3FF] text-[#5873F9]">
+          <CalendarDays
+            size={20}
+          />
+        </div>
+
+        <h3 className="mt-3 text-sm font-black text-slate-700">
+          {title}
+        </h3>
+
+        <p className="mt-1 text-xs font-medium leading-5 text-slate-400">
+          {description}
+        </p>
+
+        {action}
+      </div>
     </div>
   );
 }

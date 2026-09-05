@@ -459,7 +459,7 @@ export default function MainDashboard({
   };
 
   return (
-    <main className="min-h-screen bg-[#F8F9FA] p-4 font-sans text-gray-800 md:p-5">
+    <main className="waivs-page p-4 font-sans md:p-5">
       <div className="mx-auto flex max-w-[1680px] gap-5">
         <aside
           onMouseEnter={() => {
@@ -471,10 +471,10 @@ export default function MainDashboard({
             setIsSidebarHovered(false);
             setCanSidebarHoverExpand(true);
           }}
-          className={cn(
-            "sticky top-5 hidden h-[calc(100vh-40px)] shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-[#FBFBFA] shadow-sm transition-all duration-300 md:flex",
-            sidebarExpanded ? "w-72" : "w-16",
-          )}
+       className={cn(
+  "waivs-sidebar sticky top-5 hidden h-[calc(100vh-40px)] shrink-0 overflow-hidden transition-all duration-300 md:flex",
+  sidebarExpanded ? "w-72" : "w-16",
+)}
         >
           <div className="flex min-h-0 w-full flex-col">
             <div

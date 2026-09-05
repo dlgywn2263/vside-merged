@@ -385,9 +385,9 @@ function ProjectSidebar({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       className={cn(
-        "sticky top-5 hidden h-[calc(100vh-40px)] shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-[#FBFBFA] shadow-sm transition-all duration-300 md:flex",
-        sidebarExpanded ? "w-72" : "w-16",
-      )}
+  "waivs-sidebar sticky top-5 hidden h-[calc(100vh-40px)] shrink-0 overflow-hidden transition-all duration-300 md:flex",
+  sidebarExpanded ? "w-72" : "w-16",
+)}
     >
       <div className="flex min-h-0 w-full flex-col">
         <div
@@ -1115,7 +1115,7 @@ export function ProjectManagerList({
 
   return (
     <>
-      <main className="min-h-screen bg-[#F8F9FA] p-4 font-sans text-gray-800 md:p-5">
+     <main className="waivs-page p-4 font-sans md:p-5">
         <div className="mx-auto flex max-w-[1680px] gap-5">
           <ProjectSidebar
             allWorkspaces={allWorkspaces}
@@ -1142,7 +1142,7 @@ export function ProjectManagerList({
           />
 
           <div className="min-w-0 flex-1 space-y-5">
-            <section className="rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-sm">
+            <section className="waivs-panel px-6 py-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-black text-[#2563EB]">AIVS</p>
@@ -1253,7 +1253,7 @@ export function ProjectManagerList({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="waivs-panel p-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
                   <h2 className="text-xl font-black tracking-tight text-gray-950">

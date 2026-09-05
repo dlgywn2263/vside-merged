@@ -39,7 +39,7 @@ export default function CommentSection() {
   };
 
   return (
-    <div className="mt-8 rounded-3xl border border-blue-100 bg-white p-6 shadow-[0_18px_45px_rgba(37,99,235,0.08)]">
+    <div className="mt-8 rounded-3xl border border-blue-100 bg-white p-6 shadow-sm">
       <h2 className="mb-5 text-xl font-bold text-slate-950">
         댓글 <span className="text-blue-600">{comments.length}</span>
       </h2>
