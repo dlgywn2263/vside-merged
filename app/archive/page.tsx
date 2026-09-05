@@ -51,7 +51,7 @@ import {
   getParsedDesignDocument,
   getPrintDateLabel,
   normalizeDiagramNodes,
-} from "@/features/design/render/legacyDesignView";
+} from "@/components/design/render/legacyDesignView";
 
 type ProjectStatus = "active" | "completed";
 type ArchiveTabKey = "devlog" | "design" | "final";

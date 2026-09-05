@@ -78,7 +78,7 @@ import {
   getParsedDesignDocument,
   getPrintDateLabel,
   normalizeDiagramNodes,
-} from "@/features/design/render/legacyDesignView";
+} from "@/components/design/render/legacyDesignView";
 
 type DevlogSortType = "latest" | "oldest";
 type ProjectTypeFilter = "all" | "personal" | "team";
