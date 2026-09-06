@@ -37,14 +37,14 @@ function ScreenNodeComponent({ data, selected }: NodeProps<ScreenNodeData>) {
     <div
       className={cn(
         "w-[236px] overflow-hidden rounded-2xl border bg-white shadow-sm transition",
-        selected ? "border-indigo-500 shadow-md" : "border-slate-200",
+        selected ? "border-[#5873F9] shadow-md" : "border-[var(--waivs-border)]",
         data.isEntry && "ring-2 ring-emerald-400/60",
       )}
     >
-      <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !bg-slate-400" />
-      <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !bg-indigo-500" />
+      <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !bg-[var(--waivs-text-muted)]" />
+      <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !bg-[#5873F9]" />
 
-      <div className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-2">
+      <div className="flex items-center gap-1.5 border-b border-[var(--waivs-border-soft)] px-3 py-2">
         {data.isEntry ? (
           <span
             title="시작 화면"
@@ -55,17 +55,17 @@ function ScreenNodeComponent({ data, selected }: NodeProps<ScreenNodeData>) {
           </span>
         ) : null}
 
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--waivs-text)]">
           {data.name || "이름 없는 화면"}
         </span>
 
         {data.requiresAuth ? (
-          <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-label="로그인 필요" />
+          <Lock className="h-3.5 w-3.5 shrink-0 text-[var(--waivs-text-muted)]" aria-label="로그인 필요" />
         ) : null}
       </div>
 
       <div className="px-3 py-2">
-        <p className="truncate font-mono text-[11px] text-slate-500">
+        <p className="truncate font-mono text-[11px] text-[var(--waivs-text-sub)]">
           {data.routeKey || "경로 미지정"}
         </p>
 
@@ -77,12 +77,12 @@ function ScreenNodeComponent({ data, selected }: NodeProps<ScreenNodeData>) {
                   "rounded px-1.5 py-0.5 text-[10px] font-medium",
                   data.requirementCount === 0
                     ? "bg-red-50 text-red-600"
-                    : "bg-slate-100 text-slate-600",
+                    : "bg-[var(--waivs-surface-soft)] text-[var(--waivs-text-sub)]",
                 )}
               >
                 요구사항 {data.requirementCount}
               </span>
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+              <span className="rounded bg-[var(--waivs-surface-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--waivs-text-sub)]">
                 {ROLE_LABEL[data.role] ?? data.role}
               </span>
             </div>
@@ -92,20 +92,20 @@ function ScreenNodeComponent({ data, selected }: NodeProps<ScreenNodeData>) {
                 {data.apiLabels.slice(0, 4).map((label) => (
                   <li
                     key={label}
-                    className="truncate font-mono text-[10px] text-slate-500"
+                    className="truncate font-mono text-[10px] text-[var(--waivs-text-sub)]"
                     title={label}
                   >
                     {label}
                   </li>
                 ))}
                 {data.apiLabels.length > 4 ? (
-                  <li className="text-[10px] text-slate-400">
+                  <li className="text-[10px] text-[var(--waivs-text-muted)]">
                     외 {data.apiLabels.length - 4}개
                   </li>
                 ) : null}
               </ul>
             ) : (
-              <p className="mt-2 text-[10px] text-slate-400">호출하는 API 없음</p>
+              <p className="mt-2 text-[10px] text-[var(--waivs-text-muted)]">호출하는 API 없음</p>
             )}
           </>
         ) : null}

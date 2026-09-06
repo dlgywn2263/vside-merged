@@ -217,10 +217,10 @@ function ErdCanvasAndText({ model, mutations, awareness }: ErdTabProps) {
 
   return (
     <div className="flex h-full min-h-0">
-      <section className="flex w-[46%] min-w-[320px] flex-col border-r border-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+      <section className="flex w-[46%] min-w-[320px] flex-col border-r border-[var(--waivs-border)]">
+        <div className="flex items-center justify-between border-b border-[var(--waivs-border-soft)] px-4 py-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-600">스키마 (글로 작성)</span>
+            <span className="text-xs font-semibold text-[var(--waivs-text-sub)]">스키마 (글로 작성)</span>
             {readOnly ? (
               <span className="flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">
                 <Lock className="h-3 w-3" />
@@ -268,11 +268,11 @@ function ErdCanvasAndText({ model, mutations, awareness }: ErdTabProps) {
       <section className="relative min-w-0 flex-1">
         {model.erd.tables.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-8 text-center">
-            <p className="text-sm text-slate-500">아직 테이블이 없습니다.</p>
-            <p className="max-w-sm text-xs text-slate-400">
+            <p className="text-sm text-[var(--waivs-text-sub)]">아직 테이블이 없습니다.</p>
+            <p className="max-w-sm text-xs text-[var(--waivs-text-muted)]">
               왼쪽에 이렇게 적어 보세요.
             </p>
-            <pre className="mt-1 rounded-lg bg-slate-900 px-3 py-2 text-left font-mono text-[11px] leading-relaxed text-slate-200">
+            <pre className="mt-1 rounded-xl bg-slate-900 px-3 py-2 text-left font-mono text-[11px] leading-relaxed text-slate-200">
 {`Table users {
   id    bigint       [pk]
   email varchar(255) [not null]
@@ -328,7 +328,7 @@ function StatusBar({ errors, focused }: { errors: ParseError[]; focused: boolean
   }
 
   return (
-    <div className="flex items-center gap-1.5 border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">
+    <div className="flex items-center gap-1.5 border-t border-[var(--waivs-border-soft)] px-4 py-2 text-[11px] text-[var(--waivs-text-sub)]">
       <Check className="h-3 w-3 text-emerald-500" />
       {focused ? "타이핑을 멈추면 다이어그램에 반영됩니다." : "다이어그램과 같은 내용입니다."}
     </div>

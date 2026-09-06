@@ -67,7 +67,7 @@ function SaveIndicator({ state }: { state: DesignDocState }) {
 
   if (state.saveState === "saving") {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-slate-500">
+      <span className="flex items-center gap-1.5 text-xs text-[var(--waivs-text-sub)]">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         저장 중
       </span>
@@ -84,11 +84,11 @@ function SaveIndicator({ state }: { state: DesignDocState }) {
   }
 
   if (state.saveState === "pending") {
-    return <span className="text-xs text-slate-400">변경사항 저장 대기 중</span>;
+    return <span className="text-xs text-[var(--waivs-text-muted)]">변경사항 저장 대기 중</span>;
   }
 
   return (
-    <span className="flex items-center gap-1.5 text-xs text-slate-500">
+    <span className="flex items-center gap-1.5 text-xs text-[var(--waivs-text-sub)]">
       <Check className="h-3.5 w-3.5 text-emerald-500" />
       {state.savedAt ? relativeTime(state.savedAt, now) : "모든 변경사항 저장됨"}
     </span>
@@ -122,10 +122,10 @@ export function DesignHeader({
   const toggleDoctor = useDesignUiStore((s) => s.toggleDoctor);
 
   return (
-    <header className="flex flex-col gap-3 border-b border-slate-200 bg-white px-6 py-3">
+    <header className="flex shrink-0 flex-col gap-3 border-b border-[var(--waivs-border-soft)] px-5 py-4">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold text-slate-900">
+          <h1 className="truncate text-base font-semibold text-[var(--waivs-text)]">
             {workspaceName || "설계 관리"}
           </h1>
           <SaveIndicator state={state} />
@@ -133,7 +133,7 @@ export function DesignHeader({
 
         <div className="flex items-center gap-2">
           {state.peerCount > 1 ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+            <span className="flex items-center gap-1.5 rounded-full bg-[#EEF3FF] px-2.5 py-1 text-xs font-medium text-[#5873F9]">
               <Users className="h-3.5 w-3.5" />
               {state.peerCount}명이 함께 보는 중
             </span>
@@ -145,7 +145,7 @@ export function DesignHeader({
             onClick={onOpenAiDraft}
             className="gap-1.5"
           >
-            <Sparkles className="h-4 w-4 text-indigo-500" />
+            <Sparkles className="h-4 w-4 text-[#5873F9]" />
             AI 초안
           </Button>
 
@@ -155,7 +155,7 @@ export function DesignHeader({
             onClick={onOpenHistory}
             className="gap-1.5"
           >
-            <History className="h-4 w-4 text-slate-500" />
+            <History className="h-4 w-4 text-[var(--waivs-text-sub)]" />
             기록
           </Button>
 
@@ -169,7 +169,7 @@ export function DesignHeader({
             {printing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Printer className="h-4 w-4 text-slate-500" />
+              <Printer className="h-4 w-4 text-[var(--waivs-text-sub)]" />
             )}
             {printing ? "만드는 중" : "PDF / 인쇄"}
           </Button>
@@ -180,7 +180,7 @@ export function DesignHeader({
             onClick={onOpenCodegen}
             className="gap-1.5"
           >
-            <FileCode className="h-4 w-4 text-slate-500" />
+            <FileCode className="h-4 w-4 text-[var(--waivs-text-sub)]" />
             코드 생성
           </Button>
 
@@ -208,10 +208,10 @@ export function DesignHeader({
             type="button"
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition",
+              "rounded-xl px-3.5 py-1.5 text-sm font-medium transition",
               activeTab === tab.id
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100",
+                ? "bg-[#5873F9] text-white"
+                : "text-[var(--waivs-text-sub)] hover:bg-[var(--waivs-surface-soft)]",
             )}
           >
             {tab.label}

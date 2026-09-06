@@ -38,8 +38,8 @@ const SEVERITY_META: Record<
   INFO: {
     label: "참고",
     icon: Info,
-    tone: "text-slate-500",
-    dot: "bg-slate-400",
+    tone: "text-[var(--waivs-text-sub)]",
+    dot: "bg-[var(--waivs-text-muted)]",
   },
 };
 
@@ -60,11 +60,11 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
   }, [report.findings]);
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <aside className="flex w-80 shrink-0 flex-col border-l border-[var(--waivs-border)] bg-white">
+      <div className="flex items-center justify-between border-b border-[var(--waivs-border-soft)] px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-slate-900">설계 점검</p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="text-sm font-semibold text-[var(--waivs-text)]">설계 점검</p>
+          <p className="mt-0.5 text-xs text-[var(--waivs-text-sub)]">
             {report.findings.length === 0
               ? "문제를 찾지 못했습니다."
               : `${report.errorCount}개 고쳐야 함 · ${report.warningCount}개 확인 필요`}
@@ -74,7 +74,7 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
         <button
           type="button"
           onClick={() => toggleDoctor(false)}
-          className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="rounded-md p-1 text-[var(--waivs-text-muted)] transition hover:bg-[var(--waivs-surface-soft)] hover:text-[var(--waivs-text-sub)]"
           aria-label="점검 패널 닫기"
         >
           <X className="h-4 w-4" />
@@ -91,8 +91,8 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
         {report.findings.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
             <CheckCircle2 className="h-8 w-8 text-emerald-400" />
-            <p className="text-sm text-slate-500">지금은 짚어 드릴 것이 없습니다.</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-sm text-[var(--waivs-text-sub)]">지금은 짚어 드릴 것이 없습니다.</p>
+            <p className="text-xs text-[var(--waivs-text-muted)]">
               요구사항과 화면, API, 테이블이 서로 잘 이어져 있습니다.
             </p>
           </div>
@@ -105,7 +105,7 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
             const Icon = meta.icon;
 
             return (
-              <section key={severity} className="border-b border-slate-100 last:border-b-0">
+              <section key={severity} className="border-b border-[var(--waivs-border-soft)] last:border-b-0">
                 <p
                   className={cn(
                     "flex items-center gap-1.5 px-4 py-2 text-xs font-semibold",
@@ -114,7 +114,7 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {meta.label}
-                  <span className="text-slate-400">{items.length}</span>
+                  <span className="text-[var(--waivs-text-muted)]">{items.length}</span>
                 </p>
 
                 <ul>
@@ -123,7 +123,7 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
                       <button
                         type="button"
                         onClick={() => focusDesignTarget(finding.targetKind, finding.targetId)}
-                        className="flex w-full gap-2 px-4 py-2 text-left transition hover:bg-slate-50"
+                        className="flex w-full gap-2 px-4 py-2 text-left transition hover:bg-[var(--waivs-surface-soft)]"
                       >
                         <span
                           className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", meta.dot)}
@@ -131,15 +131,15 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
 
                         <span className="min-w-0 flex-1">
                           {finding.targetLabel ? (
-                            <span className="block truncate text-xs font-medium text-slate-700">
+                            <span className="block truncate text-xs font-medium text-[var(--waivs-text-sub)]">
                               {finding.targetLabel}
                             </span>
                           ) : null}
 
-                          <span className="block text-xs text-slate-600">{finding.message}</span>
+                          <span className="block text-xs text-[var(--waivs-text-sub)]">{finding.message}</span>
 
                           {finding.fixHint ? (
-                            <span className="mt-0.5 block text-[11px] text-slate-400">
+                            <span className="mt-0.5 block text-[11px] text-[var(--waivs-text-muted)]">
                               {finding.fixHint}
                             </span>
                           ) : null}
@@ -151,7 +151,7 @@ export function DoctorPanel({ report, mutations }: DoctorPanelProps) {
                           <button
                             type="button"
                             onClick={() => applyDoctorFix(mutations, finding.fix!)}
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                            className="inline-flex items-center gap-1 rounded-md border border-[var(--waivs-border)] px-2 py-1 text-[11px] font-medium text-[var(--waivs-text-sub)] transition hover:border-[var(--waivs-border)] hover:bg-[var(--waivs-surface-soft)]"
                           >
                             <Wand2 className="h-3 w-3" />
                             {describeFix(finding.fix)}

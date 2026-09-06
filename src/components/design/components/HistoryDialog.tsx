@@ -118,7 +118,7 @@ export function HistoryDialog({
       <DialogContent className="flex max-h-[80vh] w-[min(560px,95vw)] flex-col gap-4">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-slate-500" />
+            <History className="h-5 w-5 text-[var(--waivs-text-sub)]" />
             되돌리기 기록
           </DialogTitle>
           <DialogDescription>
@@ -128,7 +128,7 @@ export function HistoryDialog({
         </DialogHeader>
 
         {errorMessage ? (
-          <p className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {errorMessage}
           </p>
@@ -136,12 +136,12 @@ export function HistoryDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading ? (
-            <p className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+            <p className="flex items-center justify-center gap-2 py-8 text-sm text-[var(--waivs-text-muted)]">
               <Loader2 className="h-4 w-4 animate-spin" />
               기록을 불러오는 중
             </p>
           ) : checkpoints.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">
+            <p className="py-8 text-center text-sm text-[var(--waivs-text-muted)]">
               아직 남은 기록이 없습니다. AI 초안이나 코드 생성을 적용하면 그
               직전 상태가 여기에 남습니다.
             </p>
@@ -150,17 +150,17 @@ export function HistoryDialog({
               {checkpoints.map((checkpoint) => (
                 <li
                   key={checkpoint.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--waivs-border)] px-3 py-2.5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">
+                    <p className="truncate text-sm font-medium text-[var(--waivs-text)]">
                       {checkpoint.label}
                     </p>
                     {checkpoint.summary ? (
-                      <p className="truncate text-xs text-slate-500">{checkpoint.summary}</p>
+                      <p className="truncate text-xs text-[var(--waivs-text-sub)]">{checkpoint.summary}</p>
                     ) : null}
 
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-[var(--waivs-text-muted)]">
                       {timeLabel(checkpoint.createdAt)}
                       {checkpoint.createdByNickname
                         ? ` · ${checkpoint.createdByNickname}`

@@ -3,7 +3,7 @@
 // 경로: src/components/design/tabs/apis/ApiTab.tsx
 
 import { useMemo } from "react";
-import { Braces, Plus, Search, Trash2 } from "lucide-react";
+import { Braces, Plus, Route, Search, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,15 @@ import type { DesignMutations } from "../../realtime/mutations";
 import { useDesignUiStore } from "../../store/designUiStore";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { LinkCountBadge, LinkPicker } from "../../components/LinkPicker";
+import {
+  DetailDangerButton,
+  DetailEmpty,
+  DetailField,
+  DetailPanel,
+  DetailPanelBody,
+  DetailPanelHeader,
+  DetailSection,
+} from "../../components/DetailPanel";
 
 const METHOD_STYLE: Record<HttpMethod, string> = {
   GET: "bg-emerald-50 text-emerald-700",
@@ -97,9 +106,9 @@ export function ApiTab({ model, mutations }: ApiTabProps) {
   return (
     <div className="flex h-full min-h-0">
       <section className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-3">
-          <div className="flex flex-1 items-center gap-2 rounded-lg bg-slate-50 px-3">
-            <Search className="h-4 w-4 text-slate-400" />
+        <div className="flex items-center gap-2 border-b border-[var(--waivs-border-soft)] px-6 py-3">
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-[var(--waivs-surface-soft)] px-3">
+            <Search className="h-4 w-4 text-[var(--waivs-text-muted)]" />
             <Input
               value={keyword}
               onChange={(event) => setSearch("apis", event.target.value)}
@@ -117,7 +126,7 @@ export function ApiTab({ model, mutations }: ApiTabProps) {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[var(--waivs-text-sub)]">
                 {model.apis.length > 0 ? "검색 결과가 없습니다." : "아직 API 명세가 없습니다."}
               </p>
               {model.apis.length === 0 ? (
@@ -128,14 +137,14 @@ export function ApiTab({ model, mutations }: ApiTabProps) {
               ) : null}
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-[var(--waivs-border-soft)]">
               {filtered.map((item) => (
                 <li
                   key={item.id}
                   onClick={() => select({ apiId: item.id })}
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 px-6 py-2.5 transition hover:bg-slate-50",
-                    selectedId === item.id && "bg-indigo-50/60 hover:bg-indigo-50/60",
+                    "flex cursor-pointer items-center gap-3 px-6 py-2.5 transition hover:bg-[var(--waivs-surface-soft)]",
+                    selectedId === item.id && "bg-[#EEF3FF] hover:bg-[#EEF3FF]",
                   )}
                 >
                   <div onClick={(event) => event.stopPropagation()}>
@@ -170,7 +179,7 @@ export function ApiTab({ model, mutations }: ApiTabProps) {
                       mutations.updateApi(item.id, { endpoint: event.target.value })
                     }
                     onClick={(event) => event.stopPropagation()}
-                    className="h-8 flex-1 border-transparent bg-transparent px-2 font-mono text-sm hover:border-slate-200"
+                    className="h-8 flex-1 border-transparent bg-transparent px-2 font-mono text-sm hover:border-[var(--waivs-border)]"
                   />
 
                   <div className="flex shrink-0 gap-1">
@@ -185,7 +194,7 @@ export function ApiTab({ model, mutations }: ApiTabProps) {
                       event.stopPropagation();
                       void handleRemove(item.id, `${item.method} ${item.endpoint}`);
                     }}
-                    className="rounded-md p-1.5 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+                    className="rounded-md p-1.5 text-[var(--waivs-text-muted)] transition hover:bg-red-50 hover:text-red-500"
                     aria-label="API 삭제"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -197,71 +206,96 @@ export function ApiTab({ model, mutations }: ApiTabProps) {
         </div>
       </section>
 
-      <aside className="w-96 shrink-0 overflow-y-auto border-l border-slate-200 bg-slate-50/60 p-5">
+      <DetailPanel width="w-96">
         {!selected ? (
-          <p className="mt-8 text-center text-sm text-slate-400">
-            API를 선택하면
-            <br />
-            요청·응답과 연결을 여기서 편집합니다.
-          </p>
+          <DetailEmpty
+            icon={Route}
+            title="API를 선택해 주세요"
+            description="왼쪽 목록에서 하나를 고르면 요청·응답과 연결을 여기서 편집합니다."
+          />
         ) : (
-          <div className="space-y-5">
-            <div>
-              <label className="text-xs font-semibold text-slate-500">설명</label>
-              <Input
-                value={selected.description}
-                onChange={(event) =>
-                  mutations.updateApi(selected.id, { description: event.target.value })
+          <>
+            <DetailPanelHeader
+              eyebrow={selected.method}
+              title={selected.endpoint || "경로 없음"}
+              icon={Route}
+              onClose={() => select({ apiId: null })}
+            />
+
+            <DetailPanelBody>
+              <DetailSection tone="soft">
+                <DetailField label="설명">
+                  <Input
+                    value={selected.description}
+                    onChange={(event) =>
+                      mutations.updateApi(selected.id, { description: event.target.value })
+                    }
+                    placeholder="이 API가 하는 일"
+                    className="rounded-xl bg-white"
+                  />
+                </DetailField>
+              </DetailSection>
+
+              <DetailSection title="요청·응답 예시">
+                <div className="space-y-3">
+                  <JsonField
+                    label="요청 본문"
+                    value={selected.request}
+                    onChange={(value) => mutations.updateApi(selected.id, { request: value })}
+                  />
+
+                  <JsonField
+                    label="응답 본문"
+                    value={selected.response}
+                    onChange={(value) => mutations.updateApi(selected.id, { response: value })}
+                  />
+                </div>
+              </DetailSection>
+
+              <DetailSection title="이 API가 담당하는 요구사항">
+                <LinkPicker
+                  emptyHint="요구사항 탭에서 먼저 만들어 주세요."
+                  candidates={requirementCandidates}
+                  selectedIds={selected.requirementIds}
+                  onToggle={(requirementId, linked) =>
+                    mutations.linkRequirementApi(requirementId, selected.id, linked)
+                  }
+                />
+              </DetailSection>
+
+              <DetailSection title="이 API를 호출하는 화면">
+                <LinkPicker
+                  emptyHint="화면 흐름 탭에서 먼저 만들어 주세요."
+                  candidates={screenCandidates}
+                  selectedIds={selected.screenIds}
+                  onToggle={(screenId, linked) =>
+                    mutations.linkScreenApi(screenId, selected.id, linked)
+                  }
+                />
+              </DetailSection>
+
+              <DetailSection title="이 API가 다루는 테이블">
+                <LinkPicker
+                  emptyHint="ERD 탭에서 테이블을 먼저 만들어 주세요."
+                  candidates={tableCandidates}
+                  selectedIds={selected.tableIds}
+                  onToggle={(tableId, linked) =>
+                    mutations.linkApiTable(selected.id, tableId, linked)
+                  }
+                />
+              </DetailSection>
+
+              <DetailDangerButton
+                icon={Trash2}
+                label="이 API 삭제"
+                onClick={() =>
+                  void handleRemove(selected.id, `${selected.method} ${selected.endpoint}`)
                 }
-                placeholder="이 API가 하는 일"
-                className="mt-1.5 bg-white"
               />
-            </div>
-
-            <JsonField
-              label="요청 본문 예시"
-              value={selected.request}
-              onChange={(value) => mutations.updateApi(selected.id, { request: value })}
-            />
-
-            <JsonField
-              label="응답 본문 예시"
-              value={selected.response}
-              onChange={(value) => mutations.updateApi(selected.id, { response: value })}
-            />
-
-            <LinkPicker
-              title="이 API가 담당하는 요구사항"
-              emptyHint="요구사항 탭에서 먼저 만들어 주세요."
-              candidates={requirementCandidates}
-              selectedIds={selected.requirementIds}
-              onToggle={(requirementId, linked) =>
-                mutations.linkRequirementApi(requirementId, selected.id, linked)
-              }
-            />
-
-            <LinkPicker
-              title="이 API를 호출하는 화면"
-              emptyHint="화면 흐름 탭에서 먼저 만들어 주세요."
-              candidates={screenCandidates}
-              selectedIds={selected.screenIds}
-              onToggle={(screenId, linked) =>
-                mutations.linkScreenApi(screenId, selected.id, linked)
-              }
-            />
-
-            <LinkPicker
-              title="이 API가 다루는 테이블"
-              emptyHint="ERD 탭에서 테이블을 먼저 만들어 주세요."
-              candidates={tableCandidates}
-              selectedIds={selected.tableIds}
-              onToggle={(tableId, linked) =>
-                mutations.linkApiTable(selected.id, tableId, linked)
-              }
-            />
-          </div>
+            </DetailPanelBody>
+          </>
         )}
-      </aside>
+      </DetailPanel>
     </div>
   );
 }
@@ -287,11 +321,11 @@ function JsonField({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-slate-500">{label}</label>
+        <label className="text-[11px] font-bold text-[var(--waivs-text-sub)]">{label}</label>
         <button
           type="button"
           onClick={format}
-          className="flex items-center gap-1 text-[11px] text-slate-400 transition hover:text-slate-700"
+          className="flex items-center gap-1 text-[11px] text-[var(--waivs-text-muted)] transition hover:text-[var(--waivs-text-sub)]"
         >
           <Braces className="h-3 w-3" />
           정리
@@ -302,7 +336,7 @@ function JsonField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder="{ }"
-        className="mt-1.5 min-h-[96px] bg-white font-mono text-xs"
+        className="mt-1.5 min-h-[96px] rounded-xl bg-white font-mono text-xs"
       />
     </div>
   );

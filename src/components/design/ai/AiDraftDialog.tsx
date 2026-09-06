@@ -231,7 +231,7 @@ export function AiDraftDialog({
       <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-indigo-500" />
+            <Sparkles className="h-4 w-4 text-[#5873F9]" />
             AI로 설계 초안 만들기
           </DialogTitle>
           <DialogDescription>
@@ -243,16 +243,16 @@ export function AiDraftDialog({
 
         {step === "generating" ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-            <p className="text-sm text-slate-600">{progress}</p>
-            <p className="text-xs text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin text-[#5873F9]" />
+            <p className="text-sm text-[var(--waivs-text-sub)]">{progress}</p>
+            <p className="text-xs text-[var(--waivs-text-muted)]">
               20초에서 1분쯤 걸립니다. 창을 닫지 말아 주세요.
             </p>
           </div>
         ) : step === "review" && draft ? (
           <div className="space-y-3">
             {errorMessage ? (
-              <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {errorMessage}
               </p>
@@ -263,7 +263,7 @@ export function AiDraftDialog({
         ) : (
           <div className="space-y-4 py-2">
             {otherDrafter ? (
-              <p className="flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {otherDrafter}님이 지금 초안을 만드는 중입니다. 둘 다 넣으면 같은 내용이 두 벌
                 들어갈 수 있습니다.
@@ -271,7 +271,7 @@ export function AiDraftDialog({
             ) : null}
 
             {hasExisting ? (
-              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <p className="rounded-xl bg-[var(--waivs-surface-soft)] px-3 py-2 text-xs text-[var(--waivs-text-sub)]">
                 이미 작성된 내용이 있습니다. 지우지 않고 새로 만든 것만 더하며, 이미 있는 것은
                 AI에게 알려 주어 다시 만들지 않게 합니다.
               </p>
@@ -308,7 +308,7 @@ export function AiDraftDialog({
             </Field>
 
             {errorMessage ? (
-              <p className="flex items-start gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              <p className="flex items-start gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {errorMessage}
               </p>
@@ -375,7 +375,7 @@ function ReviewStep({
       {report ? (
         <p
           className={cn(
-            "rounded-lg px-3 py-2 text-xs",
+            "rounded-xl px-3 py-2 text-xs",
             report.errorCount > 0
               ? "bg-red-50 text-red-700"
               : report.warningCount > 0
@@ -417,18 +417,18 @@ function ReviewStep({
       </Section>
 
       <Section title="화면">
-        <p className="px-1 text-xs text-slate-500">
+        <p className="px-1 text-xs text-[var(--waivs-text-sub)]">
           {draft.screens.map((screen) => screen.name).join(" · ")}
         </p>
       </Section>
 
       <Section title="표">
-        <p className="px-1 font-mono text-xs text-slate-500">
+        <p className="px-1 font-mono text-xs text-[var(--waivs-text-sub)]">
           {draft.erd.tables.map((table) => table.name).join(" · ")}
         </p>
       </Section>
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-[var(--waivs-text-muted)]">
         화면과 표는 서로 이어져 있어 낱개로 빼면 연결이 끊깁니다. 넣은 뒤 편집 화면에서
         지우는 편이 안전합니다.
       </p>
@@ -439,7 +439,7 @@ function ReviewStep({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <p className="mb-1 text-xs font-semibold text-slate-500">{title}</p>
+      <p className="mb-1 text-xs font-semibold text-[var(--waivs-text-sub)]">{title}</p>
       <div className="space-y-0.5">{children}</div>
     </section>
   );
@@ -459,19 +459,19 @@ function Row({
   mono?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 hover:bg-slate-50">
+    <label className="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 hover:bg-[var(--waivs-surface-soft)]">
       <input
         type="checkbox"
         checked={checked}
         onChange={onToggle}
-        className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300"
+        className="mt-0.5 h-3.5 w-3.5 rounded border-[var(--waivs-border)] accent-[#5873F9]"
       />
       <span className={cn("min-w-0 flex-1", !checked && "opacity-40")}>
-        <span className={cn("block truncate text-xs text-slate-700", mono && "font-mono")}>
+        <span className={cn("block truncate text-xs text-[var(--waivs-text-sub)]", mono && "font-mono")}>
           {title}
         </span>
         {subtitle ? (
-          <span className="block truncate text-[11px] text-slate-400">{subtitle}</span>
+          <span className="block truncate text-[11px] text-[var(--waivs-text-muted)]">{subtitle}</span>
         ) : null}
       </span>
     </label>
@@ -480,9 +480,9 @@ function Row({
 
 function Count({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg bg-slate-50 px-2 py-2">
-      <p className="text-lg font-semibold tabular-nums text-slate-900">{value}</p>
-      <p className="text-[11px] text-slate-500">{label}</p>
+    <div className="rounded-xl bg-[var(--waivs-surface-soft)] px-2 py-2">
+      <p className="text-lg font-semibold tabular-nums text-[var(--waivs-text)]">{value}</p>
+      <p className="text-[11px] text-[var(--waivs-text-sub)]">{label}</p>
     </div>
   );
 }
@@ -498,9 +498,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-xs font-semibold text-slate-500">{label}</label>
+      <label className="text-xs font-semibold text-[var(--waivs-text-sub)]">{label}</label>
       <div className="mt-1">{children}</div>
-      {hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-[11px] text-[var(--waivs-text-muted)]">{hint}</p> : null}
     </div>
   );
 }

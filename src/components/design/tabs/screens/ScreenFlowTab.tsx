@@ -19,7 +19,7 @@ import ReactFlow, {
   type Node,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, MonitorSmartphone, MoveRight, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,15 @@ import {
 import type { DesignModel, ScreenRole, TransitionKind } from "../../model/schema";
 import type { DesignMutations } from "../../realtime/mutations";
 import { useDesignUiStore } from "../../store/designUiStore";
+import {
+  DetailDangerButton,
+  DetailEmpty,
+  DetailField,
+  DetailPanel,
+  DetailPanelBody,
+  DetailPanelHeader,
+  DetailSection,
+} from "../../components/DetailPanel";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { LinkPicker } from "../../components/LinkPicker";
 import { ScreenNode, type ScreenNodeData } from "./ScreenNode";
@@ -159,8 +168,8 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
 
         {model.screens.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm text-slate-500">아직 화면이 없습니다.</p>
-            <p className="max-w-xs text-xs text-slate-400">
+            <p className="text-sm text-[var(--waivs-text-sub)]">아직 화면이 없습니다.</p>
+            <p className="max-w-xs text-xs text-[var(--waivs-text-muted)]">
               로그인, 목록, 상세처럼 사용자가 실제로 보게 될 화면을 놓고
               화살표로 이어 보세요.
             </p>
@@ -201,9 +210,10 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
         </ReactFlow>
       </div>
 
-      <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-slate-50/60 p-5">
+      <DetailPanel>
         {selectedTransition ? (
           <TransitionPanel
+            onClose={() => setSelectedEdgeId(null)}
             trigger={selectedTransition.trigger}
             kind={selectedTransition.kind}
             condition={selectedTransition.condition}
@@ -220,31 +230,28 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
             }}
           />
         ) : selectedScreen ? (
-          <div className="space-y-5">
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-xs font-semibold text-slate-500">화면 정보</span>
-              <button
-                type="button"
-                onClick={() => void handleRemoveScreen(selectedScreen.id, selectedScreen.name)}
-                className="rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
-                aria-label="화면 삭제"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+          <>
+            <DetailPanelHeader
+              eyebrow={selectedScreen.key || "SCREEN"}
+              title={selectedScreen.name || "이름 없는 화면"}
+              icon={MonitorSmartphone}
+              onClose={() => select({ screenId: null })}
+            />
 
+            <DetailPanelBody>
+            <DetailSection tone="soft">
             <div className="space-y-3">
-              <Field label="화면 이름">
+              <DetailField label="화면 이름">
                 <Input
                   value={selectedScreen.name}
                   onChange={(event) =>
                     mutations.updateScreen(selectedScreen.id, { name: event.target.value })
                   }
-                  className="bg-white"
+                  className="rounded-xl bg-white"
                 />
-              </Field>
+              </DetailField>
 
-              <Field
+              <DetailField
                 label="라우트 경로"
                 hint="React 페이지 파일을 만들 때 이 경로가 쓰입니다."
               >
@@ -254,18 +261,18 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
                     mutations.updateScreen(selectedScreen.id, { key: event.target.value })
                   }
                   placeholder="/login"
-                  className="bg-white font-mono text-sm"
+                  className="rounded-xl bg-white font-mono text-sm"
                 />
-              </Field>
+              </DetailField>
 
-              <Field label="종류">
+              <DetailField label="종류">
                 <Select
                   value={selectedScreen.role}
                   onValueChange={(value) =>
                     mutations.updateScreen(selectedScreen.id, { role: value as ScreenRole })
                   }
                 >
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="rounded-xl bg-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -276,21 +283,21 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
                     ))}
                   </SelectContent>
                 </Select>
-              </Field>
+              </DetailField>
 
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-[var(--waivs-text-sub)]">
                 <input
                   type="checkbox"
                   checked={selectedScreen.isEntry}
                   onChange={(event) =>
                     mutations.updateScreen(selectedScreen.id, { isEntry: event.target.checked })
                   }
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-[var(--waivs-border)] accent-[#5873F9]"
                 />
                 시작 화면
               </label>
 
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-[var(--waivs-text-sub)]">
                 <input
                   type="checkbox"
                   checked={selectedScreen.requiresAuth}
@@ -299,12 +306,12 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
                       requiresAuth: event.target.checked,
                     })
                   }
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-[var(--waivs-border)] accent-[#5873F9]"
                 />
                 로그인이 필요한 화면
               </label>
 
-              <Field label="설명">
+              <DetailField label="설명">
                 <Textarea
                   value={selectedScreen.description}
                   onChange={(event) =>
@@ -312,13 +319,14 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
                       description: event.target.value,
                     })
                   }
-                  className="min-h-[80px] bg-white"
+                  className="min-h-[80px] rounded-xl bg-white"
                 />
-              </Field>
+              </DetailField>
             </div>
+            </DetailSection>
 
+            <DetailSection title="이 화면이 만족시키는 요구사항">
             <LinkPicker
-              title="이 화면이 만족시키는 요구사항"
               emptyHint="요구사항 탭에서 먼저 만들어 주세요."
               candidates={model.requirements.map((item) => ({
                 id: item.id,
@@ -330,9 +338,10 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
                 mutations.linkRequirementScreen(requirementId, selectedScreen.id, linked)
               }
             />
+            </DetailSection>
 
+            <DetailSection title="이 화면이 호출하는 API">
             <LinkPicker
-              title="이 화면이 호출하는 API"
               emptyHint="API 명세 탭에서 먼저 만들어 주세요."
               candidates={model.apis.map((api) => ({
                 id: api.id,
@@ -344,33 +353,23 @@ function ScreenFlowCanvas({ model, mutations }: ScreenFlowTabProps) {
                 mutations.linkScreenApi(selectedScreen.id, apiId, linked)
               }
             />
-          </div>
-        ) : (
-          <p className="mt-8 text-center text-sm text-slate-400">
-            화면이나 화살표를 클릭하면
-            <br />
-            여기서 편집합니다.
-          </p>
-        )}
-      </aside>
-    </div>
-  );
-}
+            </DetailSection>
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="text-xs font-semibold text-slate-500">{label}</label>
-      {children}
-      {hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p> : null}
+            <DetailDangerButton
+              icon={Trash2}
+              label="이 화면 삭제"
+              onClick={() => void handleRemoveScreen(selectedScreen.id, selectedScreen.name)}
+            />
+            </DetailPanelBody>
+          </>
+        ) : (
+          <DetailEmpty
+            icon={MonitorSmartphone}
+            title="화면이나 화살표를 골라 주세요"
+            description="다이어그램에서 상자를 누르면 화면을, 화살표를 누르면 이동 조건을 편집합니다."
+          />
+        )}
+      </DetailPanel>
     </div>
   );
 }
@@ -382,39 +381,39 @@ function TransitionPanel({
   condition,
   onChange,
   onRemove,
+  onClose,
 }: {
   trigger: string;
   kind: TransitionKind;
   condition: string;
   onChange: (patch: { trigger?: string; kind?: TransitionKind; condition?: string }) => void;
   onRemove: () => void;
+  onClose: () => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-500">화면 이동</span>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
-          aria-label="흐름 삭제"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
+    <>
+      <DetailPanelHeader
+        eyebrow="TRANSITION"
+        title={trigger || "화면 이동"}
+        icon={MoveRight}
+        onClose={onClose}
+      />
 
-      <Field label="무엇을 했을 때" hint="예: 로그인 버튼 클릭">
+      <DetailPanelBody>
+        <DetailSection tone="soft">
+          <div className="space-y-3">
+      <DetailField label="무엇을 했을 때" hint="예: 로그인 버튼 클릭">
         <Input
           value={trigger}
           onChange={(event) => onChange({ trigger: event.target.value })}
           placeholder="사용자의 행동"
-          className="bg-white"
+          className="rounded-xl bg-white"
         />
-      </Field>
+      </DetailField>
 
-      <Field label="이동 방식">
+      <DetailField label="이동 방식">
         <Select value={kind} onValueChange={(value) => onChange({ kind: value as TransitionKind })}>
-          <SelectTrigger className="bg-white">
+          <SelectTrigger className="rounded-xl bg-white">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -425,17 +424,22 @@ function TransitionPanel({
             ))}
           </SelectContent>
         </Select>
-      </Field>
+      </DetailField>
 
-      <Field label="조건" hint="예: 성공 시 / 실패 시">
+      <DetailField label="조건" hint="예: 성공 시 / 실패 시">
         <Input
           value={condition}
           onChange={(event) => onChange({ condition: event.target.value })}
           placeholder="없으면 비워 두세요"
-          className="bg-white"
+          className="rounded-xl bg-white"
         />
-      </Field>
-    </div>
+      </DetailField>
+          </div>
+        </DetailSection>
+
+        <DetailDangerButton icon={Trash2} label="이 흐름 삭제" onClick={onRemove} />
+      </DetailPanelBody>
+    </>
   );
 }
 

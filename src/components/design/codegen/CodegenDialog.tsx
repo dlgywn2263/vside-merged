@@ -49,7 +49,7 @@ const STATUS_LABEL: Record<CodegenFileStatus, string> = {
 
 const STATUS_CLASS: Record<CodegenFileStatus, string> = {
   NEW: "bg-emerald-50 text-emerald-700",
-  IDENTICAL: "bg-slate-100 text-slate-500",
+  IDENTICAL: "bg-[var(--waivs-surface-soft)] text-[var(--waivs-text-sub)]",
   CONFLICT: "bg-amber-50 text-amber-700",
 };
 
@@ -295,7 +295,7 @@ export function CodegenDialog({
       <DialogContent className="flex max-h-[85vh] w-[min(1100px,95vw)] max-w-none flex-col gap-4 overflow-hidden sm:max-w-none">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileCode className="h-5 w-5 text-indigo-500" />
+            <FileCode className="h-5 w-5 text-[#5873F9]" />
             설계에서 코드 만들기
           </DialogTitle>
           <DialogDescription>
@@ -305,14 +305,14 @@ export function CodegenDialog({
         </DialogHeader>
 
         {errorMessage ? (
-          <p className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {errorMessage}
           </p>
         ) : null}
 
         {errorCount > 0 ? (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
             설계 점검에 오류가 {errorCount}건 있습니다. 오류가 하나라도 있으면 코드를 만들지
             않습니다 — 깨진 설계에서 나온 코드는 고치는 데 더 오래 걸리기 때문입니다.
           </p>
@@ -412,12 +412,12 @@ function SetupPane({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="space-y-1.5 text-sm">
-          <span className="font-medium text-slate-700">어느 프로젝트에 넣을까요</span>
+          <span className="font-medium text-[var(--waivs-text-sub)]">어느 프로젝트에 넣을까요</span>
           <select
             value={projectName}
             onChange={(event) => onProjectChange(event.target.value)}
             disabled={busy}
-            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-9 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
           >
             {projects.length === 0 ? <option value="">프로젝트가 없습니다</option> : null}
             {projects.map((name) => (
@@ -429,12 +429,12 @@ function SetupPane({
         </label>
 
         <label className="space-y-1.5 text-sm">
-          <span className="font-medium text-slate-700">브랜치</span>
+          <span className="font-medium text-[var(--waivs-text-sub)]">브랜치</span>
           <select
             value={branchName}
             onChange={(event) => onBranchChange(event.target.value)}
             disabled={busy}
-            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-9 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
           >
             {branches.length === 0 ? (
               <option value={branchName}>{branchName || "작업 폴더 없음"}</option>
@@ -451,9 +451,9 @@ function SetupPane({
       {targetInfo ? (
         <p
           className={cn(
-            "rounded-lg px-3 py-2 text-xs",
+            "rounded-xl px-3 py-2 text-xs",
             targetInfo.stack === "SPRING" || targetInfo.stack === "REACT"
-              ? "bg-slate-50 text-slate-600"
+              ? "bg-[var(--waivs-surface-soft)] text-[var(--waivs-text-sub)]"
               : "bg-amber-50 text-amber-800",
           )}
         >
@@ -462,14 +462,14 @@ function SetupPane({
       ) : null}
 
       <label className="block space-y-1.5 text-sm">
-        <span className="font-medium text-slate-700">자바 패키지 (비워 두면 알아서 찾습니다)</span>
+        <span className="font-medium text-[var(--waivs-text-sub)]">자바 패키지 (비워 두면 알아서 찾습니다)</span>
         <Input
           value={basePackage}
           onChange={(event) => onPackageChange(event.target.value)}
           placeholder="com.example.demo"
           disabled={busy}
         />
-        <span className="block text-xs text-slate-400">
+        <span className="block text-xs text-[var(--waivs-text-muted)]">
           프로젝트 폴더를 보고 정합니다. 잘못 짚으면 자바 파일이 한 개도 컴파일되지 않으므로,
           미리보기에서 어떤 패키지로 잡혔는지 꼭 확인해 주세요.
         </span>
@@ -498,7 +498,7 @@ function PreviewPane({
   if (preview.blockedBy.length > 0) {
     return (
       <div className="space-y-3">
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
           설계에 먼저 고쳐야 할 문제가 {preview.blockedBy.length}건 있어 코드를 만들지 않았습니다.
         </p>
 
@@ -506,10 +506,10 @@ function PreviewPane({
           {preview.blockedBy.map((finding, index) => (
             <li
               key={`${finding.ruleId}-${finding.targetId}-${index}`}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className="rounded-xl border border-[var(--waivs-border)] px-3 py-2 text-sm"
             >
-              <p className="font-medium text-slate-800">{finding.message}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="font-medium text-[var(--waivs-text)]">{finding.message}</p>
+              <p className="mt-0.5 text-xs text-[var(--waivs-text-sub)]">
                 {finding.targetLabel ? `${finding.targetLabel} · ` : ""}
                 {finding.ruleId}
               </p>
@@ -522,7 +522,7 @@ function PreviewPane({
 
   if (preview.files.length === 0) {
     return (
-      <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-600">
+      <p className="rounded-xl bg-[var(--waivs-surface-soft)] px-3 py-3 text-sm text-[var(--waivs-text-sub)]">
         {preview.note || "이 프로젝트에는 만들 수 있는 코드가 없습니다."}
       </p>
     );
@@ -531,24 +531,24 @@ function PreviewPane({
   return (
     <div className="flex min-h-0 gap-4">
       <div className="w-[42%] shrink-0 space-y-3">
-        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <p className="rounded-xl bg-[var(--waivs-surface-soft)] px-3 py-2 text-xs text-[var(--waivs-text-sub)]">
           {preview.stackLabel} 프로젝트
           {preview.basePackage ? ` · 패키지 ${preview.basePackage}` : ""}
         </p>
 
         {grouped.map(([label, files]) => (
           <div key={label}>
-            <p className="mb-1 text-xs font-semibold text-slate-500">{label}</p>
+            <p className="mb-1 text-xs font-semibold text-[var(--waivs-text-sub)]">{label}</p>
 
             <ul className="space-y-1">
               {files.map((file) => (
                 <li key={file.path}>
                   <div
                     className={cn(
-                      "flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition",
+                      "flex items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition",
                       openedFile?.path === file.path
-                        ? "border-indigo-300 bg-indigo-50/60"
-                        : "border-slate-200 hover:bg-slate-50",
+                        ? "border-[#5873F9] bg-[#EEF3FF]"
+                        : "border-[var(--waivs-border)] hover:bg-[var(--waivs-surface-soft)]",
                     )}
                   >
                     <input
@@ -564,10 +564,10 @@ function PreviewPane({
                       onClick={() => onOpen(file.path)}
                       className="min-w-0 flex-1 text-left"
                     >
-                      <p className="truncate text-xs font-medium text-slate-800">
+                      <p className="truncate text-xs font-medium text-[var(--waivs-text)]">
                         {file.path.split("/").pop()}
                       </p>
-                      <p className="truncate text-[11px] text-slate-400">{file.path}</p>
+                      <p className="truncate text-[11px] text-[var(--waivs-text-muted)]">{file.path}</p>
                       <span
                         className={cn(
                           "mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
@@ -604,8 +604,8 @@ function PreviewPane({
 function CodeBlock({ title, code }: { title: string; code: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <p className="mb-1 truncate text-xs font-medium text-slate-500">{title}</p>
-      <pre className="max-h-[46vh] flex-1 overflow-auto rounded-lg bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100">
+      <p className="mb-1 truncate text-xs font-medium text-[var(--waivs-text-sub)]">{title}</p>
+      <pre className="max-h-[46vh] flex-1 overflow-auto rounded-xl bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100">
         <code>{code}</code>
       </pre>
     </div>
@@ -615,7 +615,7 @@ function CodeBlock({ title, code }: { title: string; code: string }) {
 function ResultPane({ report }: { report: CodegenApplyReport }) {
   return (
     <div className="space-y-3">
-      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+      <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
         {report.written}개 파일을 넣었습니다.
         {report.skipped > 0 ? ` ${report.skipped}개는 내용이 같아 두었습니다.` : ""}
         {report.failed > 0 ? ` ${report.failed}개는 넣지 못했습니다.` : ""}
@@ -625,16 +625,16 @@ function ResultPane({ report }: { report: CodegenApplyReport }) {
         {report.results.map((result) => (
           <li
             key={result.path}
-            className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-xs"
+            className="flex items-start justify-between gap-3 rounded-xl border border-[var(--waivs-border)] px-3 py-2 text-xs"
           >
-            <span className="min-w-0 flex-1 truncate text-slate-700">{result.path}</span>
+            <span className="min-w-0 flex-1 truncate text-[var(--waivs-text-sub)]">{result.path}</span>
             <span
               className={cn(
                 "shrink-0 rounded px-1.5 py-0.5 font-medium",
                 result.status === "WRITTEN"
                   ? "bg-emerald-50 text-emerald-700"
                   : result.status === "SKIPPED"
-                    ? "bg-slate-100 text-slate-500"
+                    ? "bg-[var(--waivs-surface-soft)] text-[var(--waivs-text-sub)]"
                     : "bg-red-50 text-red-700",
               )}
             >
@@ -651,7 +651,7 @@ function ResultPane({ report }: { report: CodegenApplyReport }) {
       </ul>
 
       {report.results.some((result) => result.message) ? (
-        <ul className="space-y-1 text-xs text-slate-500">
+        <ul className="space-y-1 text-xs text-[var(--waivs-text-sub)]">
           {report.results
             .filter((result) => result.message)
             .map((result) => (

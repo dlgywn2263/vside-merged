@@ -10,7 +10,7 @@
 // 보여야 한다.
 
 import { useMemo } from "react";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Search, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,15 @@ import type { DesignMutations } from "../../realtime/mutations";
 import { useDesignUiStore } from "../../store/designUiStore";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { LinkCountBadge, LinkPicker } from "../../components/LinkPicker";
+import {
+  DetailDangerButton,
+  DetailEmpty,
+  DetailField,
+  DetailPanel,
+  DetailPanelBody,
+  DetailPanelHeader,
+  DetailSection,
+} from "../../components/DetailPanel";
 
 const PRIORITY_LABEL: Record<Priority, string> = {
   must: "필수",
@@ -39,7 +48,7 @@ const PRIORITY_LABEL: Record<Priority, string> = {
 const PRIORITY_STYLE: Record<Priority, string> = {
   must: "bg-red-50 text-red-700",
   should: "bg-amber-50 text-amber-700",
-  could: "bg-slate-100 text-slate-600",
+  could: "bg-[var(--waivs-surface-soft)] text-[var(--waivs-text-sub)]",
 };
 
 export interface RequirementsTabProps {
@@ -104,9 +113,9 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
   return (
     <div className="flex h-full min-h-0">
       <section className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-3">
-          <div className="flex flex-1 items-center gap-2 rounded-lg bg-slate-50 px-3">
-            <Search className="h-4 w-4 text-slate-400" />
+        <div className="flex items-center gap-2 border-b border-[var(--waivs-border-soft)] px-6 py-3">
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-[var(--waivs-surface-soft)] px-3">
+            <Search className="h-4 w-4 text-[var(--waivs-text-muted)]" />
             <Input
               value={keyword}
               onChange={(event) => setSearch("requirements", event.target.value)}
@@ -127,7 +136,7 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
           ) : (
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 bg-white">
-                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <tr className="border-b border-[var(--waivs-border)] text-left text-xs text-[var(--waivs-text-sub)]">
                   <th className="w-16 px-6 py-2 font-medium">번호</th>
                   <th className="w-32 px-3 py-2 font-medium">구분</th>
                   <th className="px-3 py-2 font-medium">기능명</th>
@@ -143,11 +152,11 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
                     key={item.id}
                     onClick={() => select({ requirementId: item.id })}
                     className={cn(
-                      "cursor-pointer border-b border-slate-100 transition hover:bg-slate-50",
-                      selectedId === item.id && "bg-indigo-50/60 hover:bg-indigo-50/60",
+                      "cursor-pointer border-b border-[var(--waivs-border-soft)] transition hover:bg-[var(--waivs-surface-soft)]",
+                      selectedId === item.id && "bg-[#EEF3FF] hover:bg-[#EEF3FF]",
                     )}
                   >
-                    <td className="px-6 py-2 text-xs tabular-nums text-slate-400">
+                    <td className="px-6 py-2 text-xs tabular-nums text-[var(--waivs-text-muted)]">
                       {item.code}
                     </td>
 
@@ -158,7 +167,7 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
                           mutations.updateRequirement(item.id, { category: event.target.value })
                         }
                         onClick={(event) => event.stopPropagation()}
-                        className="h-8 border-transparent bg-transparent px-2 hover:border-slate-200"
+                        className="h-8 border-transparent bg-transparent px-2 hover:border-[var(--waivs-border)]"
                       />
                     </td>
 
@@ -170,7 +179,7 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
                           mutations.updateRequirement(item.id, { name: event.target.value })
                         }
                         onClick={(event) => event.stopPropagation()}
-                        className="h-8 border-transparent bg-transparent px-2 hover:border-slate-200"
+                        className="h-8 border-transparent bg-transparent px-2 hover:border-[var(--waivs-border)]"
                       />
                     </td>
 
@@ -213,7 +222,7 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
                           event.stopPropagation();
                           void handleRemove(item.id, item.name);
                         }}
-                        className="rounded-md p-1.5 text-slate-300 transition hover:bg-red-50 hover:text-red-500"
+                        className="rounded-md p-1.5 text-[var(--waivs-text-muted)] transition hover:bg-red-50 hover:text-red-500"
                         aria-label="요구사항 삭제"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -227,49 +236,72 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
         </div>
       </section>
 
-      <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-slate-50/60 p-5">
+      <DetailPanel>
         {!selected ? (
-          <p className="mt-8 text-center text-sm text-slate-400">
-            요구사항을 선택하면
-            <br />
-            설명과 연결을 여기서 편집합니다.
-          </p>
+          <DetailEmpty
+            icon={ListChecks}
+            title="요구사항을 선택해 주세요"
+            description="왼쪽 표에서 한 줄을 고르면 설명과 연결을 여기서 편집합니다."
+          />
         ) : (
-          <div className="space-y-5">
-            <div>
-              <label className="text-xs font-semibold text-slate-500">설명</label>
-              <Textarea
-                value={selected.description}
-                onChange={(event) =>
-                  mutations.updateRequirement(selected.id, { description: event.target.value })
-                }
-                placeholder="이 기능이 무엇을 해야 하는지 한두 문장으로 적어 주세요."
-                className="mt-1.5 min-h-[120px] bg-white"
+          <>
+            <DetailPanelHeader
+              eyebrow={selected.code || "REQUIREMENT"}
+              title={selected.name || "이름 없는 요구사항"}
+              icon={ListChecks}
+              onClose={() => select({ requirementId: null })}
+            />
+
+            <DetailPanelBody>
+              <DetailSection tone="soft">
+                <DetailField
+                  label="설명"
+                  hint="코드를 만들 때 이 문장이 주석과 문서에 그대로 쓰입니다."
+                >
+                  <Textarea
+                    value={selected.description}
+                    onChange={(event) =>
+                      mutations.updateRequirement(selected.id, {
+                        description: event.target.value,
+                      })
+                    }
+                    placeholder="이 기능이 무엇을 해야 하는지 한두 문장으로 적어 주세요."
+                    className="min-h-[120px] rounded-xl bg-white"
+                  />
+                </DetailField>
+              </DetailSection>
+
+              <DetailSection title="이 요구사항이 나타나는 화면">
+                <LinkPicker
+                  emptyHint="화면 흐름 탭에서 화면을 먼저 만들어 주세요."
+                  candidates={screenCandidates}
+                  selectedIds={selected.screenIds}
+                  onToggle={(screenId, linked) =>
+                    mutations.linkRequirementScreen(selected.id, screenId, linked)
+                  }
+                />
+              </DetailSection>
+
+              <DetailSection title="이 요구사항을 담당하는 API">
+                <LinkPicker
+                  emptyHint="API 명세 탭에서 API를 먼저 만들어 주세요."
+                  candidates={apiCandidates}
+                  selectedIds={selected.apiIds}
+                  onToggle={(apiId, linked) =>
+                    mutations.linkRequirementApi(selected.id, apiId, linked)
+                  }
+                />
+              </DetailSection>
+
+              <DetailDangerButton
+                icon={Trash2}
+                label="이 요구사항 삭제"
+                onClick={() => void handleRemove(selected.id, selected.name)}
               />
-            </div>
-
-            <LinkPicker
-              title="이 요구사항이 나타나는 화면"
-              emptyHint="화면 흐름 탭에서 화면을 먼저 만들어 주세요."
-              candidates={screenCandidates}
-              selectedIds={selected.screenIds}
-              onToggle={(screenId, linked) =>
-                mutations.linkRequirementScreen(selected.id, screenId, linked)
-              }
-            />
-
-            <LinkPicker
-              title="이 요구사항을 담당하는 API"
-              emptyHint="API 명세 탭에서 API를 먼저 만들어 주세요."
-              candidates={apiCandidates}
-              selectedIds={selected.apiIds}
-              onToggle={(apiId, linked) =>
-                mutations.linkRequirementApi(selected.id, apiId, linked)
-              }
-            />
-          </div>
+            </DetailPanelBody>
+          </>
         )}
-      </aside>
+      </DetailPanel>
     </div>
   );
 }
@@ -277,7 +309,7 @@ export function RequirementsTab({ model, mutations }: RequirementsTabProps) {
 function EmptyRequirements({ hasAny, onAdd }: { hasAny: boolean; onAdd: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-center">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-[var(--waivs-text-sub)]">
         {hasAny ? "검색 결과가 없습니다." : "아직 요구사항이 없습니다."}
       </p>
 

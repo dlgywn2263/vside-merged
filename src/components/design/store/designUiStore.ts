@@ -27,7 +27,13 @@ interface DesignUiState {
   search: Record<DesignTab, string>;
   selection: DesignSelection;
 
-  /** 설계 닥터 패널을 펼쳐 두었는지. */
+  /**
+   * 설계 닥터 패널을 펼쳐 두었는지.
+   *
+   * 처음에는 닫아 둔다. 막 들어온 사람은 아직 아무것도 쓰지 않았는데
+   * 점검 결과부터 마주하게 되기 때문이다. 문제 개수는 헤더 버튼 위
+   * 배지로 계속 보이므로, 닫아 둬도 놓치지 않는다.
+   */
   doctorOpen: boolean;
 
   /** ERD 탭에서 텍스트 패널이 차지하는 비율(0~1). */
@@ -52,7 +58,7 @@ export const useDesignUiStore = create<DesignUiState>((set) => ({
   activeTab: "requirements",
   search: { requirements: "", screens: "", erd: "", apis: "" },
   selection: EMPTY_SELECTION,
-  doctorOpen: true,
+  doctorOpen: false,
   erdTextRatio: 0.42,
 
   setActiveTab: (tab) => set({ activeTab: tab }),

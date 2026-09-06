@@ -35,13 +35,13 @@ function TableNodeComponent({ data, selected }: NodeProps<TableNodeData>) {
     <div
       className={cn(
         "w-[248px] overflow-hidden rounded-xl border bg-white shadow-sm transition",
-        selected ? "border-indigo-500 shadow-md" : "border-slate-200",
+        selected ? "border-[#5873F9] shadow-md" : "border-[var(--waivs-border)]",
       )}
     >
-      <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !bg-slate-400" />
-      <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !bg-indigo-500" />
+      <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !bg-[var(--waivs-text-muted)]" />
+      <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !bg-[#5873F9]" />
 
-      <div className="flex items-center gap-2 bg-slate-900 px-3 py-2">
+      <div className="flex items-center gap-2 bg-[#5873F9] px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-mono text-sm font-semibold text-white">
           {data.name || "이름 없음"}
         </span>
@@ -56,9 +56,9 @@ function TableNodeComponent({ data, selected }: NodeProps<TableNodeData>) {
         ) : null}
       </div>
 
-      <ul className="divide-y divide-slate-50">
+      <ul className="divide-y divide-[var(--waivs-border-soft)]">
         {data.columns.length === 0 ? (
-          <li className="px-3 py-2 text-xs text-slate-400">컬럼 없음</li>
+          <li className="px-3 py-2 text-xs text-[var(--waivs-text-muted)]">컬럼 없음</li>
         ) : (
           data.columns.map((column) => (
             <li key={column.id} className="flex items-center gap-2 px-3 py-1.5">
@@ -66,15 +66,15 @@ function TableNodeComponent({ data, selected }: NodeProps<TableNodeData>) {
                 {column.isPk ? (
                   <KeyRound className="h-3 w-3 text-amber-500" aria-label="기본키" />
                 ) : column.isFk ? (
-                  <Link2 className="h-3 w-3 text-indigo-400" aria-label="외래키" />
+                  <Link2 className="h-3 w-3 text-[#5873F9]" aria-label="외래키" />
                 ) : null}
               </span>
 
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--waivs-text-sub)]">
                 {column.name}
               </span>
 
-              <span className="shrink-0 font-mono text-[10px] text-slate-400">
+              <span className="shrink-0 font-mono text-[10px] text-[var(--waivs-text-muted)]">
                 {column.type}
                 {column.nullable ? "" : " *"}
               </span>

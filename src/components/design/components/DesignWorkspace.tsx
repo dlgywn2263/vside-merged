@@ -61,11 +61,15 @@ export function DesignWorkspace() {
         if (cancelled) return;
 
         setWorkspaces(
-          (list ?? []).map((item: { id: string; name: string; mode?: string }) => ({
-            id: item.id,
-            name: item.name,
-            mode: item.mode === "team" ? "team" : "personal",
-          })),
+          (list ?? []).map(
+            (item: { id: string; name: string; mode?: string; role?: string }) => ({
+              id: item.id,
+              name: item.name,
+              mode: item.mode === "team" ? "team" : "personal",
+              // 사이드바가 "팀 프로젝트 · OWNER" 처럼 역할까지 보여 준다.
+              role: item.role,
+            }),
+          ),
         );
       } catch (error) {
         if (cancelled) return;
@@ -150,7 +154,15 @@ export function DesignWorkspace() {
 
   return (
     <ConfirmDialogProvider>
-      <div className="flex h-[calc(100vh-56px)] min-h-0 bg-white">
+      {/*
+        다른 화면(자료실·마이페이지)과 같은 껍데기다. 연한 바탕 위에 흰
+        패널을 얹고 20px 간격을 둔다.
+
+        다만 높이는 min-h 가 아니라 고정이다. 자료실은 위에서 아래로 읽는
+        문서라 늘어나도 되지만, 여기 화면 흐름도와 ERD 는 주어진 높이를
+        채워야 하는 캔버스라 min-h 로 두면 찌그러진다.
+      */}
+      <div className="waivs-page flex h-[calc(100dvh-72px)] min-h-0 gap-5 p-5 text-[var(--waivs-text)]">
         <WorkspaceSidebar
           workspaces={workspaces}
           currentWorkspaceId={workspaceId}
@@ -158,7 +170,7 @@ export function DesignWorkspace() {
           errorMessage={workspaceError}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="waivs-panel flex min-w-0 flex-1 flex-col overflow-hidden">
           {!workspaceId ? (
             <NoWorkspace hasWorkspaces={workspaces.length > 0} />
           ) : (
@@ -180,13 +192,13 @@ export function DesignWorkspace() {
               <ConnectionNotice status={state.status} message={state.errorMessage} />
 
               {printError ? (
-                <p className="mx-6 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                <p className="mx-6 mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
                   {printError}
                 </p>
               ) : null}
 
               {state.status === "loading" ? (
-                <div className="flex flex-1 items-center justify-center gap-2 text-sm text-slate-400">
+                <div className="flex flex-1 items-center justify-center gap-2 text-sm text-[var(--waivs-text-muted)]">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   설계 문서를 여는 중
                 </div>
@@ -271,11 +283,11 @@ export function DesignWorkspace() {
 function EmptyDesign({ onStart }: { onStart: () => void }) {
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/95 px-8 text-center">
-      <Sparkles className="h-8 w-8 text-indigo-400" />
-      <p className="text-base font-semibold text-slate-800">
+      <Sparkles className="h-8 w-8 text-[#5873F9]" />
+      <p className="text-base font-semibold text-[var(--waivs-text)]">
         어떤 서비스를 만드시나요?
       </p>
-      <p className="max-w-sm text-sm text-slate-500">
+      <p className="max-w-sm text-sm text-[var(--waivs-text-sub)]">
         한 줄만 알려 주시면 요구사항과 화면, 표, API를 서로 연결해 초안을 만들어 드립니다.
         마음에 안 드는 것은 빼고 넣을 수 있습니다.
       </p>
@@ -285,7 +297,7 @@ function EmptyDesign({ onStart }: { onStart: () => void }) {
         초안 만들기
       </Button>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-[var(--waivs-text-muted)]">
         직접 쓰고 싶다면 위 탭에서 바로 시작해도 됩니다.
       </p>
     </div>
@@ -295,8 +307,8 @@ function EmptyDesign({ onStart }: { onStart: () => void }) {
 function NoWorkspace({ hasWorkspaces }: { hasWorkspaces: boolean }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
-      <p className="text-sm font-medium text-slate-700">워크스페이스를 먼저 선택해 주세요.</p>
-      <p className="max-w-sm text-xs text-slate-400">
+      <p className="text-sm font-medium text-[var(--waivs-text-sub)]">워크스페이스를 먼저 선택해 주세요.</p>
+      <p className="max-w-sm text-xs text-[var(--waivs-text-muted)]">
         {hasWorkspaces
           ? "왼쪽 목록에서 설계를 작성할 워크스페이스를 고르면 시작됩니다."
           : "워크스페이스를 만들면 그 안에서 설계를 작성할 수 있습니다."}
