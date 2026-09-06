@@ -11,9 +11,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, PencilLine, Sparkles } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { getMyWorkspacesByTokenApi } from "@/lib/ide/api";
 import { getAuthUser } from "@/lib/auth/tokenStore";
 
@@ -105,6 +105,11 @@ export function DesignWorkspace() {
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
   const documentEmpty = isEmptyModel(model);
+
+  // 빈 문서에서 "직접 작성하기" 를 고르면 안내를 접는다. 문서에는 아무것도
+  // 쓰지 않으므로 새로고침하면 다시 뜨지만, 한 줄이라도 적었으면 문서가
+  // 비지 않아 뜨지 않는다.
+  const [blankStarted, setBlankStarted] = useState(false);
 
   const mutations = useMemo(() => (doc ? createDesignMutations(doc) : null), [doc]);
 
@@ -205,8 +210,11 @@ export function DesignWorkspace() {
               ) : state.status === "error" || !mutations ? null : (
                 <div className="flex min-h-0 flex-1">
                   <div className="relative min-w-0 flex-1">
-                    {documentEmpty ? (
-                      <EmptyDesign onStart={() => setAiOpen(true)} />
+                    {documentEmpty && !blankStarted ? (
+                      <EmptyDesign
+                        onStartWithAi={() => setAiOpen(true)}
+                        onStartBlank={() => setBlankStarted(true)}
+                      />
                     ) : null}
 
                     {activeTab === "requirements" ? (
@@ -280,27 +288,95 @@ export function DesignWorkspace() {
  * 무엇을 써야 할지 몰라서 설계를 못 하는데 칸만 하나 더 주는 셈이었다.
  * 이제는 한 줄만 적으면 시작할 수 있다는 것을 가장 먼저 보여 준다.
  */
-function EmptyDesign({ onStart }: { onStart: () => void }) {
+function EmptyDesign({
+  onStartWithAi,
+  onStartBlank,
+}: {
+  onStartWithAi: () => void;
+  onStartBlank: () => void;
+}) {
   return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-white/95 px-8 text-center">
-      <Sparkles className="h-8 w-8 text-[#5873F9]" />
-      <p className="text-base font-semibold text-[var(--waivs-text)]">
-        어떤 서비스를 만드시나요?
-      </p>
-      <p className="max-w-sm text-sm text-[var(--waivs-text-sub)]">
-        한 줄만 알려 주시면 요구사항과 화면, 표, API를 서로 연결해 초안을 만들어 드립니다.
-        마음에 안 드는 것은 빼고 넣을 수 있습니다.
-      </p>
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-white/95 px-8">
+      <div className="text-center">
+        <p className="text-lg font-black text-[var(--waivs-text)]">어떻게 시작할까요?</p>
+        <p className="mt-1 text-sm text-[var(--waivs-text-muted)]">
+          둘 중 아무거나 골라도 됩니다. 나중에 바꿔도 됩니다.
+        </p>
+      </div>
 
-      <Button onClick={onStart} className="mt-1 gap-1.5">
-        <Sparkles className="h-4 w-4" />
-        초안 만들기
-      </Button>
+      <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+        <StartChoice
+          icon={<Sparkles className="h-5 w-5" />}
+          title="AI로 초안 만들기"
+          description="한 줄만 알려 주시면 요구사항과 화면, 표, API를 서로 연결해 만들어 드립니다. 마음에 안 드는 것은 빼고 넣을 수 있습니다."
+          actionLabel="초안 만들기"
+          onClick={onStartWithAi}
+          primary
+        />
 
-      <p className="text-xs text-[var(--waivs-text-muted)]">
-        직접 쓰고 싶다면 위 탭에서 바로 시작해도 됩니다.
-      </p>
+        <StartChoice
+          icon={<PencilLine className="h-5 w-5" />}
+          title="직접 작성하기"
+          description="빈 문서에서 시작합니다. 요구사항부터 하나씩 적어 나가고, 필요하면 나중에 AI 초안을 얹을 수도 있습니다."
+          actionLabel="빈 문서로 시작"
+          onClick={onStartBlank}
+        />
+      </div>
     </div>
+  );
+}
+
+/** 시작 방식 하나. 두 갈래를 나란히 놓아야 고를 수 있다는 것이 눈에 보인다. */
+function StartChoice({
+  icon,
+  title,
+  description,
+  actionLabel,
+  onClick,
+  primary = false,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  actionLabel: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col gap-2 rounded-2xl border p-5 text-left transition",
+        primary
+          ? "border-[#5873F9] bg-[#F7F9FF] hover:bg-[#EEF3FF]"
+          : "border-[var(--waivs-border)] bg-white hover:border-[#5873F9] hover:bg-[var(--waivs-surface-soft)]",
+      )}
+    >
+      <span
+        className={cn(
+          "grid h-10 w-10 place-items-center rounded-xl",
+          primary
+            ? "bg-[#5873F9] text-white"
+            : "bg-[var(--waivs-surface-soft)] text-[var(--waivs-text-sub)]",
+        )}
+      >
+        {icon}
+      </span>
+
+      <span className="text-sm font-black text-[var(--waivs-text)]">{title}</span>
+
+      <span className="text-xs leading-5 text-[var(--waivs-text-muted)]">{description}</span>
+
+      <span
+        className={cn(
+          "mt-1 text-xs font-black",
+          primary ? "text-[#5873F9]" : "text-[var(--waivs-text-sub)]",
+        )}
+      >
+        {actionLabel} →
+      </span>
+    </button>
   );
 }
 

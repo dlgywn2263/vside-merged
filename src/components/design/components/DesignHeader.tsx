@@ -121,94 +121,26 @@ export function DesignHeader({
   const doctorOpen = useDesignUiStore((s) => s.doctorOpen);
   const toggleDoctor = useDesignUiStore((s) => s.toggleDoctor);
 
+  // 한 줄로 모은다. 예전에는 제목 아래 저장 표시가 세로로 쌓이고 탭이 또 한
+  // 줄이라 114px 을 썼는데, 설계 화면에서 그만큼은 캔버스에 주는 편이 낫다.
+  // 자주 누르지 않는 두 버튼은 아이콘만 남겨 자리를 뺐다.
   return (
-    <header className="flex shrink-0 flex-col gap-3 border-b border-[var(--waivs-border-soft)] px-5 py-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold text-[var(--waivs-text)]">
-            {workspaceName || "설계 관리"}
-          </h1>
-          <SaveIndicator state={state} />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {state.peerCount > 1 ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-[#EEF3FF] px-2.5 py-1 text-xs font-medium text-[#5873F9]">
-              <Users className="h-3.5 w-3.5" />
-              {state.peerCount}명이 함께 보는 중
-            </span>
-          ) : null}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenAiDraft}
-            className="gap-1.5"
-          >
-            <Sparkles className="h-4 w-4 text-[#5873F9]" />
-            AI 초안
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenHistory}
-            className="gap-1.5"
-          >
-            <History className="h-4 w-4 text-[var(--waivs-text-sub)]" />
-            기록
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onPrint}
-            disabled={printing}
-            className="gap-1.5"
-          >
-            {printing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Printer className="h-4 w-4 text-[var(--waivs-text-sub)]" />
-            )}
-            {printing ? "만드는 중" : "PDF / 인쇄"}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenCodegen}
-            className="gap-1.5"
-          >
-            <FileCode className="h-4 w-4 text-[var(--waivs-text-sub)]" />
-            코드 생성
-          </Button>
-
-          <Button
-            variant={doctorOpen ? "default" : "outline"}
-            size="sm"
-            onClick={() => toggleDoctor()}
-            className="gap-1.5"
-          >
-            <Stethoscope className="h-4 w-4" />
-            설계 점검
-            {issueCount > 0 ? (
-              <span className="ml-0.5 rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
-                {issueCount}
-              </span>
-            ) : null}
-          </Button>
-        </div>
+    <header className="flex shrink-0 items-center gap-4 border-b border-[var(--waivs-border-soft)] px-5 py-3.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <h1 className="truncate text-xl font-black tracking-tight text-[var(--waivs-text)]">
+          {workspaceName || "설계 관리"}
+        </h1>
+        <SaveIndicator state={state} />
       </div>
 
-      <nav className="flex gap-1">
+      <nav className="flex shrink-0 gap-1">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "rounded-xl px-3.5 py-1.5 text-sm font-medium transition",
+              "rounded-xl px-3 py-1.5 text-sm font-medium transition",
               activeTab === tab.id
                 ? "bg-[#5873F9] text-white"
                 : "text-[var(--waivs-text-sub)] hover:bg-[var(--waivs-surface-soft)]",
@@ -218,6 +150,71 @@ export function DesignHeader({
           </button>
         ))}
       </nav>
+
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        {state.peerCount > 1 ? (
+          <span
+            title={`${state.peerCount}명이 함께 보는 중`}
+            className="flex items-center gap-1 rounded-full bg-[#EEF3FF] px-2 py-1 text-xs font-bold text-[#5873F9]"
+          >
+            <Users className="h-3.5 w-3.5" />
+            {state.peerCount}
+          </span>
+        ) : null}
+
+        <Button variant="outline" size="sm" onClick={onOpenAiDraft} className="gap-1.5">
+          <Sparkles className="h-4 w-4 text-[#5873F9]" />
+          AI 초안
+        </Button>
+
+        {/* 아래 둘은 가끔 쓰는 것이라 아이콘만 남긴다. 이름은 툴팁으로 뜬다. */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenHistory}
+          title="기록"
+          aria-label="기록"
+          className="px-2"
+        >
+          <History className="h-4 w-4 text-[var(--waivs-text-sub)]" />
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onPrint}
+          disabled={printing}
+          title="PDF / 인쇄"
+          aria-label="PDF / 인쇄"
+          className="px-2"
+        >
+          {printing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Printer className="h-4 w-4 text-[var(--waivs-text-sub)]" />
+          )}
+        </Button>
+
+        <Button variant="outline" size="sm" onClick={onOpenCodegen} className="gap-1.5">
+          <FileCode className="h-4 w-4 text-[var(--waivs-text-sub)]" />
+          코드 생성
+        </Button>
+
+        <Button
+          variant={doctorOpen ? "default" : "outline"}
+          size="sm"
+          onClick={() => toggleDoctor()}
+          className="gap-1.5"
+        >
+          <Stethoscope className="h-4 w-4" />
+          설계 점검
+          {issueCount > 0 ? (
+            <span className="ml-0.5 rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
+              {issueCount}
+            </span>
+          ) : null}
+        </Button>
+      </div>
     </header>
   );
 }
