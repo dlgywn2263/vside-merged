@@ -260,6 +260,12 @@ function toLegacyFlow(model: DesignModel): { nodesJson: string; edgesJson: strin
     };
   }
 
+  // 자료실과 마이페이지가 설계단계 상자와 같은 것을 보여 주려면
+  // 화면이 부르는 API 이름까지 함께 실어야 한다.
+  const apiLabelById = new Map(
+    model.apis.map((api) => [api.id, `${api.method} ${api.endpoint}`]),
+  );
+
   const nodes = model.screens.map((screen) => ({
     id: screen.id,
     type: "systemNode",
@@ -269,6 +275,15 @@ function toLegacyFlow(model: DesignModel): { nodesJson: string; edgesJson: strin
       type: "client",
       // 예전 형식에는 라우트를 담을 자리가 없어 부가 설명 칸을 빌려 쓴다.
       techStack: screen.key,
+      // 아래 넷은 설계단계 화면 상자에 그대로 찍히는 것들이다.
+      // 자료실 그림이 설계단계와 달라 보이지 않으려면 함께 보내야 한다.
+      isEntry: screen.isEntry,
+      requiresAuth: screen.requiresAuth,
+      role: screen.role,
+      requirementCount: screen.requirementIds.length,
+      apiLabels: screen.apiIds
+        .map((apiId) => apiLabelById.get(apiId))
+        .filter((label): label is string => Boolean(label)),
     },
   }));
 

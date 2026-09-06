@@ -141,6 +141,18 @@ type NormalizedDiagramNode = {
   y: number;
   columns: Record<string, unknown>[];
   subText: string;
+  /** 화면 흐름 상자 아랫줄에 쓰는 라우트 경로. */
+  route: string;
+  /** 시작 화면이면 설계단계처럼 초록 테두리를 두른다. */
+  isEntry: boolean;
+  /** 로그인이 필요한 화면인지. */
+  requiresAuth: boolean;
+  /** 화면 / 팝업 / 외부. */
+  roleLabel: string;
+  /** 이 화면이 만족시키는 요구사항 개수. */
+  requirementCount: number;
+  /** 이 화면이 부르는 API 이름들. */
+  apiLabels: string[];
 };
 
 function cn(
@@ -170,7 +182,7 @@ const archiveTabs: {
   {
     key: "design",
     label: "설계 문서",
-    description: "요구사항·API·ERD·데이터 흐름",
+    description: "요구사항·API·ERD·화면 흐름",
     icon: FileText,
   },
   {
@@ -207,8 +219,8 @@ const designSectionTabs: {
   },
   {
     key: "flow",
-    label: "데이터 흐름",
-    description: "화면·서버·DB 흐름",
+    label: "화면 흐름",
+    description: "화면 사이 이동",
     icon: GitBranch,
   },
 ];
@@ -245,9 +257,9 @@ const archivePdfSectionItems: {
   },
   {
     key: "design-flow",
-    label: "데이터 플로우",
+    label: "화면 흐름",
     group: "설계 문서",
-    printTitle: "데이터 플로우",
+    printTitle: "화면 흐름",
   },
   {
     key: "final-report",
@@ -263,9 +275,9 @@ const archivePdfSectionItems: {
   },
   {
     key: "final-flow",
-    label: "최종 보고서 데이터 플로우",
+    label: "최종 보고서 화면 흐름",
     group: "최종 보고서",
-    printTitle: "최종 보고서 데이터 플로우",
+    printTitle: "최종 보고서 화면 흐름",
   },
 ];
 
@@ -1095,6 +1107,32 @@ function buildSvgPath(
   return `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`;
 }
 
+/** 설계단계 화면 상자에 찍히는 종류 이름. */
+const SCREEN_ROLE_LABEL: Record<string, string> = {
+  page: "화면",
+  modal: "팝업",
+  external: "외부",
+};
+
+/** 화면 흐름 노드가 실어 온 부가 정보를 상자에 쓸 모양으로 꺼낸다. */
+function getScreenExtras(node: Record<string, unknown>) {
+  const data = getNodeData(node);
+  const role = typeof data.role === "string" ? data.role : "page";
+
+  return {
+    isEntry: Boolean(data.isEntry),
+    requiresAuth: Boolean(data.requiresAuth),
+    roleLabel: SCREEN_ROLE_LABEL[role] ?? role,
+    requirementCount:
+      typeof data.requirementCount === "number" ? data.requirementCount : 0,
+    apiLabels: Array.isArray(data.apiLabels)
+      ? data.apiLabels.filter(
+          (label): label is string => typeof label === "string",
+        )
+      : [],
+  };
+}
+
 function normalizeDiagramNodes(
   nodes: Record<
     string,
@@ -1131,6 +1169,13 @@ function normalizeDiagramNodes(
 
         subText:
           getNodeSubText(node),
+
+        route:
+          getFlowNodeTechStack(
+            node,
+          ),
+
+        ...getScreenExtras(node),
       };
     },
   );
@@ -1141,10 +1186,10 @@ function getDiagramLayout(
   type: "erd" | "flow",
 ) {
   const nodeWidth =
-    type === "erd" ? 220 : 270;
+    type === "erd" ? 248 : 236;
 
   const nodeHeight =
-    type === "erd" ? 138 : 92;
+    type === "erd" ? 138 : 152;
 
   const padding = 80;
 
@@ -1222,6 +1267,63 @@ function getDiagramLayout(
    PRINT DIAGRAM
    ========================================================= */
 
+/**
+ * 인쇄용 화면 흐름 상자.
+ *
+ * 화면용 ScreenFlowNodeShape 와 같은 그림을 문자열 SVG 로 만든다.
+ * 둘이 어긋나면 화면에서 본 것과 뽑은 PDF 가 달라진다.
+ */
+function buildPrintScreenNodeSvg(
+  node: NormalizedDiagramNode,
+  width: number,
+  height: number,
+) {
+  const shownApis = node.apiLabels.slice(0, 3);
+  const restApis = node.apiLabels.length - shownApis.length;
+
+  const entrySvg = node.isEntry
+    ? `<rect x="${node.x + 12}" y="${node.y + 12}" width="34" height="17" rx="6" fill="#ecfdf5" />
+       <text x="${node.x + 29}" y="${node.y + 24}" text-anchor="middle" class="diagram-entry">시작</text>`
+    : "";
+
+  const authSvg = node.requiresAuth
+    ? `<text x="${node.x + width - 14}" y="${node.y + 25}" text-anchor="end" class="diagram-chip-muted">로그인</text>`
+    : "";
+
+  const apiSvg = shownApis.length
+    ? shownApis
+        .map(
+          (label, index) =>
+            `<text x="${node.x + 14}" y="${node.y + 100 + index * 14}" class="diagram-api">${escapeHtml(label)}</text>`,
+        )
+        .join("")
+    : `<text x="${node.x + 14}" y="${node.y + 100}" class="diagram-chip-muted">호출하는 API 없음</text>`;
+
+  const restSvg =
+    restApis > 0
+      ? `<text x="${node.x + 14}" y="${node.y + 100 + shownApis.length * 14}" class="diagram-chip-muted">외 ${restApis}개</text>`
+      : "";
+
+  return `
+    <g>
+      <rect x="${node.x}" y="${node.y}" width="${width}" height="${height}" rx="16"
+        fill="#ffffff" stroke="${node.isEntry ? "#34d399" : "#e5e7eb"}" stroke-width="${node.isEntry ? 2 : 1}" />
+      ${entrySvg}
+      <text x="${node.x + (node.isEntry ? 54 : 14)}" y="${node.y + 25}" class="diagram-title">${escapeHtml(node.label)}</text>
+      ${authSvg}
+      <line x1="${node.x}" y1="${node.y + 38}" x2="${node.x + width}" y2="${node.y + 38}" stroke="#eef1f4" />
+      <text x="${node.x + 14}" y="${node.y + 56}" class="diagram-route">${escapeHtml(node.route)}</text>
+      <rect x="${node.x + 14}" y="${node.y + 64}" width="62" height="17" rx="5"
+        fill="${node.requirementCount === 0 ? "#fef2f2" : "#f1f5f9"}" />
+      <text x="${node.x + 20}" y="${node.y + 76}" class="${node.requirementCount === 0 ? "diagram-chip-warn" : "diagram-chip"}">요구사항 ${node.requirementCount}</text>
+      <rect x="${node.x + 82}" y="${node.y + 64}" width="34" height="17" rx="5" fill="#f1f5f9" />
+      <text x="${node.x + 99}" y="${node.y + 76}" text-anchor="middle" class="diagram-chip">${escapeHtml(node.roleLabel)}</text>
+      ${apiSvg}
+      ${restSvg}
+    </g>
+  `;
+}
+
 function buildPrintDiagramSvg({
   nodes,
   edges,
@@ -1298,6 +1400,13 @@ function buildPrintDiagramSvg({
         targetNode.y +
         layout.nodeHeight / 2;
 
+      // 화면 흐름에서는 "무엇을 했을 때 넘어가는가" 가 핵심 정보다.
+      // 선만 그리면 그 정보가 그림에서 통째로 빠진다.
+      const label =
+        typeof edge.label === "string"
+          ? edge.label.trim()
+          : "";
+
       return `
         <path
           d="${buildSvgPath(
@@ -1309,13 +1418,18 @@ function buildPrintDiagramSvg({
           fill="none"
           stroke="${strokeColor}"
           stroke-width="2"
-          stroke-dasharray="${
-            type === "flow"
-              ? "6 5"
-              : "0"
-          }"
           marker-end="url(#arrow-${type})"
         />
+        ${
+          label
+            ? `<text
+                 x="${(sourceX + targetX) / 2}"
+                 y="${(sourceY + targetY) / 2 - 8}"
+                 class="diagram-edge-label"
+                 text-anchor="middle"
+               >${escapeHtml(label)}</text>`
+            : ""
+        }
       `;
     })
     .join("");
@@ -1344,6 +1458,14 @@ function buildPrintDiagramSvg({
                         ? column.type
                         : "TYPE";
 
+                    // 설계단계 표는 기본키에 열쇠, 외래키에 고리 표시를
+                    // 붙인다. 인쇄물은 아이콘을 쓸 수 없어 글자로 대신한다.
+                    const marker = column.isPk
+                      ? "PK "
+                      : column.isFk
+                        ? "FK "
+                        : "";
+
                     return `
                       <text
                         x="${node.x + 16}"
@@ -1356,7 +1478,8 @@ function buildPrintDiagramSvg({
                         class="diagram-column"
                       >
                         ${escapeHtml(
-                          columnName,
+                          marker +
+                            columnName,
                         )} · ${escapeHtml(
                           columnType,
                         )}
@@ -1393,7 +1516,7 @@ function buildPrintDiagramSvg({
               width="${layout.nodeWidth}"
               height="42"
               rx="14"
-              fill="#111827"
+              fill="#5873F9"
             />
 
             <text
@@ -1411,47 +1534,11 @@ function buildPrintDiagramSvg({
         `;
       }
 
-      return `
-        <g>
-          <rect
-            x="${node.x}"
-            y="${node.y}"
-            width="${layout.nodeWidth}"
-            height="${layout.nodeHeight}"
-            rx="16"
-            fill="#f8fafc"
-            stroke="#dbe1ea"
-          />
-
-          <circle
-            cx="${node.x + 28}"
-            cy="${node.y + 32}"
-            r="14"
-            fill="#ffffff"
-            stroke="#dbe1ea"
-          />
-
-          <text
-            x="${node.x + 52}"
-            y="${node.y + 33}"
-            class="diagram-title"
-          >
-            ${escapeHtml(
-              node.label,
-            )}
-          </text>
-
-          <text
-            x="${node.x + 52}"
-            y="${node.y + 58}"
-            class="diagram-muted"
-          >
-            ${escapeHtml(
-              node.subText,
-            )}
-          </text>
-        </g>
-      `;
+      return buildPrintScreenNodeSvg(
+        node,
+        layout.nodeWidth,
+        layout.nodeHeight,
+      );
     })
     .join("");
 
@@ -3050,7 +3137,7 @@ export default function ArchivePage() {
             .join("")
         : `
           <div class="empty small-empty">
-            작성된 데이터 플로우가 없습니다.
+            작성된 화면 흐름이 없습니다.
           </div>
         `;
 
@@ -3080,7 +3167,7 @@ export default function ArchivePage() {
 
       "design-flow": `
         <p class="body-text section-description">
-          화면, 서버, DB, 외부 서비스 사이의 데이터 흐름을 시각화한 다이어그램입니다.
+          설계단계에서 작성한 화면 사이의 이동 흐름을 시각화한 다이어그램입니다.
         </p>
 
         ${flowDiagramHtml}
@@ -3380,6 +3467,55 @@ export default function ArchivePage() {
               fill: #64748b;
               font-size: 10px;
               font-weight: 700;
+            }
+
+            /* 화면 흐름 상자에 쓰는 작은 글씨들. 화면용과 같은 값이어야 한다. */
+            .diagram-route {
+              fill: #6b7280;
+              font-size: 10px;
+              font-weight: 700;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
+
+            .diagram-entry {
+              fill: #047857;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-chip {
+              fill: #475569;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-chip-warn {
+              fill: #dc2626;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-chip-muted {
+              fill: #9ca3af;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-api {
+              fill: #6b7280;
+              font-size: 9px;
+              font-weight: 700;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
+
+            /* 화살표 위에 얹는 이동 조건. 선과 겹쳐도 읽히도록 흰 테를 두른다. */
+            .diagram-edge-label {
+              fill: #475569;
+              font-size: 10px;
+              font-weight: 700;
+              stroke: #ffffff;
+              stroke-width: 3px;
+              paint-order: stroke;
             }
 
             @media print {
@@ -4659,7 +4795,7 @@ function ArchiveDesignContent({
         <EmptyState
           icon={FileText}
           title="아직 저장된 설계 문서가 없습니다."
-          message="설계관리에서 요구사항, API 명세, ERD 또는 데이터 플로우를 작성하면 이곳에서 문서 형태로 확인할 수 있습니다."
+          message="설계관리에서 요구사항, API 명세, ERD 또는 화면 흐름을 작성하면 이곳에서 문서 형태로 확인할 수 있습니다."
         />
       ) : (
         <>
@@ -5009,8 +5145,8 @@ function DesignFlowPage({
     return (
       <DesignEmptyText
         icon={GitBranch}
-        title="작성된 데이터 플로우가 없습니다."
-        text="설계관리에서 데이터 플로우를 작성하면 이곳에서 확인할 수 있습니다."
+        title="작성된 화면 흐름이 없습니다."
+        text="설계관리에서 화면 흐름을 작성하면 이곳에서 확인할 수 있습니다."
       />
     );
   }
@@ -5018,8 +5154,8 @@ function DesignFlowPage({
   return (
     <div className="space-y-4">
       <SectionTitle
-        title="데이터 플로우"
-        description="화면, 서버, DB, 외부 서비스 사이의 흐름을 시각화했습니다."
+        title="화면 흐름"
+        description="화면 사이의 이동 흐름을 시각화했습니다."
         count={`노드 ${nodes.length}개 · 연결 ${edgeCount}개`}
       />
 
@@ -5027,7 +5163,7 @@ function DesignFlowPage({
         nodes={nodes}
         edges={edges}
         type="flow"
-        title="데이터 플로우 미리보기"
+        title="화면 흐름 미리보기"
         description="설계단계에서 작성한 흐름도를 그대로 표시합니다."
       />
 
@@ -5074,6 +5210,180 @@ function DesignFlowPage({
 /* =========================================================
    DIAGRAM PREVIEW
    ========================================================= */
+
+/**
+ * 화면 흐름 상자.
+ *
+ * 설계단계의 화면 카드(src/components/design/tabs/screens/ScreenNode.tsx)와
+ * 같은 것을 보여 준다. 같은 데이터인데 그림이 다르면 다른 자료로 오해한다.
+ */
+function ScreenFlowNodeShape({
+  node,
+  width,
+  height,
+}: {
+  node: NormalizedDiagramNode;
+  width: number;
+  height: number;
+}) {
+  const shownApis = node.apiLabels.slice(0, 3);
+  const restApis = node.apiLabels.length - shownApis.length;
+
+  return (
+    <g>
+      <rect
+        x={node.x}
+        y={node.y}
+        width={width}
+        height={height}
+        rx={16}
+        fill="#ffffff"
+        stroke={node.isEntry ? "#34d399" : "#e5e7eb"}
+        strokeWidth={node.isEntry ? 2 : 1}
+      />
+
+      {node.isEntry ? (
+        <>
+          <rect
+            x={node.x + 12}
+            y={node.y + 12}
+            width={34}
+            height={17}
+            rx={6}
+            fill="#ecfdf5"
+          />
+          <text
+            x={node.x + 29}
+            y={node.y + 24}
+            textAnchor="middle"
+            fill="#047857"
+            fontSize={9}
+            fontWeight={900}
+          >
+            시작
+          </text>
+        </>
+      ) : null}
+
+      <text
+        x={node.x + (node.isEntry ? 54 : 14)}
+        y={node.y + 25}
+        fill="#0f172a"
+        fontSize={13}
+        fontWeight={900}
+      >
+        {node.label}
+      </text>
+
+      {node.requiresAuth ? (
+        <text
+          x={node.x + width - 14}
+          y={node.y + 25}
+          textAnchor="end"
+          fill="#9ca3af"
+          fontSize={9}
+          fontWeight={900}
+        >
+          로그인
+        </text>
+      ) : null}
+
+      <line
+        x1={node.x}
+        y1={node.y + 38}
+        x2={node.x + width}
+        y2={node.y + 38}
+        stroke="#eef1f4"
+      />
+
+      <text
+        x={node.x + 14}
+        y={node.y + 56}
+        fill="#6b7280"
+        fontSize={10}
+        fontWeight={700}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+      >
+        {node.route}
+      </text>
+
+      <rect
+        x={node.x + 14}
+        y={node.y + 64}
+        width={62}
+        height={17}
+        rx={5}
+        fill={node.requirementCount === 0 ? "#fef2f2" : "#f1f5f9"}
+      />
+      <text
+        x={node.x + 20}
+        y={node.y + 76}
+        fill={node.requirementCount === 0 ? "#dc2626" : "#475569"}
+        fontSize={9}
+        fontWeight={900}
+      >
+        요구사항 {node.requirementCount}
+      </text>
+
+      <rect
+        x={node.x + 82}
+        y={node.y + 64}
+        width={34}
+        height={17}
+        rx={5}
+        fill="#f1f5f9"
+      />
+      <text
+        x={node.x + 99}
+        y={node.y + 76}
+        textAnchor="middle"
+        fill="#475569"
+        fontSize={9}
+        fontWeight={900}
+      >
+        {node.roleLabel}
+      </text>
+
+      {shownApis.length === 0 ? (
+        <text
+          x={node.x + 14}
+          y={node.y + 100}
+          fill="#9ca3af"
+          fontSize={9}
+          fontWeight={700}
+        >
+          호출하는 API 없음
+        </text>
+      ) : (
+        shownApis.map((label, index) => (
+          <text
+            key={label}
+            x={node.x + 14}
+            y={node.y + 100 + index * 14}
+            fill="#6b7280"
+            fontSize={9}
+            fontWeight={700}
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          >
+            {label}
+          </text>
+        ))
+      )}
+
+      {restApis > 0 ? (
+        <text
+          x={node.x + 14}
+          y={node.y + 100 + shownApis.length * 14}
+          fill="#9ca3af"
+          fontSize={9}
+          fontWeight={700}
+        >
+          외 {restApis}개
+        </text>
+      ) : null}
+    </g>
+  );
+}
 
 function DesignDiagramPreview({
   nodes,
@@ -5239,31 +5549,61 @@ function DesignDiagramPreview({
                 layout.nodeHeight /
                   2;
 
+              // 화면 흐름에서는 "무엇을 했을 때 넘어가는가" 가
+              // 핵심 정보다. 선만 그리면 그림에서 통째로 빠진다.
+              const edgeLabel =
+                typeof edge.label ===
+                "string"
+                  ? edge.label.trim()
+                  : "";
+
               return (
-                <path
+                <g
                   key={String(
                     edge.id ??
                       index,
                   )}
-                  d={buildSvgPath(
-                    sourceX,
-                    sourceY,
-                    targetX,
-                    targetY,
-                  )}
-                  fill="none"
-                  stroke={
-                    strokeColor
-                  }
-                  strokeWidth={2}
-                  strokeDasharray={
-                    type ===
-                    "flow"
-                      ? "6 5"
-                      : undefined
-                  }
-                  markerEnd={`url(#archive-arrow-${type})`}
-                />
+                >
+                  <path
+                    d={buildSvgPath(
+                      sourceX,
+                      sourceY,
+                      targetX,
+                      targetY,
+                    )}
+                    fill="none"
+                    stroke={
+                      strokeColor
+                    }
+                    strokeWidth={2}
+                    markerEnd={`url(#archive-arrow-${type})`}
+                  />
+
+                  {edgeLabel ? (
+                    <text
+                      x={
+                        (sourceX +
+                          targetX) /
+                        2
+                      }
+                      y={
+                        (sourceY +
+                          targetY) /
+                          2 -
+                        8
+                      }
+                      textAnchor="middle"
+                      fill="#475569"
+                      fontSize={10}
+                      fontWeight={700}
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      paintOrder="stroke"
+                    >
+                      {edgeLabel}
+                    </text>
+                  ) : null}
+                </g>
               );
             },
           )}
@@ -5299,7 +5639,7 @@ function DesignDiagramPreview({
                       }
                       height={42}
                       rx={14}
-                      fill="#111827"
+                      fill="#5873F9"
                     />
 
                     <text
@@ -5391,6 +5731,11 @@ function DesignDiagramPreview({
                                   700
                                 }
                               >
+                                {column.isPk
+                                  ? "PK "
+                                  : column.isFk
+                                    ? "FK "
+                                    : ""}
                                 {
                                   columnName
                                 }{" "}
@@ -5408,67 +5753,16 @@ function DesignDiagramPreview({
               }
 
               return (
-                <g key={node.id}>
-                  <rect
-                    x={node.x}
-                    y={node.y}
-                    width={
-                      layout.nodeWidth
-                    }
-                    height={
-                      layout.nodeHeight
-                    }
-                    rx={16}
-                    fill="#f8fafc"
-                    stroke="#dbe1ea"
-                  />
-
-                  <circle
-                    cx={
-                      node.x +
-                      28
-                    }
-                    cy={
-                      node.y +
-                      32
-                    }
-                    r={14}
-                    fill="#ffffff"
-                    stroke="#dbe1ea"
-                  />
-
-                  <text
-                    x={
-                      node.x +
-                      52
-                    }
-                    y={
-                      node.y +
-                      33
-                    }
-                    fill="#0f172a"
-                    fontSize={13}
-                    fontWeight={900}
-                  >
-                    {node.label}
-                  </text>
-
-                  <text
-                    x={
-                      node.x +
-                      52
-                    }
-                    y={
-                      node.y +
-                      58
-                    }
-                    fill="#64748b"
-                    fontSize={10}
-                    fontWeight={700}
-                  >
-                    {node.subText}
-                  </text>
-                </g>
+                <ScreenFlowNodeShape
+                  key={node.id}
+                  node={node}
+                  width={
+                    layout.nodeWidth
+                  }
+                  height={
+                    layout.nodeHeight
+                  }
+                />
               );
             },
           )}
@@ -5578,7 +5872,7 @@ function ArchiveFinalReportContent({
 
             <p className="mt-1 text-xs font-medium text-slate-500">
               PDF 저장 시 아래 초안,
-              ERD, 데이터 플로우가 함께
+              ERD, 화면 흐름이 함께
               출력됩니다.
             </p>
           </div>
@@ -5679,7 +5973,7 @@ function FinalReportDesignVisuals({
       <DesignEmptyText
         icon={Database}
         title="표시할 설계 다이어그램이 없습니다."
-        text="설계관리에서 ERD 또는 데이터 플로우를 작성하면 최종 보고서에 함께 표시됩니다."
+        text="설계관리에서 ERD 또는 화면 흐름을 작성하면 최종 보고서에 함께 표시됩니다."
       />
     );
   }
@@ -5701,7 +5995,7 @@ function FinalReportDesignVisuals({
           nodes={flowNodes}
           edges={flowEdges}
           type="flow"
-          title="최종 보고서 데이터 플로우"
+          title="최종 보고서 화면 흐름"
           description="PDF 저장 시 최종 보고서에 포함됩니다."
         />
       )}
