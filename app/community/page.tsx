@@ -10,6 +10,7 @@ import {
   Bookmark,
   ChevronLeft,
   ChevronRight,
+  Megaphone
 } from "lucide-react";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
@@ -185,6 +186,49 @@ export default function CommunityPage() {
               placeholder="제목, 내용 검색"
               className="w-full rounded-full border border-slate-200 bg-white py-3 pl-11 pr-5 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100/60"
             />
+          </div>
+        </div>
+        {/* 공지사항 */}
+        <div className="mb-5 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {/* 공지 헤더 */}
+          <div className="flex items-center gap-4 px-7 py-5">
+            <div className="flex items-center gap-2">
+              <Megaphone size={20} className="text-blue-600" />
+
+              <span className="text-lg font-bold text-gray-900">
+                공지사항
+              </span>
+            </div>
+          </div>
+
+          {/* 공지 */}
+          <div className="mx-5 mb-3 rounded-xl border border-blue-100 bg-blue-50/40">
+            <div className="flex items-center justify-between px-5 py-4">
+              
+              {/* 왼쪽 */}
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="shrink-0 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
+                  공지
+                </span>
+
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900">
+                    WAIVS 서비스 이용 안내
+                  </p>
+                </div>
+              </div>
+
+              {/* 오른쪽 */}
+              <div className="ml-6 flex shrink-0 items-center gap-5">
+                <span className="text-sm font-medium text-gray-700">
+                  관리자
+                </span>
+
+                <span className="text-sm text-gray-400">
+                  2026-09-03
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
