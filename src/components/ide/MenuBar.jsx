@@ -41,6 +41,7 @@ import {
 } from "@/lib/ide/api";
 import { useAuth } from "@/contexts/AuthContext";
 import VoiceChatManager from "@/components/ide/voice/VoiceChatManager";
+import { readActiveEditorContent } from "@/lib/ide/activeEditorContent";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import GitBranchControls from "@/components/ide/git/GitBranchControls";
 import { useGitRemoteActions } from "@/hooks/ide/useGitRemoteActions";
@@ -189,7 +190,13 @@ export default function MenuBar({ mode = "personal" }) {
     dispatch(setActiveBottomTab("output"));
 
     try {
-      const content = fileContents[activeFileId] || "";
+      // 화면의 지금 내용을 직접 읽는다.
+      //
+      // Redux 스냅샷은 타이핑이 멈추고 0.4초 뒤에야 갱신된다. 그래서 고치자마자
+      // 실행을 누르면 마지막 몇 글자가 빠진 코드가 저장되고 그게 실행됐다.
+      // 에디터가 이 파일을 보고 있지 않을 때만 스냅샷으로 넘어간다.
+      const content =
+        readActiveEditorContent(activeFileId) ?? fileContents[activeFileId] ?? "";
       await saveFileApi(workspaceId, activeProject, activeBranch || "master", activeFileId, content);
       dispatch(writeToTerminal(`\r\n[System] 코드를 자동 저장했습니다: ${activeFileId}\r\n`));
     } catch (error) {
@@ -261,7 +268,13 @@ if (tree && tree.children) {
     dispatch(setDebugMode(true));
     dispatch(setActiveBottomTab("output"));
     try {
-      const content = fileContents[activeFileId] || "";
+      // 화면의 지금 내용을 직접 읽는다.
+      //
+      // Redux 스냅샷은 타이핑이 멈추고 0.4초 뒤에야 갱신된다. 그래서 고치자마자
+      // 실행을 누르면 마지막 몇 글자가 빠진 코드가 저장되고 그게 실행됐다.
+      // 에디터가 이 파일을 보고 있지 않을 때만 스냅샷으로 넘어간다.
+      const content =
+        readActiveEditorContent(activeFileId) ?? fileContents[activeFileId] ?? "";
       await saveFileApi(workspaceId, activeProject, activeBranch || "master", activeFileId, content);
       dispatch(writeToTerminal(`\r\n[System] 코드를 자동 저장했습니다: ${activeFileId}\r\n`));
     } catch (error) {
@@ -384,15 +397,15 @@ if (tree && tree.children) {
         break;
       case "저장":
         if (!activeFileId || !workspaceId || !activeProject) return alert("에디터에 파일이 없습니다.");
-        try {
-          const content = fileContents[activeFileId] || "";
-          await saveFileApi(workspaceId, activeProject, activeBranch || "master", activeFileId, content);
-          if (!isTerminalVisible) dispatch(toggleTerminal());
-          dispatch(writeToTerminal(`[System] ✅ 저장 완료: ${activeFileId}\n`));
-        } catch (error) {
-          if (!isTerminalVisible) dispatch(toggleTerminal());
-          dispatch(writeToTerminal(`[Error] ❌ 저장 실패: ${error.message}\n`));
-        }
+
+        // 저장은 에디터에 맡긴다.
+        //
+        // 여기서 직접 저장하면 Redux 스냅샷을 쓰게 되는데, 그것은 에디터가
+        // 지금 들고 있는 내용보다 뒤처져 있을 수 있다. 게다가 에디터에도
+        // Ctrl+S 명령이 걸려 있어서, 한 번 눌렀는데 저장 요청이 두 번 나가고
+        // 나중에 도착한 쪽이 이겼다. 이제 경로를 하나로 모은다.
+        // 성공·실패 표시도 에디터가 한다.
+        dispatch(triggerEditorCmd("save"));
         break;
       case "다른 이름으로...":
         if (!activeFileId || !workspaceId || !activeProject) return alert("파일이 없습니다.");
@@ -411,6 +424,26 @@ if (tree && tree.children) {
         break;
       case "모두 저장":
         if (!workspaceId || !activeProject) return alert("저장할 내용이 없습니다.");
+
+        // 팀 모드에서는 지금 보고 있는 파일만 저장한다.
+        //
+        // 아래에서 쓰는 Redux 스냅샷에는 이번에 한 번이라도 연 파일이 전부
+        // 들어 있다. 그중에는 지금 팀원이 고치고 있는 파일도 있을 수 있는데,
+        // 그것까지 내 스냅샷으로 덮으면 남의 작업이 통째로 사라진다.
+        // 다른 파일은 그 파일을 열고 있는 사람이 자동 저장으로 남긴다.
+        if (mode === "team") {
+          if (!isTerminalVisible) dispatch(toggleTerminal());
+
+          dispatch(
+            writeToTerminal(
+              "[System] 팀 모드에서는 지금 열려 있는 파일만 저장합니다. 다른 파일은 각자 화면에서 저장됩니다.\n",
+            ),
+          );
+
+          dispatch(triggerEditorCmd("save"));
+          break;
+        }
+
         dispatch(writeToTerminal("[System] 모든 파일을 저장합니다...\n"));
         try {
           const savePromises = Object.entries(fileContents || {}).map(([path, content]) =>

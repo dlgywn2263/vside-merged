@@ -8,6 +8,10 @@ import { usePathname } from "next/navigation";
 import * as Y from "yjs";
 import { MonacoBinding } from "y-monaco";
 import { CodeDocSession } from "@/lib/ide/collab/codeDocSession";
+import {
+  registerActiveEditorReader,
+  unregisterActiveEditorReader,
+} from "@/lib/ide/activeEditorContent";
 import { VscCheck, VscClose, VscSparkle, VscLoading, VscLock, VscWarning, VscArrowRight } from "react-icons/vsc";
 
 import {
@@ -34,6 +38,12 @@ import {
 } from "@/store/slices/uiSlice";
 
 import { useAuth } from "@/contexts/AuthContext";
+
+/** 개인 모드에서 타이핑이 멈추고 이만큼 지나면 디스크에 쓴다. 팀 모드와 같은 간격. */
+const DISK_SAVE_IDLE_MS = 3000;
+
+/** 파일을 열고 이만큼 지나도 내용이 안 오면 로드에 실패한 것으로 본다. */
+const CONTENT_LOAD_TIMEOUT_MS = 5000;
 
 const configureTypeScriptMonaco = (monacoInstance) => {
   if (!monacoInstance?.languages?.typescript) return;
@@ -362,8 +372,19 @@ export default function CodeEditor() {
 
   // [아키텍처 개선] 파일별 최신 로컬 상태를 독립적으로 추적하는 딕셔너리 맵 구조 도입 (O(1) 접근성)
   const saveTimerRef = useRef(null);
-  const latestContentRef = useRef({}); 
+  const latestContentRef = useRef({});
   const prevFileIdRef = useRef(null);
+
+  /**
+   * 개인 모드 디스크 자동 저장.
+   *
+   * 팀 모드는 협업 세션이 담당자 한 명을 뽑아 저장한다. 개인 모드에는 그런
+   * 것이 없어서, 지금까지는 Ctrl+S 를 누르거나 실행 버튼을 눌러야만 디스크에
+   * 쓰였다. 그런데 실행 버튼은 지금 보고 있는 파일 하나만 저장하므로,
+   * 파일 여러 개를 고치고 실행하면 나머지는 옛 코드로 돌아갔다.
+   */
+  const diskSaveTimerRef = useRef(null);
+  const pendingDiskSaveRef = useRef(null);
 
   const [fontSize, setFontSize] = useState(14);
   const [showAiInput, setShowAiInput] = useState(false);
@@ -381,6 +402,58 @@ export default function CodeEditor() {
     type: "confirm",
   });
   const [editorNotice, setEditorNotice] = useState(null);
+
+  /** 미뤄 둔 디스크 저장을 지금 내보낸다. 없으면 아무것도 하지 않는다. */
+  const flushDiskSave = useCallback(async () => {
+    const pending = pendingDiskSaveRef.current;
+
+    if (!pending) return;
+
+    pendingDiskSaveRef.current = null;
+
+    try {
+      await saveFileApi(
+        pending.workspaceId,
+        pending.projectName,
+        pending.branchName,
+        pending.filePath,
+        pending.content,
+      );
+    } catch (error) {
+      // 실패하면 되돌려 둔다. 다음 편집이나 파일 전환 때 한 번 더 나간다.
+      pendingDiskSaveRef.current = pending;
+
+      dispatch(
+        writeToTerminal(`[Error] 자동 저장 실패: ${error.message}\n`),
+      );
+    }
+  }, [dispatch]);
+
+  /** 개인 모드에서 타이핑이 멈추면 디스크에 쓴다. 간격은 팀 모드와 같게 둔다. */
+  const scheduleDiskSave = useCallback(
+    (content) => {
+      const { activeFileId, workspaceId, activeProject, activeBranch } =
+        stateRef.current;
+
+      if (!activeFileId || !workspaceId || !activeProject) return;
+
+      pendingDiskSaveRef.current = {
+        filePath: activeFileId,
+        workspaceId,
+        projectName: activeProject,
+        branchName: activeBranch || "master",
+        content,
+      };
+
+      if (diskSaveTimerRef.current) clearTimeout(diskSaveTimerRef.current);
+
+      diskSaveTimerRef.current = setTimeout(
+        () => void flushDiskSave(),
+        DISK_SAVE_IDLE_MS,
+      );
+    },
+    [flushDiskSave],
+  );
 
   /** 지금 내 자리를 잡고 있는 팀원 이름. 없으면 null 이고, 있으면 읽기 전용이 된다. */
   const [peerLockName, setPeerLockName] = useState(null);
@@ -490,20 +563,60 @@ export default function CodeEditor() {
       if (pendingContent !== undefined && pendingContent !== fileContents[prevFileId]) {
         dispatch(updateFileContent({ filePath: prevFileId, content: pendingContent }));
       }
+
+      // 디스크에 아직 못 쓴 것도 지금 내보낸다. 파일을 갈아탄 뒤에 쓰면
+      // 예약해 둔 내용이 어느 파일 것인지 헷갈릴 수 있고, 그 사이에 실행을
+      // 누르면 직전 파일이 옛 코드로 돌아간다.
+      if (diskSaveTimerRef.current) {
+        clearTimeout(diskSaveTimerRef.current);
+        diskSaveTimerRef.current = null;
+      }
+
+      void flushDiskSave();
     }
     prevFileIdRef.current = activeFileId;
-  }, [activeFileId, dispatch, fileContents]);
+  }, [activeFileId, dispatch, fileContents, flushDiskSave]);
 
   // [생명주기 클린업] 컴포넌트 완전히 언마운트 될 때 타이머 초기화 및 최종 Flush
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (diskSaveTimerRef.current) clearTimeout(diskSaveTimerRef.current);
+
+      // 개인 모드에서 아직 디스크에 못 쓴 것이 있으면 마지막으로 내보낸다.
+      void flushDiskSave();
+
       const currentFileId = prevFileIdRef.current;
       if (currentFileId && latestContentRef.current[currentFileId] !== undefined) {
          dispatch(updateFileContent({ filePath: currentFileId, content: latestContentRef.current[currentFileId] }));
       }
     };
-  }, [dispatch]);
+  }, [dispatch, flushDiskSave]);
+
+  /**
+   * 실행·디버그가 화면의 지금 내용을 읽어 갈 수 있도록 통로를 열어 둔다.
+   *
+   * 그쪽은 Redux 스냅샷을 쓰고 있었는데, 그 값은 타이핑이 멈추고 0.4초 뒤에야
+   * 갱신된다. 고치자마자 실행하면 마지막 몇 글자가 빠진 코드가 저장돼 화면과
+   * 다른 결과가 나왔다.
+   */
+  useEffect(() => {
+    const reader = () => {
+      const editor = editorRef.current;
+      const model = editor?.getModel?.();
+
+      if (!editor || !model || model.isDisposed()) return null;
+
+      return {
+        filePath: stateRef.current.activeFileId,
+        content: editor.getValue(),
+      };
+    };
+
+    registerActiveEditorReader(reader);
+
+    return () => unregisterActiveEditorReader(reader);
+  }, []);
 
   // 💡 [핵심 개선 포인트: Yjs Bridge 패턴 적용]
   // 기존의 '!isTeamModeRef.current' 조건을 과감히 제거했습니다.
@@ -845,6 +958,21 @@ export default function CodeEditor() {
       },
       onSaveError: (error) => {
         console.error("[협업] 자동 저장 실패", error);
+
+        if (collabSessionRef.current !== sessionId) return;
+
+        // 자동 저장이 실패해도 사용자는 알 길이 없었다. 서버가 내려가 있으면
+        // 저장된 줄 알고 창을 닫게 되므로 화면에 남긴다. 세션은 표시를
+        // 되돌려 두므로 다음 편집이나 접속자 변화 때 다시 시도한다.
+        dispatch(
+          writeToTerminal(`[Error] 자동 저장 실패: ${error.message}\n`),
+        );
+
+        setEditorNotice({
+          title: "자동 저장에 실패했습니다",
+          message: `${savedFileId} — ${error.message || "서버에 저장하지 못했습니다."} 연결이 돌아오면 다시 시도합니다.`,
+          variant: "danger",
+        });
       },
     });
 
@@ -1240,6 +1368,31 @@ useEffect(() => {
     cleanupCollaboration,
   ]);
 
+  /**
+   * 파일은 열렸는데 내용이 끝내 도착하지 않으면 알린다.
+   *
+   * 협업 세션은 내용이 Redux 에 들어와야 시작된다. 그때까지는 빈 에디터가
+   * 보이는데, 그것을 빈 파일로 오해하고 타이핑하면 그 내용은 팀원에게도
+   * 가지 않고 디스크에도 남지 않는다. 실제로 팀원이 새로 만든 파일을 열었을
+   * 때 이 상태였다.
+   *
+   * 파일을 여는 순간에는 잠깐 이 상태가 정상이므로, 몇 초 기다렸다가 그때도
+   * 그대로면 그때 띄운다.
+   */
+  useEffect(() => {
+    if (!isTeamMode || !activeFileId || isContentLoaded) return undefined;
+
+    const timerId = window.setTimeout(() => {
+      setEditorNotice({
+        title: "파일을 불러오지 못했습니다",
+        message: `${activeFileId} — 내용을 받아오지 못해 동시편집을 시작할 수 없습니다. 지금 화면에 보이는 빈 내용은 실제 파일이 아닐 수 있으니, 파일을 닫았다 다시 열어 주세요.`,
+        variant: "danger",
+      });
+    }, CONTENT_LOAD_TIMEOUT_MS);
+
+    return () => window.clearTimeout(timerId);
+  }, [isTeamMode, activeFileId, isContentLoaded]);
+
   useEffect(() => {
     stateRef.current = {
       activeFileId,
@@ -1384,6 +1537,13 @@ useEffect(() => {
         }),
       );
     }, 400);
+
+    // 개인 모드는 디스크 자동 저장이 없어서, Ctrl+S 를 누르지 않으면 고친
+    // 내용이 파일에 남지 않았다. 팀 모드는 협업 세션이 담당하므로 건드리지
+    // 않는다.
+    if (!isTeamModeRef.current) {
+      scheduleDiskSave(value);
+    }
   };
 
   const executeAiAction = async (queryText, currentCode) => {
@@ -1671,15 +1831,30 @@ useEffect(() => {
 
     latestContentRef.current[activeFileId] = currentContent;
 
-    await saveFileApi(
-      workspaceId,
-      activeProject,
-      activeBranch || "master",
-      activeFileId,
-      currentContent,
-    );
+    try {
+      await saveFileApi(
+        workspaceId,
+        activeProject,
+        activeBranch || "master",
+        activeFileId,
+        currentContent,
+      );
 
-    dispatch(writeToTerminal(`[System] Saved: ${activeFileId}\n`));
+      dispatch(writeToTerminal(`[System] Saved: ${activeFileId}\n`));
+    } catch (error) {
+      // 저장 실패를 사용자에게 보여 준다. 예전에는 아무 표시가 없어서,
+      // 서버가 내려가 있어도 저장된 줄 알고 창을 닫을 수 있었다.
+      dispatch(writeToTerminal(`[Error] 저장 실패: ${error.message}\n`));
+
+      setEditorNotice({
+        title: "저장하지 못했습니다",
+        message: `${activeFileId} — ${error.message || "서버에 저장하지 못했습니다."}`,
+        variant: "danger",
+      });
+
+      // 부르는 쪽이 후속 동작을 판단할 수 있게 그대로 올려 보낸다.
+      throw error;
+    }
   }, [activeBranch, activeFileId, activeProject, dispatch, workspaceId]);
 
   const handleSaveAndReturnToFileStatus = useCallback(async () => {
@@ -1798,30 +1973,13 @@ useEffect(() => {
       () => runRedo(),
     );
 
-    editor.addCommand(
-      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
-      async () => {
-        const currentContent = editor.getValue();
-        const { activeFileId, workspaceId, activeProject, activeBranch } = stateRef.current;
-        if (!activeFileId || !workspaceId || !activeProject) return;
-
-        dispatch(updateFileContent({ filePath: activeFileId, content: currentContent }));
-        latestContentRef.current[activeFileId] = currentContent;
-
-        try {
-          await saveFileApi(
-            workspaceId,
-            activeProject,
-            activeBranch,
-            activeFileId,
-            currentContent,
-          );
-          dispatch(writeToTerminal(`[System] Saved: ${activeFileId}\n`));
-        } catch (e) {
-          dispatch(writeToTerminal(`[Error] Save failed: ${e.message}\n`));
-        }
-      },
-    );
+    // Ctrl+S 는 여기서 직접 처리하지 않는다.
+    //
+    // MenuBar 가 창 전체에 Ctrl+S 를 걸어 두고 있어서, 여기에도 명령을 걸면
+    // 한 번 눌렀는데 저장 요청이 두 번 나간다. 나중에 도착한 쪽이 이기므로
+    // 어느 내용이 남을지도 알 수 없다. 그래서 MenuBar 가 editorCmd("save")
+    // 로 넘겨주고, 아래 editorCmd 처리에서 handleSaveCurrentFile 하나만
+    // 부른다. 저장 경로는 한 곳이어야 한다.
 
     editor.addCommand(
       monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyK,
@@ -2050,6 +2208,9 @@ useEffect(() => {
     editor.focus();
 
     switch (editorCmd) {
+      // 저장 경로는 여기 하나뿐이다. Ctrl+S 도 메뉴의 "저장" 도 모두
+      // MenuBar 가 이 명령으로 넘겨준다. 실패 알림은 아래 함수가 띄운다.
+      case "save": void handleSaveCurrentFile().catch(() => {}); break;
       case "undo": runUndo(); break;
       case "redo": runRedo(); break;
       case "cut": editor.trigger("keyboard", "editor.action.clipboardCutAction", null); break;
@@ -2076,7 +2237,7 @@ useEffect(() => {
       default: break;
     }
     dispatch(triggerEditorCmd(null));
-  }, [editorCmd, dispatch, activeFileId, runUndo, runRedo]);
+  }, [editorCmd, dispatch, activeFileId, runUndo, runRedo, handleSaveCurrentFile]);
 
   const isMapTab =
     activeFileId === "Architecture Map" ||
