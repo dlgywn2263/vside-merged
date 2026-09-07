@@ -6,10 +6,8 @@ import Editor, { DiffEditor, useMonaco } from "@monaco-editor/react";
 import { useDispatch, useSelector } from "react-redux";
 import { usePathname } from "next/navigation";
 import * as Y from "yjs";
-import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
-import { CollabWebSocket } from "@/lib/ide/collabSocket";
-import { CollabFileSaver } from "@/lib/ide/collabFileSaver";
+import { CodeDocSession } from "@/lib/ide/collab/codeDocSession";
 import { VscCheck, VscClose, VscSparkle, VscLoading, VscLock, VscWarning, VscArrowRight } from "react-icons/vsc";
 
 import {
@@ -19,7 +17,6 @@ import {
 } from "@/store/slices/fileSystemSlice";
 
 import {
-  claimCollabSeedApi,
   saveFileApi,
   fetchAiAssistApi,
   fetchAiAutocompleteApi,
@@ -38,7 +35,6 @@ import {
 
 import { useAuth } from "@/contexts/AuthContext";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE_URL || "ws://localhost:8080";
 const configureTypeScriptMonaco = (monacoInstance) => {
   if (!monacoInstance?.languages?.typescript) return;
 
@@ -189,10 +185,6 @@ const configureTypeScriptMonaco = (monacoInstance) => {
   );
 };
 
-// 방 접속 규약은 /ws/collab 을 쓰는 세 곳이 공유한다.
-// 서버가 핸드셰이크에서 토큰을 확인하므로 공용 폴리필을 써야 한다.
-const CustomWebSocket = CollabWebSocket;
-
 const normalizeCollabKeyPart = (value, fallback = "") => {
   return String(value ?? fallback)
     .replace(/\\/g, "/")
@@ -201,6 +193,26 @@ const normalizeCollabKeyPart = (value, fallback = "") => {
     .trim();
 };
 
+
+/**
+ * 디버거가 알려 준 경로와 지금 열려 있는 파일이 같은 파일인지.
+ *
+ * 백엔드는 실행 컨테이너 안의 경로를 그대로 돌려주기 때문에 앞쪽 접두사가
+ * 프론트의 파일 id 와 다를 수 있다. 앞이 달라도 뒤쪽이 통째로 맞으면 같은
+ * 파일로 본다. 정확히 같은 문자열만 인정하면 멈춘 줄이 영영 표시되지 않는다.
+ */
+const isSameDebugFile = (debugPath, fileId) => {
+  const normalizedDebugPath = normalizeCollabKeyPart(debugPath);
+  const normalizedFileId = normalizeCollabKeyPart(fileId);
+
+  if (!normalizedDebugPath || !normalizedFileId) return false;
+
+  return (
+    normalizedDebugPath === normalizedFileId ||
+    normalizedDebugPath.endsWith("/" + normalizedFileId) ||
+    normalizedFileId.endsWith("/" + normalizedDebugPath)
+  );
+};
 
 const parseMergeConflicts = (value = "") => {
   const lines = String(value || "").split("\n");
@@ -311,18 +323,40 @@ export default function CodeEditor() {
   const editorRef = useRef(null);
   const monacoRef = useRef(null); 
   
+  /**
+   * 팀원이 지금 커서를 두고 있는 줄. 값은 그 사람의 표시 이름이다.
+   *
+   * 내 커서가 이 줄들과 겹치면 에디터를 읽기 전용으로 바꿔 입력을 막는다.
+   * 예전에는 onKeyDown 에서 키를 가로챘는데, 그 방식은 한글 조합 입력과
+   * 붙여넣기, 여러 줄 선택 후 덮어쓰기를 그대로 통과시켰다. readOnly 는
+   * 그 경로를 전부 막는다.
+   *
+   * 다만 서버가 문서의 주인이 아닌 CRDT 구조라서, 상대가 Yjs 로 보내오는
+   * 편집까지 막을 수는 없다. 어디까지나 같은 자리를 동시에 고치는 사고를
+   * 줄이기 위한 장치다.
+   */
   const lockedLinesRef = useRef({});
   const lockDecosRef = useRef([]);
 
-  /** 이 방의 최초 내용을 넣어도 되는지. 서버가 방마다 한 사람에게만 준다. */
-  const seedGrantedRef = useRef(false);
+  /**
+   * 팀원 커서 자리에 띄우는 이름표. clientId -> Monaco content widget.
+   *
+   * 데코레이션(injected text)으로 그렸더니 편집이 일어날 때마다 지워졌다
+   * 다시 그려져 이름표가 깜빡였다. content widget 은 문서 위에 얹히는 별도
+   * 레이어라 본문 편집에 영향을 받지 않는다.
+   */
+  const peerWidgetsRef = useRef(new Map());
 
-  /** 넣을 디스크 내용. 허락이 늦게 와도 넣을 수 있게 들고 있는다. */
+  /** 팀 모드 되돌리기. 내가 한 편집만 추적한다. */
+  const undoManagerRef = useRef(null);
+
+  /** 디스크에 있던 내용. 서버에 저장본이 없을 때 이것으로 문서를 만든다. */
   const localContentRef = useRef("");
 
-  /** 팀 모드에서 파일을 자동으로 저장하는 담당. */
-  const fileSaverRef = useRef(null);
   const conflictDecosRef = useRef([]);
+
+  /** 브레이크포인트와 현재 실행 줄에 붙여 둔 데코레이션 id 목록. */
+  const debugDecosRef = useRef([]);
   const conflictOriginalContentRef = useRef({});
   const cursorListenerRef = useRef(null); 
 
@@ -339,7 +373,6 @@ export default function CodeEditor() {
   const [editorMountVersion, setEditorMountVersion] = useState(0);
   const [fetchedNickname, setFetchedNickname] = useState("");
 
-  const [lockWarning, setLockWarning] = useState({ show: false, msg: "" });
   const [mergeConflicts, setMergeConflicts] = useState([]);
   const [conflictSessionFileId, setConflictSessionFileId] = useState(null);
   const [lastConflictCount, setLastConflictCount] = useState(0);
@@ -348,7 +381,12 @@ export default function CodeEditor() {
     type: "confirm",
   });
   const [editorNotice, setEditorNotice] = useState(null);
-  const warningTimeoutRef = useRef(null);
+
+  /** 지금 내 자리를 잡고 있는 팀원 이름. 없으면 null 이고, 있으면 읽기 전용이 된다. */
+  const [peerLockName, setPeerLockName] = useState(null);
+
+  /** 디스크에는 내용이 있는데 협업 문서가 아직 비어 있는 상태인지. */
+  const [isDocumentLoading, setIsDocumentLoading] = useState(false);
 
   const aiInputRef = useRef(null);
 
@@ -404,13 +442,11 @@ export default function CodeEditor() {
     activeBranch,
   });
 
-  const ydocRef = useRef(null);
-  const providerRef = useRef(null);
+  /** 이 파일의 동시편집 세션. 문서를 받아 오고 저장하는 일을 맡는다. */
+  const sessionRef = useRef(null);
+
   const bindingRef = useRef(null);
   const collabSessionRef = useRef(0);
-  const providerStatusListenerRef = useRef(null);
-  const providerSyncListenerRef = useRef(null);
-  const bindTimeoutsRef = useRef([]);
   const awarenessChangeListenerRef = useRef(null);
 
   const isTeamMode = pathname?.includes("/team");
@@ -496,14 +532,6 @@ export default function CodeEditor() {
     }
   }, [fileContents, activeFileId]);
 
-  const showWarningToast = (msg) => {
-    if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
-    setLockWarning({ show: true, msg });
-    warningTimeoutRef.current = setTimeout(() => {
-      setLockWarning({ show: false, msg: "" });
-    }, 2500);
-  };
-
   useEffect(() => {
     const handleUnhandledRejection = (event) => {
       if (
@@ -518,7 +546,7 @@ export default function CodeEditor() {
     return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
   }, []);
 
-  const getMyDisplayName = () => {
+  const getMyDisplayName = useCallback(() => {
     if (fetchedNickname) return fetchedNickname;
     if (user?.nickname) return user.nickname;
     if (user?.email) return user.email.split("@")[0];
@@ -529,169 +557,196 @@ export default function CodeEditor() {
         if (storedUser?.nickname) return storedUser.nickname;
         if (storedUser?.email) return storedUser.email.split("@")[0];
       }
-    } catch (e) {}
+    } catch {}
 
-    return "익명 개발자"; 
-  };
+    return "익명 개발자";
+  }, [fetchedNickname, user]);
 
+  /**
+   * 협업 방에 올릴 표시 이름.
+   *
+   * 이름을 setupCollaboration 의 의존성으로 넣으면, 프로필 조회가 끝나
+   * 닉네임이 바뀌는 순간 방을 통째로 다시 잡는다. 편집 도중에 연결이
+   * 끊겼다 붙는 셈이라 위험하다. 그래서 값은 ref 로만 넘겨서 방은 그대로
+   * 두고 이름만 갈아 끼운다.
+   */
+  const displayNameRef = useRef("익명 개발자");
+
+  useEffect(() => {
+    displayNameRef.current = getMyDisplayName();
+  }, [getMyDisplayName]);
+
+  /**
+   * 내 커서나 선택 영역이 팀원이 잡은 줄과 겹치는지 다시 계산한다.
+   *
+   * 커서가 놓인 한 줄만 보지 않고 선택 범위 전체를 훑는다. 잠긴 줄을
+   * 포함해서 드래그한 뒤 덮어쓰는 것이 예전 방식의 가장 큰 구멍이었다.
+   */
+  const refreshPeerLock = useCallback(() => {
+    if (!isTeamModeRef.current) {
+      setPeerLockName(null);
+      return;
+    }
+
+    const selection = editorRef.current?.getSelection?.();
+
+    if (!selection) {
+      setPeerLockName(null);
+      return;
+    }
+
+    const startLine = Math.min(
+      selection.startLineNumber,
+      selection.endLineNumber,
+    );
+    const endLine = Math.max(selection.startLineNumber, selection.endLineNumber);
+
+    let blockedBy = null;
+
+    for (let line = startLine; line <= endLine; line += 1) {
+      if (lockedLinesRef.current[line]) {
+        blockedBy = lockedLinesRef.current[line];
+        break;
+      }
+    }
+
+    setPeerLockName(blockedBy);
+  }, []);
+
+  /**
+   * 되돌리기 / 다시하기.
+   *
+   * 팀 모드에서는 Monaco 기본 되돌리기를 쓰지 않는다. 이유는 아래
+   * UndoManager 를 만드는 자리에 적어 두었다. 개인 모드는 그대로 둔다.
+   */
+  const runUndo = useCallback(() => {
+    const editor = editorRef.current;
+
+    if (!editor) return;
+
+    if (isTeamModeRef.current && undoManagerRef.current) {
+      undoManagerRef.current.undo();
+      return;
+    }
+
+    editor.trigger("keyboard", "undo", null);
+  }, []);
+
+  const runRedo = useCallback(() => {
+    const editor = editorRef.current;
+
+    if (!editor) return;
+
+    if (isTeamModeRef.current && undoManagerRef.current) {
+      undoManagerRef.current.redo();
+      return;
+    }
+
+    editor.trigger("keyboard", "redo", null);
+  }, []);
+
+  /** 팀원 이름표를 전부 걷어낸다. 방을 바꾸거나 나갈 때 쓴다. */
+  const removeAllPeerWidgets = useCallback(() => {
+    const editor = editorRef.current;
+
+    peerWidgetsRef.current.forEach((widget) => {
+      try {
+        editor?.removeContentWidget?.(widget);
+      } catch {
+        // 에디터가 이미 정리된 경우
+      }
+    });
+
+    peerWidgetsRef.current.clear();
+  }, []);
+
+  /**
+   * 협업 세션을 정리한다.
+   *
+   * 순서가 중요하다. 세션을 파기하면 문서도 함께 사라지므로, 문서를 읽는
+   * MonacoBinding 과 되돌리기를 먼저 떼어 낸 뒤에 세션을 파기한다.
+   * 떠나기 전 저장 여부는 세션이 연결을 끊기 전에 스스로 판단한다.
+   */
   const cleanupCollaboration = useCallback(() => {
-  collabSessionRef.current += 1;
+    collabSessionRef.current += 1;
 
-  bindTimeoutsRef.current.forEach((timerId) => {
-    window.clearTimeout(timerId);
-  });
-  bindTimeoutsRef.current = [];
+    setPeerLockName(null);
+    setIsDocumentLoading(false);
+    removeAllPeerWidgets();
 
-  // 저장 담당인지는 연결을 끊기 전에 물어봐야 한다.
-  //
-  // 끊고 나면 누가 접속해 있는지 알 수 없어 모두가 자기를 담당이라고
-  // 여기게 되고, 나가는 사람마다 저장을 보내면서 남아서 계속 고치던
-  // 팀원의 최신 내용을 옛 것으로 덮을 수 있다.
-  const saver = fileSaverRef.current;
-  fileSaverRef.current = null;
+    lockedLinesRef.current = {};
 
-  if (saver) {
-    const shouldSave = saver.shouldSaveOnLeave();
-
-    // 저장이 끝난 뒤에 정리한다. 저장이 문서를 읽어야 한다.
-    if (shouldSave) {
-      void saver.flush().finally(() => saver.destroy());
-    } else {
-      saver.destroy();
-    }
-  }
-
-  const provider = providerRef.current;
-  const statusListener = providerStatusListenerRef.current;
-  const syncListener = providerSyncListenerRef.current;
-  const awarenessListener = awarenessChangeListenerRef.current;
-
-  try {
-    if (provider && statusListener && typeof provider.off === "function") {
-      provider.off("status", statusListener);
-    }
-  } catch {
-    // provider status listener cleanup failure ignored
-  }
-
-  try {
-    if (provider && syncListener && typeof provider.off === "function") {
-      provider.off("sync", syncListener);
-    }
-  } catch {
-    // provider sync listener cleanup failure ignored
-  }
-
-  try {
-    if (
-      provider?.awareness &&
-      awarenessListener &&
-      typeof provider.awareness.off === "function"
-    ) {
-      provider.awareness.off("change", awarenessListener);
-    }
-  } catch {
-    // awareness listener cleanup failure ignored
-  }
-
-  providerStatusListenerRef.current = null;
-  providerSyncListenerRef.current = null;
-  awarenessChangeListenerRef.current = null;
-
-  try {
     if (cursorListenerRef.current) {
-      cursorListenerRef.current.dispose();
+      try {
+        cursorListenerRef.current.dispose();
+      } catch {
+        // 에디터가 이미 정리된 경우
+      }
+
       cursorListenerRef.current = null;
     }
 
-    const editor = editorRef.current;
-    const model = editor?.getModel?.();
+    const awareness = sessionRef.current?.awareness;
+    const awarenessListener = awarenessChangeListenerRef.current;
 
-    if (
-      editor &&
-      model &&
-      !model.isDisposed() &&
-      lockDecosRef.current.length > 0
-    ) {
-      editor.deltaDecorations(lockDecosRef.current, []);
+    if (awareness && awarenessListener) {
+      try {
+        awareness.off("change", awarenessListener);
+      } catch {
+        // 연결이 이미 정리된 경우
+      }
     }
 
-    lockDecosRef.current = [];
-    lockedLinesRef.current = {};
+    awarenessChangeListenerRef.current = null;
+
+    if (undoManagerRef.current) {
+      try {
+        undoManagerRef.current.destroy();
+      } catch {
+        // 이미 정리된 경우
+      }
+
+      undoManagerRef.current = null;
+    }
+
+    if (bindingRef.current) {
+      try {
+        bindingRef.current.destroy();
+      } catch {
+        // y-monaco 가 이미 떼어진 핸들러를 다시 떼려다 던지는 경우가 있다.
+        // 정리 중이라 무시해도 안전하다.
+      }
+
+      bindingRef.current = null;
+    }
+
+    if (lockDecosRef.current.length > 0) {
+      try {
+        editorRef.current?.deltaDecorations(lockDecosRef.current, []);
+      } catch {
+        // 에디터가 이미 정리된 경우
+      }
+
+      lockDecosRef.current = [];
+    }
+
+    const session = sessionRef.current;
+    sessionRef.current = null;
+
+    if (session) {
+      try {
+        session.destroy();
+      } catch {
+        // 이미 정리된 경우
+      }
+    }
 
     try {
-      const editor = editorRef.current;
-      const model = editor?.getModel?.();
-
-      if (editor && model && !model.isDisposed()) {
-        editor.updateOptions({ readOnly: false });
-      }
+      editorRef.current?.updateOptions({ readOnly: false });
     } catch {
-      // readOnly reset failure ignored
+      // 에디터가 이미 정리된 경우
     }
-
-    const binding = bindingRef.current;
-    bindingRef.current = null;
-
-    if (binding) {
-      const originalConsoleError = console.error;
-
-      console.error = (...args) => {
-        const firstArg = String(args?.[0] || "");
-
-        if (
-          firstArg.includes("[yjs] Tried to remove event handler") ||
-          firstArg.includes("Tried to remove event handler that doesn't exist")
-        ) {
-          return;
-        }
-
-        originalConsoleError.apply(console, args);
-      };
-
-      try {
-        binding.destroy();
-      } catch (error) {
-        const message = String(error?.message || error || "");
-
-        if (
-          !message.includes("Tried to remove event handler") &&
-          !message.includes("event handler that doesn't exist")
-        ) {
-          throw error;
-        }
-      } finally {
-        console.error = originalConsoleError;
-      }
-    }
-
-    if (providerRef.current) {
-      try {
-        providerRef.current.awareness?.setLocalState(null);
-      } catch {}
-
-      try {
-        providerRef.current.disconnect();
-      } catch {}
-
-      try {
-        providerRef.current.destroy?.();
-      } catch {}
-
-      providerRef.current = null;
-    }
-
-    if (ydocRef.current) {
-      try {
-        ydocRef.current.destroy();
-      } catch {}
-
-      ydocRef.current = null;
-    }
-  } catch {
-    // Monaco/Yjs cleanup race condition ignored
-  }
-}, []);
+  }, [removeAllPeerWidgets]);
 
   const setupCollaboration = useCallback(
   (editor) => {
@@ -714,8 +769,7 @@ export default function CodeEditor() {
         editorRef.current === editor &&
         currentModel &&
         !currentModel.isDisposed() &&
-        providerRef.current &&
-        ydocRef.current
+        sessionRef.current
       );
     };
 
@@ -730,32 +784,20 @@ export default function CodeEditor() {
       normalizeCollabKeyPart(activeFileId),
     ].join(":");
 
-    // 이 방의 최초 내용을 넣을 권한을 서버에 물어본다.
+    // 서버에 저장본이 없을 때 이것으로 문서를 만든다.
     //
-    // 답이 오기 전에 연결이 끝나 bind 가 실행될 수 있으므로 기본값은
-    // "넣지 않음"이다. 넣지 않아 잠깐 비어 보이는 것은 상대의 내용이 오면
-    // 채워지지만, 잘못 넣은 중복은 되돌리기 어렵다.
-    seedGrantedRef.current = false;
+    // Redux 를 먼저 본다. 거기에는 파일을 열 때 디스크에서 받아 온 내용이
+    // 들어 있다. latestContentRef 는 "에디터가 마지막으로 들고 있던 값"이라
+    // 파일을 갈아탈 때 모델이 바뀌면서 잠깐 빈 문자열이 들어올 수 있는데,
+    // 그 값으로 시드하면 "이 파일은 비어 있다"가 방의 정본으로 등록되어
+    // 뒤에 들어오는 사람까지 전부 빈 문서를 받게 된다.
+    const rawContent =
+      fileContentsRef.current[activeFileId] ??
+      latestContentRef.current[activeFileId] ??
+      "";
 
-    claimCollabSeedApi(roomName)
-      .then((granted) => {
-        if (collabSessionRef.current !== sessionId) return;
-
-        seedGrantedRef.current = granted;
-
-        // 이미 bind 가 끝났는데 이제야 허락이 왔고 문서가 비어 있다면
-        // 여기서 넣는다. 아니면 파일이 빈 채로 남는다.
-        if (granted) {
-          const yText = ydocRef.current?.getText("monaco");
-
-          if (yText && yText.length === 0 && localContentRef.current !== "") {
-            yText.insert(0, localContentRef.current);
-          }
-        }
-      })
-      .catch(() => {
-        // 물어보지 못했으면 넣지 않는다. 위와 같은 이유다.
-      });
+    const localContent = String(rawContent).replace(/\r\n/g, "\n");
+    localContentRef.current = localContent;
 
     console.log("[COLLAB ROOM ENTER]", {
       activeFileId,
@@ -766,24 +808,58 @@ export default function CodeEditor() {
       activeBranch,
     });
 
-    const ydoc = new Y.Doc();
-    ydocRef.current = ydoc;
+    const savedFileId = activeFileId;
+    const savedProject = activeProject;
+    const savedBranch = activeBranch || "master";
 
-    const provider = new WebsocketProvider(
-      `${WS_BASE}/ws/collab`,
-      roomName,
-      ydoc,
-      {
-        WebSocketPolyfill: CustomWebSocket,
+    // 문서를 받아 오는 일과 저장하는 일은 세션이 맡는다.
+    //
+    // 세션이 "저장본 조회 → 없으면 시드 → 접속" 순서를 지키므로, 여기서는
+    // 문서가 준비된 뒤에 에디터만 붙이면 된다. 예전처럼 빈 문서에 먼저
+    // 붙였다가 뒤늦게 채우는 구간이 없어서, 화면이 비었다 채워지지 않는다.
+    const session = new CodeDocSession({
+      room: roomName,
+      diskContent: localContent,
+      saveFile: async (content) => {
+        await saveFileApi(
+          workspaceId,
+          savedProject,
+          savedBranch,
+          savedFileId,
+          content,
+          { allowEmpty: false },
+        );
+
+        // 파일 트리와 미저장 표시가 어긋나지 않게 맞춰 준다.
+        latestContentRef.current[savedFileId] = content;
+        dispatch(updateFileContent({ filePath: savedFileId, content }));
       },
-    );
+      onStatusChange: (status, message) => {
+        if (collabSessionRef.current !== sessionId) return;
 
-    providerRef.current = provider;
+        setIsDocumentLoading(status === "loading");
 
-    const awareness = provider.awareness;
+        if (status === "error") {
+          console.error("[협업] 문서를 불러오지 못했습니다.", roomName, message);
+        }
+      },
+      onSaveError: (error) => {
+        console.error("[협업] 자동 저장 실패", error);
+      },
+    });
+
+    sessionRef.current = session;
+    setIsDocumentLoading(true);
+
+    const attachEditor = () => {
+    const awareness = session.awareness;
+
+    if (!awareness) return;
+
+    const yText = session.yText;
     const myColor =
       "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
-    const myName = getMyDisplayName();
+    const myName = displayNameRef.current;
 
     const initialPos = editor.getPosition();
 
@@ -795,6 +871,7 @@ export default function CodeEditor() {
     awareness.setLocalStateField("lockData", {
       name: myName,
       line: initialPos ? initialPos.lineNumber : 1,
+      column: initialPos ? initialPos.column : 1,
     });
 
     cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {
@@ -802,10 +879,24 @@ export default function CodeEditor() {
 
       const line = event.position.lineNumber;
 
+      // 이름은 그때그때 읽는다. 방에 들어온 뒤에 닉네임이 도착하는 일이 잦다.
       awareness.setLocalStateField("lockData", {
-        name: myName,
+        name: displayNameRef.current,
         line,
+        column: event.position.column,
       });
+
+      // 내가 옮겨 간 자리가 팀원이 잡은 줄인지 다시 본다.
+      refreshPeerLock();
+
+      // 마우스나 방향키로 자리를 옮기면 되돌리기 묶음을 거기서 끊는다.
+      // 시간만으로 나누면 쉬지 않고 친 것이 통째로 한 덩어리가 되므로,
+      // 자리를 옮긴 지점도 경계로 삼아야 기대하는 단위에 가까워진다.
+      const cursorReason = monacoRef.current?.editor?.CursorChangeReason;
+
+      if (cursorReason && event.reason === cursorReason.Explicit) {
+        undoManagerRef.current?.stopCapturing();
+      }
 
       
     });
@@ -821,18 +912,17 @@ export default function CodeEditor() {
       const decorations = [];
 
       Object.entries(lockedLinesRef.current).forEach(
-        ([lineStr, lockerName]) => {
+        ([lineStr, peerName]) => {
           const line = Number(lineStr);
 
           decorations.push({
             range: new monacoRef.current.Range(line, 1, line, 1),
             options: {
               isWholeLine: true,
-              className: "locked-line-bg",
-              linesDecorationsClassName: "locked-line-margin",
-              glyphMarginClassName: "locked-glyph",
+              className: "peer-line-bg",
+              linesDecorationsClassName: "peer-line-margin",
               hoverMessage: {
-                value: `🚫 **${lockerName}**님이 이 줄을 수정 중입니다.`,
+                value: `🔒 **${peerName}**님이 편집 중입니다. 이 줄은 수정할 수 없습니다.`,
               },
             },
           });
@@ -843,6 +933,83 @@ export default function CodeEditor() {
         lockDecosRef.current,
         decorations,
       );
+    };
+
+    /**
+     * 팀원 커서 자리에 이름표를 붙인다.
+     *
+     * y-monaco 는 원격 커서를 beforeContentClassName / afterContentClassName
+     * 으로 그리는데, 커서만 찍어 범위가 비면 Monaco 가 그 둘을 렌더링하지
+     * 않아 이름표가 보이지 않았다. 범위가 비어도 그려지는 injected text 로
+     * 여기서 직접 그린다. y-monaco 쪽 ::after 이름표는 CSS 에서 껐다.
+     * 둘 다 켜 두면 같은 이름이 두 번 보인다.
+     *
+     * 위치는 y-monaco 의 selection 이 아니라 우리가 보내는 lockData 에서
+     * 가져온다. selection 은 상대가 타이핑할 때만 이쪽에 반영돼서, 클릭이나
+     * 드래그만 했을 때는 이름표가 뜨지 않았다. lockData 는 커서를 옮길
+     * 때마다 보내고 있고 같은 값으로 노란 줄이 이미 정확히 따라다닌다.
+     */
+    const updatePeerCursorLabels = (peerCursors = []) => {
+      if (!isLiveSession() || !monacoRef.current) return;
+
+      const currentEditor = editorRef.current;
+      const model = currentEditor?.getModel?.();
+
+      if (!currentEditor || !model || model.isDisposed()) return;
+
+      const preference = [
+        monacoRef.current.editor.ContentWidgetPositionPreference.ABOVE,
+        monacoRef.current.editor.ContentWidgetPositionPreference.BELOW,
+      ];
+
+      const stillHere = new Set();
+
+      peerCursors.forEach(({ clientId, name, line, column, color }) => {
+        if (!name) return;
+
+        // 상대 문서와 내 문서가 잠깐 어긋나 있을 수 있어 위치를 다듬는다.
+        const position = model.validatePosition({
+          lineNumber: line,
+          column,
+        });
+
+        stillHere.add(clientId);
+
+        let widget = peerWidgetsRef.current.get(clientId);
+
+        if (!widget) {
+          const node = document.createElement("div");
+          node.className = "peer-caret-label";
+
+          widget = {
+            node,
+            position,
+            getId: () => `peer-cursor-${clientId}`,
+            getDomNode: () => node,
+            getPosition: () => ({
+              position: widget.position,
+              preference,
+            }),
+          };
+
+          peerWidgetsRef.current.set(clientId, widget);
+          currentEditor.addContentWidget(widget);
+        }
+
+        widget.position = position;
+        widget.node.textContent = name;
+        widget.node.style.backgroundColor = color || "#5873f9";
+
+        currentEditor.layoutContentWidget(widget);
+      });
+
+      // 나갔거나 다른 파일로 옮겨 간 사람의 이름표는 걷어낸다.
+      peerWidgetsRef.current.forEach((widget, clientId) => {
+        if (stillHere.has(clientId)) return;
+
+        currentEditor.removeContentWidget(widget);
+        peerWidgetsRef.current.delete(clientId);
+      });
     };
 
     const awarenessChangeHandler = () => {
@@ -859,6 +1026,7 @@ export default function CodeEditor() {
 
       const styles = [];
       const newLockedLines = {};
+      const peerCursors = [];
 
       awareness.getStates().forEach((state, clientId) => {
         if (state.user && state.user.name && state.user.color) {
@@ -871,25 +1039,12 @@ export default function CodeEditor() {
               z-index: 99 !important;
               display: inline-block !important;
             }
-            .yRemoteSelectionHead-${clientId}::after {
-              position: absolute !important;
-              content: "${state.user.name}" !important;
-              top: -20px !important;
-              left: -2px !important;
-              background-color: ${state.user.color} !important;
-              color: white !important;
-              font-size: 11px !important;
-              font-weight: bold !important;
-              padding: 2px 6px !important;
-              border-radius: 4px !important;
-              border-bottom-left-radius: 0 !important;
-              white-space: nowrap !important;
-              z-index: 100 !important;
-              pointer-events: none !important;
-            }
+            /* 이름표는 아래 peer-caret-label 하나로만 그린다.
+               y-monaco 의 ::after 까지 켜 두면 같은 사람 이름이 두 번 보인다. */
             .yRemoteSelection-${clientId} {
               background-color: ${state.user.color}44 !important;
             }
+            /* 이름표 색은 content widget 에 직접 넣는다. */
           `);
         }
 
@@ -899,6 +1054,14 @@ export default function CodeEditor() {
           state.lockData.line
         ) {
           newLockedLines[state.lockData.line] = state.lockData.name;
+
+          peerCursors.push({
+            clientId,
+            name: state.lockData.name,
+            line: state.lockData.line,
+            column: state.lockData.column || 1,
+            color: state.user?.color,
+          });
         }
       });
 
@@ -906,26 +1069,15 @@ export default function CodeEditor() {
 
       lockedLinesRef.current = newLockedLines;
       updateLockDecorations();
+      updatePeerCursorLabels(peerCursors);
 
-      const currentEditor = editorRef.current;
-      const currentPos = currentEditor?.getPosition?.();
-
-      if (!currentEditor || !currentPos) return;
-
+      // 팀원이 자리를 옮기면 내가 막혀야 하는지도 같이 달라진다.
+      refreshPeerLock();
     };
 
     awarenessChangeListenerRef.current = awarenessChangeHandler;
     awareness.on("change", awarenessChangeHandler);
 
-    const yText = ydoc.getText("monaco");
-
-    const rawContent =
-      latestContentRef.current[activeFileId] ??
-      fileContentsRef.current[activeFileId] ??
-      "";
-
-    const localContent = String(rawContent).replace(/\r\n/g, "\n");
-    localContentRef.current = localContent;
 
     const doBind = () => {
       if (!isLiveSession()) return;
@@ -934,15 +1086,6 @@ export default function CodeEditor() {
       const currentModel = editor.getModel();
 
       if (!currentModel || currentModel.isDisposed()) return;
-
-      // 최초 내용을 넣을지는 서버가 준 허락으로만 정한다.
-      //
-      // 예전에는 awareness 에 누가 있는지를 보고 정했는데, bind 가 타이머로
-      // 먼저 실행되면 상대 정보가 아직 안 와서 양쪽 다 자기가 처음이라고
-      // 판단해 같은 내용을 두 번 넣었다.
-      if (seedGrantedRef.current && yText.length === 0 && localContent !== "") {
-        yText.insert(0, localContent);
-      }
 
       if (!isLiveSession()) return;
 
@@ -960,6 +1103,29 @@ export default function CodeEditor() {
           awareness,
         );
 
+        // 되돌리기는 내가 한 편집만 대상으로 한다.
+        //
+        // Monaco 기본 되돌리기는 모델에 쌓인 모든 변경을 되돌린다. 거기에는
+        // 팀원의 편집과, 접속 직후 y-monaco 가 문서를 한 번에 채우며 부른
+        // setValue 까지 들어 있다. 그래서 계속 누르면 "빈 문서" 상태까지
+        // 되돌아가 내용이 통째로 사라졌고, 그 빈 상태가 Yjs 를 타고 팀원에게도
+        // 퍼졌다.
+        //
+        // y-monaco 는 로컬 편집을 doc.transact(..., binding) 으로 넣는다.
+        // 그 origin 만 추적하면 팀원 작업은 건드리지 않고 내 것만 되돌린다.
+        // 설계 문서 쪽 realtime/useUndo.ts 도 같은 이유로 같은 방식을 쓴다.
+        //
+        // 되돌리기 단위는 captureTimeout 으로 정해진다. 그 시간 안에 이어진
+        // 편집은 한 덩어리로 묶인다. 기본값(500ms)으로 두면 쉬지 않고 친
+        // 내용이 통째로 한 번에 되돌아가 "조금씩 되돌리기"가 되지 않는다.
+        undoManagerRef.current = new Y.UndoManager(yText, {
+          trackedOrigins: new Set([bindingRef.current]),
+          captureTimeout: 400,
+        });
+
+        // 붙었으면 더 기다릴 것이 없다.
+        setIsDocumentLoading(false);
+
         console.log("[YJS MonacoBinding created]", {
           roomName,
           hasBinding: Boolean(bindingRef.current),
@@ -969,139 +1135,26 @@ export default function CodeEditor() {
       } catch (error) {
         console.error("[YJS MonacoBinding failed]", error);
       }
-
-      // 자동 저장을 붙인다.
-      //
-      // 방이 비면 서버에는 아무것도 남지 않으므로, 아무도 Ctrl+S 를 누르지
-      // 않고 창을 닫으면 함께 고친 것이 통째로 사라진다. 접속자 중 한 명을
-      // 담당으로 정해 그 사람만 저장한다.
-      if (!fileSaverRef.current) {
-        const savedFileId = activeFileId;
-        const savedProject = activeProject;
-        const savedBranch = activeBranch || "master";
-
-        fileSaverRef.current = new CollabFileSaver({
-          yText,
-          awareness,
-          clientId: ydoc.clientID,
-          save: async (content) => {
-            await saveFileApi(
-              workspaceId,
-              savedProject,
-              savedBranch,
-              savedFileId,
-              content,
-            );
-
-            // 파일 트리와 미저장 표시가 어긋나지 않게 맞춰 준다.
-            // 팀 모드는 편집 중에 Redux 를 갱신하지 않기 때문이다.
-            latestContentRef.current[savedFileId] = content;
-            dispatch(updateFileContent({ filePath: savedFileId, content }));
-          },
-          onError: (error) => {
-            console.error("[협업] 자동 저장 실패", error);
-          },
-        });
-      }
     };
 
-    const safeDoBind = (reason) => {
-  if (!isLiveSession()) return;
-  if (bindingRef.current) return;
+      // 문서를 이미 받아 온 뒤라 기다릴 것 없이 바로 붙인다.
+      doBind();
+    };
 
-  console.log("[YJS bind start]", {
-    reason,
-    roomName,
-    wsBase: WS_BASE,
-    providerSynced: provider.synced,
-    yTextLength: yText.length,
-    modelLength: editor.getModel()?.getValue()?.length,
-    awarenessClients: Array.from(awareness.getStates().keys()),
-    myClientId: awareness.clientID,
-  });
+    void session.open().then(() => {
+      if (!isLiveSession()) return;
+      if (session.getStatus() !== "ready") return;
 
-  doBind();
-
-  console.log("[YJS bind done]", {
-    reason,
-    hasBinding: Boolean(bindingRef.current),
-    yTextLength: yText.length,
-    modelLength: editor.getModel()?.getValue()?.length,
-  });
-};
-
-const statusHandler = ({ status }) => {
-  console.log("[YJS status]", status, roomName, WS_BASE);
-
-  if (status !== "connected") return;
-
-  const timerId = window.setTimeout(() => {
-    safeDoBind("connected-fallback");
-  }, 800);
-
-  bindTimeoutsRef.current.push(timerId);
-};
-
-providerStatusListenerRef.current = statusHandler;
-provider.on("status", statusHandler);
-
-const syncHandler = (isSynced) => {
-    console.log("[YJS sync]", isSynced, roomName, yText.toString().length);
-
-    if (!isSynced) return;
-
-    if (typeof provider.off === "function") {
-      provider.off("sync", syncHandler);
-    }
-
-    providerSyncListenerRef.current = null;
-    safeDoBind("sync");
-  };
-
-  providerSyncListenerRef.current = syncHandler;
-  provider.on("sync", syncHandler);
-
-  if (provider.synced) {
-    safeDoBind("already-synced");
-  }
-
-  const finalFallbackTimerId = window.setTimeout(() => {
-    safeDoBind("final-fallback");
-  }, 2000);
-
-  // 허락을 못 받았는데 문서가 계속 비어 있고 방에 나 혼자라면, 먼저 있던
-  // 사람이 그새 나간 것이다. 그대로 두면 파일이 빈 채로 열리므로 한 번 더
-  // 물어본다.
-  const reclaimTimerId = window.setTimeout(() => {
-    if (!isLiveSession()) return;
-    if (seedGrantedRef.current) return;
-    if (yText.length > 0) return;
-    if (awareness.getStates().size > 1) return;
-
-    claimCollabSeedApi(roomName)
-      .then((granted) => {
-        if (!isLiveSession() || !granted) return;
-
-        seedGrantedRef.current = true;
-
-        if (yText.length === 0 && localContentRef.current !== "") {
-          yText.insert(0, localContentRef.current);
-        }
-      })
-      .catch(() => {});
-  }, 3000);
-
-  bindTimeoutsRef.current.push(reclaimTimerId);
-
-  bindTimeoutsRef.current.push(finalFallbackTimerId);
+      attachEditor();
+    });
   },
   [
     activeBranch,
     activeFileId,
     activeProject,
-    collabFileKey,
     cleanupCollaboration,
     dispatch,
+    refreshPeerLock,
     workspaceId,
   ],
 );
@@ -1115,21 +1168,34 @@ const syncHandler = (isSynced) => {
       .catch(console.error);
   }, [user]);
 
+  // 방에 들어간 뒤에 닉네임이 도착하면 표시 이름을 갈아 끼운다.
   useEffect(() => {
-    if (providerRef.current && providerRef.current.awareness) {
-      const awareness = providerRef.current.awareness;
-      const currentState = awareness.getLocalState();
-      const currentName = getMyDisplayName();
+    const awareness = sessionRef.current?.awareness;
 
-      if (currentName !== "익명 개발자" && currentState?.user?.name !== currentName) {
-        awareness.setLocalStateField("user", {
-          ...currentState?.user,
-          name: currentName,
-          color: currentState?.user?.color || "#ff9900",
-        });
-      }
+    if (!awareness) return;
+
+    const currentState = awareness.getLocalState();
+    const currentName = displayNameRef.current;
+
+    if (currentName === "익명 개발자") return;
+
+    if (currentState?.user?.name !== currentName) {
+      awareness.setLocalStateField("user", {
+        ...currentState?.user,
+        name: currentName,
+        color: currentState?.user?.color || "#ff9900",
+      });
     }
-  }, [fetchedNickname, user]); 
+
+    // 줄 잠금 안내에도 같은 이름이 쓰인다. 여기를 빠뜨리면 커서를 한 번
+    // 옮기기 전까지 상대에게는 "익명 개발자"가 잠근 것으로 보인다.
+    if (currentState?.lockData && currentState.lockData.name !== currentName) {
+      awareness.setLocalStateField("lockData", {
+        ...currentState.lockData,
+        name: currentName,
+      });
+    }
+  }, [fetchedNickname, user]);
 useEffect(() => {
   if (!monaco) return;
 
@@ -1183,6 +1249,76 @@ useEffect(() => {
     };
   }, [activeFileId, workspaceId, activeProject, activeBranch]);
 
+  // 브레이크포인트와 현재 실행 줄을 에디터에 그린다.
+  //
+  // 두 값은 진작 Redux 에 들어가 있었지만 그리는 곳이 없어서, 중단점을
+  // 찍어도 화면에는 아무 표시가 나지 않았다.
+  //
+  // 데코레이션은 에디터가 아니라 모델에 붙는다. 파일을 갈아타거나 에디터가
+  // 다시 마운트되면 이전 id 가 무효가 되므로 그때마다 전부 다시 그린다.
+  // 내용(activeContent)도 같이 보는 이유는, 파일을 열자마자 그리면 아직
+  // 본문이 도착하지 않아 줄 수가 0 이고 아래 필터에서 전부 걸러지기 때문이다.
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monacoInstance = monacoRef.current;
+    const model = editor?.getModel?.();
+
+    if (!editor || !monacoInstance || !model || model.isDisposed()) return;
+
+    const lineCount = model.getLineCount();
+    const decorations = [];
+
+    // 파일이 짧아져 사라진 줄에 남은 중단점은 그리지 않는다.
+    breakpoints
+      .filter((bp) => bp.path === activeFileId && bp.line <= lineCount)
+      .forEach((bp) => {
+        decorations.push({
+          range: new monacoInstance.Range(bp.line, 1, bp.line, 1),
+          options: {
+            glyphMarginClassName: "debug-breakpoint-glyph",
+            glyphMarginHoverMessage: { value: "중단점 (클릭하면 해제)" },
+          },
+        });
+      });
+
+    if (
+      debugLine?.line &&
+      debugLine.line <= lineCount &&
+      isSameDebugFile(debugLine.path, activeFileId)
+    ) {
+      decorations.push({
+        range: new monacoInstance.Range(debugLine.line, 1, debugLine.line, 1),
+        options: {
+          isWholeLine: true,
+          className: "debug-current-line",
+        },
+      });
+    }
+
+    debugDecosRef.current = editor.deltaDecorations(
+      debugDecosRef.current,
+      decorations,
+    );
+  }, [
+    breakpoints,
+    debugLine,
+    activeFileId,
+    activeContent,
+    isEditorReady,
+    editorMountVersion,
+  ]);
+
+  // 디버거가 멈춘 줄로 화면을 옮긴다.
+  //
+  // 멈춘 줄이 스크롤 밖에 있으면 노란 줄을 그려도 사용자 눈에는 아무 일도
+  // 일어나지 않은 것처럼 보인다.
+  useEffect(() => {
+    if (!debugLine?.line) return;
+    if (!isSameDebugFile(debugLine.path, activeFileId)) return;
+
+    editorRef.current?.revealLineInCenter(debugLine.line);
+  }, [debugLine, activeFileId]);
+
   useEffect(() => {
     if (showAiInput && aiInputRef.current) {
       aiInputRef.current.focus();
@@ -1227,9 +1363,15 @@ useEffect(() => {
       clearTimeout(saveTimerRef.current);
     }
 
-    if (isTeamModeRef.current) {
-      return;
-    }
+    // 팀 모드에서도 Redux 를 최신으로 유지한다.
+    //
+    // 예전에는 여기서 빠져나가 Redux 를 갱신하지 않았다. 그래서 실행·디버그·
+    // 메뉴 저장처럼 Redux 스냅샷을 읽는 경로들이 최대 30초 전 내용을 보고,
+    // 방금 고친 것이 빠진 옛 코드를 디스크에 덮고 그 옛 코드를 실행했다.
+    //
+    // 정본은 여전히 Y.Doc 이다. Redux 는 읽기 전용 스냅샷으로만 남는다 —
+    // 팀 모드에서는 <Editor> 에 value 를 넘기지 않고, Redux 브리지 effect 도
+    // 바인딩이 있으면 곧바로 빠져나가므로 되밀어 넣는 길이 없다.
 
     saveTimerRef.current = setTimeout(() => {
       const currentReduxContent = fileContentsRef.current[activeFileId] || "";
@@ -1557,40 +1699,12 @@ useEffect(() => {
     setIsEditorReady(true);
     setEditorMountVersion((prev) => prev + 1);
 
-    editor.onKeyDown((e) => {
-      if (!isTeamModeRef.current) return;
-
-      const position = editor.getPosition();
-      if (!position) return;
-
-      const lockerName = lockedLinesRef.current[position.lineNumber];
-      
-      if (lockerName) {
-        const m = monacoInstance.KeyCode;
-        const allowedKeys = [
-          m.LeftArrow, m.RightArrow, m.UpArrow, m.DownArrow,
-          m.Home, m.End, m.PageUp, m.PageDown,
-          m.Ctrl, m.Alt, m.Shift, m.Meta, m.Escape, m.Insert,
-          m.F1, m.F2, m.F3, m.F4, m.F5, m.F6, m.F7, m.F8, m.F9, m.F10, m.F11, m.F12
-        ];
-
-        const isCopy = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyC;
-        const isSelectAll = (e.ctrlKey || e.metaKey) && e.keyCode === m.KeyA;
-
-        if (!allowedKeys.includes(e.keyCode) && !isCopy && !isSelectAll) {
-          e.preventDefault();
-          e.stopPropagation();
-          showWarningToast(`🚫 ${lockerName}님이 작업 중인 구역입니다! (수정 불가)`);
-        }
-      }
-    });
-
     const cmdCurrent = editor.addCommand(0, (_, conflict) => applyConflictResolution("current", conflict));
     const cmdIncoming = editor.addCommand(0, (_, conflict) => applyConflictResolution("incoming", conflict));
     const cmdBoth = editor.addCommand(0, (_, conflict) => applyConflictResolution("both", conflict));
 
     const codeLensProvider = monacoInstance.languages.registerCodeLensProvider("*", {
-      provideCodeLenses: function (model, token) {
+      provideCodeLenses: function (model) {
         if (model.isDisposed()) return { lenses: [], dispose: () => {} };
 
         const lenses = [];
@@ -1626,7 +1740,7 @@ useEffect(() => {
         }
         return { lenses, dispose: () => {} };
       },
-      resolveCodeLens: function (model, codeLens, token) {
+      resolveCodeLens: function (model, codeLens) {
         return codeLens;
       }
     });
@@ -1647,13 +1761,17 @@ useEffect(() => {
         const text = model.getValueInRange(selection);
         dispatch(setSelectedText(text));
       }
+
+      // 선택 범위가 잠긴 줄을 물면 그 즉시 읽기 전용으로 바뀌어야 한다.
+      refreshPeerLock();
     });
 
+    // 줄 번호 왼쪽 여백을 눌러 중단점을 켜고 끈다.
+    //
+    // 예전에는 팀원이 커서를 둔 줄이면 무시했는데, 잠금을 표시 전용으로
+    // 바꾼 뒤로는 막을 이유가 없어 그 조건을 뺐다.
     editor.onMouseDown((e) => {
-      if (
-        e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
-        !lockedLinesRef.current[e.target.position.lineNumber]
-      ) {
+      if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         const line = e.target.position.lineNumber;
         const currentFile = stateRef.current.activeFileId;
         if (currentFile) {
@@ -1661,6 +1779,24 @@ useEffect(() => {
         }
       }
     });
+
+    // 팀 모드 되돌리기를 Y.UndoManager 로 돌린다. 개인 모드는 기본 동작 그대로다.
+    editor.addCommand(
+      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyZ,
+      () => runUndo(),
+    );
+
+    editor.addCommand(
+      monacoInstance.KeyMod.CtrlCmd |
+        monacoInstance.KeyMod.Shift |
+        monacoInstance.KeyCode.KeyZ,
+      () => runRedo(),
+    );
+
+    editor.addCommand(
+      monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyY,
+      () => runRedo(),
+    );
 
     editor.addCommand(
       monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS,
@@ -1914,8 +2050,8 @@ useEffect(() => {
     editor.focus();
 
     switch (editorCmd) {
-      case "undo": editor.trigger("keyboard", "undo", null); break;
-      case "redo": editor.trigger("keyboard", "redo", null); break;
+      case "undo": runUndo(); break;
+      case "redo": runRedo(); break;
       case "cut": editor.trigger("keyboard", "editor.action.clipboardCutAction", null); break;
       case "copy": editor.trigger("keyboard", "editor.action.clipboardCopyAction", null); break;
       case "paste": editor.trigger("keyboard", "editor.action.clipboardPasteAction", null); break;
@@ -1940,7 +2076,7 @@ useEffect(() => {
       default: break;
     }
     dispatch(triggerEditorCmd(null));
-  }, [editorCmd, dispatch, activeFileId]);
+  }, [editorCmd, dispatch, activeFileId, runUndo, runRedo]);
 
   const isMapTab =
     activeFileId === "Architecture Map" ||
@@ -1987,26 +2123,40 @@ useEffect(() => {
         .conflict-incoming-bg { background-color: rgba(16, 185, 129, 0.12) !important; }
         .conflict-incoming-margin { border-left: 4px solid #10b981 !important; }
 
-        .locked-line-bg { 
-          background-color: rgba(255, 0, 0, 0.12) !important; 
+        /* 팀원이 잡고 있어 수정할 수 없는 줄. */
+        .peer-line-bg {
+          background-color: rgba(245, 158, 11, 0.10) !important;
         }
-        .locked-line-margin {
-          border-left: 4px solid #ff0000 !important;
-          background-color: rgba(255, 0, 0, 0.12) !important;
+        .peer-line-margin {
+          border-left: 3px solid rgba(245, 158, 11, 0.75) !important;
           z-index: 50 !important;
         }
-        .locked-glyph {
-          background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="%23ff0000" viewBox="0 0 16 16"><path d="M11 7V5a3 3 0 0 0-6 0v2H4v7h8V7h-1zm-1.5 0h-3V5a1.5 1.5 0 0 1 3 0v2z"/></svg>') no-repeat center center !important;
-          background-size: 14px !important;
-          margin-left: 3px !important;
-          z-index: 50 !important;
+        /* 팀원 이름표. 배경색은 그 사람 커서 색으로 코드에서 직접 넣는다. */
+        .peer-caret-label {
+          font-family: system-ui, -apple-system, sans-serif;
+          color: #ffffff;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.5;
+          padding: 0 6px;
+          border-radius: 4px 4px 4px 0;
+          white-space: nowrap;
+          pointer-events: none;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
         }
       `}} />
 
-      {lockWarning.show && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[99999] bg-red-600/95 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(255,0,0,0.4)] font-extrabold text-[14px] flex items-center gap-2 animate-bounce border border-red-400">
-          <VscLock size={18} />
-          {lockWarning.msg}
+      {isDocumentLoading && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/95 px-4 py-2 text-[12px] font-bold text-blue-700 shadow-sm backdrop-blur-sm">
+          <VscLoading size={14} className="animate-spin" />
+          문서를 불러오는 중입니다 — 잠시만 기다려 주세요
+        </div>
+      )}
+
+      {peerLockName && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/95 px-4 py-2 text-[12px] font-bold text-amber-700 shadow-sm backdrop-blur-sm">
+          <VscLock size={14} />
+          {peerLockName}님이 편집 중인 줄입니다 — 수정할 수 없습니다
         </div>
       )}
 
@@ -2328,17 +2478,35 @@ useEffect(() => {
         )}
 
         <div className={`absolute inset-0 z-10 bg-white ${isDiffMode ? "invisible" : ""}`}>
+{/*
+  팀 모드에서는 value 를 넘기지 않는다.
+
+  @monaco-editor/react 는 value 가 에디터 내용과 다르면 문서 전체를
+  executeEdits 로 갈아치운다(forceMoveMarkers: true). 팀 모드는 타이핑
+  중에 Redux 를 갱신하지 않다가 자동 저장 때만 갱신하는데, 저장 요청이
+  오가는 동안 더 친 글자가 있으면 value 와 화면이 어긋난다. 그러면 저장
+  시점의 옛 내용으로 문서가 통째로 덮이면서 커서가 엉뚱한 줄로 튀고,
+  그 덮어쓰기가 MonacoBinding 을 타고 Yjs 에까지 퍼진다. 되돌리기가
+  조각나는 것도 여기서 pushUndoStop 이 계속 끼어들기 때문이다.
+
+  팀 모드의 정본은 Y.Doc 이다. 내용은 MonacoBinding 이 넣어 주므로
+  React 가 두 번째 주인 노릇을 하면 안 된다.
+*/}
 <Editor
   key={`${monacoModelPath}-${getLanguage(activeFileId)}`}
   height="100%"
   theme="light"
   path={monacoModelPath || activeFileId}
   language={getLanguage(activeFileId)}
-  value={fileContents[activeFileId] || ""}
+  value={isTeamMode ? undefined : fileContents[activeFileId] || ""}
   beforeMount={handleEditorWillMount}
   onChange={handleEditorChange}
   onMount={handleEditorDidMount}
   options={{
+              // 팀원이 잡고 있는 줄에 있거나, 문서를 아직 불러오는 중이면
+              // 입력을 받지 않는다. 불러오는 중에 친 글자는 곧 도착할 문서
+              // 내용에 덮여 사라지기 때문이다.
+              readOnly: Boolean(peerLockName) || isDocumentLoading,
               fontSize,
               fontFamily: "'D2Coding', 'Consolas', monospace",
               minimap: { enabled: editorSettings.minimap },

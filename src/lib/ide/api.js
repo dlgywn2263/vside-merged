@@ -9,7 +9,6 @@ const GIT_API_BASE = "/api/git";
 
 const DEVLOG_API_BASE = "/api/devlogs";
 const SCHEDULE_API_BASE = "/api/schedules";
-const AUTH_API_BASE = "/api/auth";
 const USER_API_BASE = "/api/users";
 const SYSTEM_API_BASE = "/api/system";
 const CODEMAP_API_BASE = "/api/codemap";
@@ -757,7 +756,15 @@ export const saveFileApi = async (
   branchName = "master",
   filePath,
   code,
+  options = {},
 ) => {
+  // 빈 내용 저장은 기본적으로 허용한다. 대부분은 사용자가 직접 누른
+  // 저장이고, 파일을 정말 비우는 것도 정상적인 동작이기 때문이다.
+  //
+  // 협업 자동 저장만 allowEmpty: false 를 넘긴다. 동기화가 덜 끝난 빈
+  // 문서로 멀쩡한 파일을 덮어쓰는 사고를 서버에서 한 번 더 막기 위해서다.
+  const allowEmpty = options.allowEmpty !== false;
+
   const response = await authFetch(`${API_BASE}/save`, {
     method: "POST",
     body: JSON.stringify({
@@ -766,6 +773,7 @@ export const saveFileApi = async (
       branchName: branchName || "master",
       filePath,
       code,
+      allowEmpty,
     }),
   });
 

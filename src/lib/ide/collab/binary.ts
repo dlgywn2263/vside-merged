@@ -1,4 +1,4 @@
-// 경로: src/components/design/realtime/binary.ts
+// 경로: src/lib/ide/collab/binary.ts
 //
 // Yjs 문서 상태를 서버에 실어 보내기 위한 base64 변환.
 //

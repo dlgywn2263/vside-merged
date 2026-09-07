@@ -17,7 +17,7 @@ import type { Awareness } from "y-protocols/awareness";
 
 import { saveDesignSnapshotApi } from "../api/designDocApi";
 import { docToModel } from "./yjsSchema";
-import { encodeDocState } from "./binary";
+import { encodeDocState } from "@/lib/ide/collab/binary";
 
 /** 마지막 편집 후 이만큼 조용하면 저장한다. */
 const IDLE_SAVE_MS = 3000;

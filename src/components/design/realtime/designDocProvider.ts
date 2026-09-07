@@ -31,7 +31,7 @@ import {
 
 import { legacyToModel } from "../model/legacy";
 import { fetchDesignDocApi, seedDesignDocApi } from "../api/designDocApi";
-import { applyEncodedState, encodeDocState } from "./binary";
+import { applyEncodedState, encodeDocState } from "@/lib/ide/collab/binary";
 import { SnapshotWriter, type SaveState } from "./snapshotWriter";
 import { seedDocFromModel } from "./yjsSchema";
 
