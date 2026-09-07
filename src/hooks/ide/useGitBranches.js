@@ -361,6 +361,36 @@ export function useGitBranches({
     }
   }, [workspaceId, activeProject]);
 
+  // 다른 사람이 브랜치를 만들거나 지우면 목록을 다시 받아 온다.
+  //
+  // 서버가 /ws/workspace-events 로 알려 주지만 그 소켓은 Sidebar 가 들고
+  // 있다. 그래서 Sidebar 가 브라우저 이벤트로 넘겨준 것을 여기서 받는다.
+  // 이게 없으면 새로고침해야만 남이 만든 브랜치가 보인다.
+  useEffect(() => {
+    if (!workspaceId || !activeProject) return undefined;
+
+    const handleBranchListChanged = (event) => {
+      const detail = event.detail || {};
+
+      if (String(detail.workspaceId) !== String(workspaceId)) return;
+      if (detail.projectName !== activeProject) return;
+
+      void loadBranches();
+    };
+
+    window.addEventListener(
+      "waivs:branch-list-changed",
+      handleBranchListChanged,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "waivs:branch-list-changed",
+        handleBranchListChanged,
+      );
+    };
+  }, [workspaceId, activeProject, loadBranches]);
+
   const refreshProjectTree = useCallback(
     async (branchName) => {
       if (!workspaceId || !activeProject) return null;

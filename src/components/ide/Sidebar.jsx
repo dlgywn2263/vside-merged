@@ -35,7 +35,6 @@ import {
   setActiveProject,
   setWorkspaceTree,
   mergeProjectFiles,
-  clearVirtualTree,
   collapseAllFolders,
 } from "@/store/slices/fileSystemSlice";
 
@@ -532,6 +531,31 @@ export default function Sidebar() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+
+        // 브랜치 생성·삭제는 어느 브랜치를 보고 있든 모두에게 온다.
+        //
+        // 브랜치 목록은 이 화면이 아니라 useGitBranches 가 들고 있어서,
+        // 브라우저 이벤트로 넘겨 그쪽에서 다시 받아 가게 한다. 소켓을
+        // 하나 더 열지 않으려고 이 소켓을 같이 쓴다.
+        if (message.type === "BRANCH_CHANGED") {
+          if (String(message.workspaceId) !== String(workspaceId)) return;
+          if (message.projectName !== activeProject) return;
+
+          console.log("🌿 [WorkspaceEvents] 브랜치 변경 감지:", message);
+
+          window.dispatchEvent(
+            new CustomEvent("waivs:branch-list-changed", {
+              detail: {
+                workspaceId: message.workspaceId,
+                projectName: message.projectName,
+                action: message.action,
+                branchName: message.branchName,
+              },
+            }),
+          );
+
+          return;
+        }
 
         if (message.type !== "FILE_TREE_CHANGED") return;
 
