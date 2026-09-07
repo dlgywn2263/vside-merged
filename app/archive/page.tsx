@@ -8,18 +8,25 @@ import {
   type ElementType,
 } from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
+  ArrowRight,
   BookOpen,
   CheckCircle2,
   Code2,
   Database,
   Download,
-  FileArchive,
   FileText,
+  FolderOpen,
   GitBranch,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Sparkles,
+  UserRound,
+  Users,
 } from "lucide-react";
 
 import {
@@ -67,11 +74,14 @@ type ArchivePdfSectionKey =
 
 type DevlogSortType = "latest" | "oldest";
 
+type ProjectFilter = "all" | "personal" | "team";
+
 type Project = {
   id: string;
   name: string;
   description: string;
   type: "개인" | "팀";
+  role: "owner" | "member";
   status: ProjectStatus;
   progress: number;
   language: string;
@@ -131,7 +141,27 @@ type NormalizedDiagramNode = {
   y: number;
   columns: Record<string, unknown>[];
   subText: string;
+  /** 화면 흐름 상자 아랫줄에 쓰는 라우트 경로. */
+  route: string;
+  /** 시작 화면이면 설계단계처럼 초록 테두리를 두른다. */
+  isEntry: boolean;
+  /** 로그인이 필요한 화면인지. */
+  requiresAuth: boolean;
+  /** 화면 / 팝업 / 외부. */
+  roleLabel: string;
+  /** 이 화면이 만족시키는 요구사항 개수. */
+  requirementCount: number;
+  /** 이 화면이 부르는 API 이름들. */
+  apiLabels: string[];
 };
+
+function cn(
+  ...classes: Array<
+    string | false | null | undefined
+  >
+) {
+  return classes.filter(Boolean).join(" ");
+}
 
 /* =========================================================
    CONSTANT
@@ -152,7 +182,7 @@ const archiveTabs: {
   {
     key: "design",
     label: "설계 문서",
-    description: "요구사항·API·ERD·데이터 흐름",
+    description: "요구사항·API·ERD·화면 흐름",
     icon: FileText,
   },
   {
@@ -189,8 +219,8 @@ const designSectionTabs: {
   },
   {
     key: "flow",
-    label: "데이터 흐름",
-    description: "화면·서버·DB 흐름",
+    label: "화면 흐름",
+    description: "화면 사이 이동",
     icon: GitBranch,
   },
 ];
@@ -227,9 +257,9 @@ const archivePdfSectionItems: {
   },
   {
     key: "design-flow",
-    label: "데이터 플로우",
+    label: "화면 흐름",
     group: "설계 문서",
-    printTitle: "데이터 플로우",
+    printTitle: "화면 흐름",
   },
   {
     key: "final-report",
@@ -245,9 +275,9 @@ const archivePdfSectionItems: {
   },
   {
     key: "final-flow",
-    label: "최종 보고서 데이터 플로우",
+    label: "최종 보고서 화면 흐름",
     group: "최종 보고서",
-    printTitle: "최종 보고서 데이터 플로우",
+    printTitle: "최종 보고서 화면 흐름",
   },
 ];
 
@@ -732,6 +762,10 @@ function mapProjectsFromWorkspaces(
           ? "팀"
           : "개인",
 
+      role: normalizeRole(
+        workspace.role,
+      ),
+
       status,
       progress,
       language,
@@ -1073,6 +1107,32 @@ function buildSvgPath(
   return `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`;
 }
 
+/** 설계단계 화면 상자에 찍히는 종류 이름. */
+const SCREEN_ROLE_LABEL: Record<string, string> = {
+  page: "화면",
+  modal: "팝업",
+  external: "외부",
+};
+
+/** 화면 흐름 노드가 실어 온 부가 정보를 상자에 쓸 모양으로 꺼낸다. */
+function getScreenExtras(node: Record<string, unknown>) {
+  const data = getNodeData(node);
+  const role = typeof data.role === "string" ? data.role : "page";
+
+  return {
+    isEntry: Boolean(data.isEntry),
+    requiresAuth: Boolean(data.requiresAuth),
+    roleLabel: SCREEN_ROLE_LABEL[role] ?? role,
+    requirementCount:
+      typeof data.requirementCount === "number" ? data.requirementCount : 0,
+    apiLabels: Array.isArray(data.apiLabels)
+      ? data.apiLabels.filter(
+          (label): label is string => typeof label === "string",
+        )
+      : [],
+  };
+}
+
 function normalizeDiagramNodes(
   nodes: Record<
     string,
@@ -1109,6 +1169,13 @@ function normalizeDiagramNodes(
 
         subText:
           getNodeSubText(node),
+
+        route:
+          getFlowNodeTechStack(
+            node,
+          ),
+
+        ...getScreenExtras(node),
       };
     },
   );
@@ -1119,10 +1186,10 @@ function getDiagramLayout(
   type: "erd" | "flow",
 ) {
   const nodeWidth =
-    type === "erd" ? 220 : 270;
+    type === "erd" ? 248 : 236;
 
   const nodeHeight =
-    type === "erd" ? 138 : 92;
+    type === "erd" ? 138 : 152;
 
   const padding = 80;
 
@@ -1200,6 +1267,63 @@ function getDiagramLayout(
    PRINT DIAGRAM
    ========================================================= */
 
+/**
+ * 인쇄용 화면 흐름 상자.
+ *
+ * 화면용 ScreenFlowNodeShape 와 같은 그림을 문자열 SVG 로 만든다.
+ * 둘이 어긋나면 화면에서 본 것과 뽑은 PDF 가 달라진다.
+ */
+function buildPrintScreenNodeSvg(
+  node: NormalizedDiagramNode,
+  width: number,
+  height: number,
+) {
+  const shownApis = node.apiLabels.slice(0, 3);
+  const restApis = node.apiLabels.length - shownApis.length;
+
+  const entrySvg = node.isEntry
+    ? `<rect x="${node.x + 12}" y="${node.y + 12}" width="34" height="17" rx="6" fill="#ecfdf5" />
+       <text x="${node.x + 29}" y="${node.y + 24}" text-anchor="middle" class="diagram-entry">시작</text>`
+    : "";
+
+  const authSvg = node.requiresAuth
+    ? `<text x="${node.x + width - 14}" y="${node.y + 25}" text-anchor="end" class="diagram-chip-muted">로그인</text>`
+    : "";
+
+  const apiSvg = shownApis.length
+    ? shownApis
+        .map(
+          (label, index) =>
+            `<text x="${node.x + 14}" y="${node.y + 100 + index * 14}" class="diagram-api">${escapeHtml(label)}</text>`,
+        )
+        .join("")
+    : `<text x="${node.x + 14}" y="${node.y + 100}" class="diagram-chip-muted">호출하는 API 없음</text>`;
+
+  const restSvg =
+    restApis > 0
+      ? `<text x="${node.x + 14}" y="${node.y + 100 + shownApis.length * 14}" class="diagram-chip-muted">외 ${restApis}개</text>`
+      : "";
+
+  return `
+    <g>
+      <rect x="${node.x}" y="${node.y}" width="${width}" height="${height}" rx="16"
+        fill="#ffffff" stroke="${node.isEntry ? "#34d399" : "#e5e7eb"}" stroke-width="${node.isEntry ? 2 : 1}" />
+      ${entrySvg}
+      <text x="${node.x + (node.isEntry ? 54 : 14)}" y="${node.y + 25}" class="diagram-title">${escapeHtml(node.label)}</text>
+      ${authSvg}
+      <line x1="${node.x}" y1="${node.y + 38}" x2="${node.x + width}" y2="${node.y + 38}" stroke="#eef1f4" />
+      <text x="${node.x + 14}" y="${node.y + 56}" class="diagram-route">${escapeHtml(node.route)}</text>
+      <rect x="${node.x + 14}" y="${node.y + 64}" width="62" height="17" rx="5"
+        fill="${node.requirementCount === 0 ? "#fef2f2" : "#f1f5f9"}" />
+      <text x="${node.x + 20}" y="${node.y + 76}" class="${node.requirementCount === 0 ? "diagram-chip-warn" : "diagram-chip"}">요구사항 ${node.requirementCount}</text>
+      <rect x="${node.x + 82}" y="${node.y + 64}" width="34" height="17" rx="5" fill="#f1f5f9" />
+      <text x="${node.x + 99}" y="${node.y + 76}" text-anchor="middle" class="diagram-chip">${escapeHtml(node.roleLabel)}</text>
+      ${apiSvg}
+      ${restSvg}
+    </g>
+  `;
+}
+
 function buildPrintDiagramSvg({
   nodes,
   edges,
@@ -1276,6 +1400,13 @@ function buildPrintDiagramSvg({
         targetNode.y +
         layout.nodeHeight / 2;
 
+      // 화면 흐름에서는 "무엇을 했을 때 넘어가는가" 가 핵심 정보다.
+      // 선만 그리면 그 정보가 그림에서 통째로 빠진다.
+      const label =
+        typeof edge.label === "string"
+          ? edge.label.trim()
+          : "";
+
       return `
         <path
           d="${buildSvgPath(
@@ -1287,13 +1418,18 @@ function buildPrintDiagramSvg({
           fill="none"
           stroke="${strokeColor}"
           stroke-width="2"
-          stroke-dasharray="${
-            type === "flow"
-              ? "6 5"
-              : "0"
-          }"
           marker-end="url(#arrow-${type})"
         />
+        ${
+          label
+            ? `<text
+                 x="${(sourceX + targetX) / 2}"
+                 y="${(sourceY + targetY) / 2 - 8}"
+                 class="diagram-edge-label"
+                 text-anchor="middle"
+               >${escapeHtml(label)}</text>`
+            : ""
+        }
       `;
     })
     .join("");
@@ -1322,6 +1458,14 @@ function buildPrintDiagramSvg({
                         ? column.type
                         : "TYPE";
 
+                    // 설계단계 표는 기본키에 열쇠, 외래키에 고리 표시를
+                    // 붙인다. 인쇄물은 아이콘을 쓸 수 없어 글자로 대신한다.
+                    const marker = column.isPk
+                      ? "PK "
+                      : column.isFk
+                        ? "FK "
+                        : "";
+
                     return `
                       <text
                         x="${node.x + 16}"
@@ -1334,7 +1478,8 @@ function buildPrintDiagramSvg({
                         class="diagram-column"
                       >
                         ${escapeHtml(
-                          columnName,
+                          marker +
+                            columnName,
                         )} · ${escapeHtml(
                           columnType,
                         )}
@@ -1371,7 +1516,7 @@ function buildPrintDiagramSvg({
               width="${layout.nodeWidth}"
               height="42"
               rx="14"
-              fill="#111827"
+              fill="#5873F9"
             />
 
             <text
@@ -1389,47 +1534,11 @@ function buildPrintDiagramSvg({
         `;
       }
 
-      return `
-        <g>
-          <rect
-            x="${node.x}"
-            y="${node.y}"
-            width="${layout.nodeWidth}"
-            height="${layout.nodeHeight}"
-            rx="16"
-            fill="#f8fafc"
-            stroke="#dbe1ea"
-          />
-
-          <circle
-            cx="${node.x + 28}"
-            cy="${node.y + 32}"
-            r="14"
-            fill="#ffffff"
-            stroke="#dbe1ea"
-          />
-
-          <text
-            x="${node.x + 52}"
-            y="${node.y + 33}"
-            class="diagram-title"
-          >
-            ${escapeHtml(
-              node.label,
-            )}
-          </text>
-
-          <text
-            x="${node.x + 52}"
-            y="${node.y + 58}"
-            class="diagram-muted"
-          >
-            ${escapeHtml(
-              node.subText,
-            )}
-          </text>
-        </g>
-      `;
+      return buildPrintScreenNodeSvg(
+        node,
+        layout.nodeWidth,
+        layout.nodeHeight,
+      );
     })
     .join("");
 
@@ -1641,6 +1750,8 @@ function buildFlowNodesForDraft(
    ========================================================= */
 
 export default function ArchivePage() {
+  const router = useRouter();
+
   const [projects, setProjects] =
     useState<Project[]>([]);
 
@@ -1746,6 +1857,113 @@ export default function ArchivePage() {
   ] = useState("");
 
   /* =========================
+     프로젝트 사이드바
+     ========================= */
+
+  const [
+    projectSearch,
+    setProjectSearch,
+  ] = useState("");
+
+  const projectSearchInputRef =
+    useRef<HTMLInputElement | null>(
+      null,
+    );
+
+  const [
+    projectFilter,
+    setProjectFilter,
+  ] =
+    useState<ProjectFilter>(
+      "all",
+    );
+
+  const [
+    isSidebarPinned,
+    setIsSidebarPinned,
+  ] = useState(true);
+
+  const [
+    isSidebarHovered,
+    setIsSidebarHovered,
+  ] = useState(false);
+
+  const [
+    canSidebarHoverExpand,
+    setCanSidebarHoverExpand,
+  ] = useState(true);
+
+  const [
+    isPageScrolled,
+    setIsPageScrolled,
+  ] = useState(false);
+
+  const sidebarExpanded =
+    isSidebarPinned ||
+    (canSidebarHoverExpand &&
+      isSidebarHovered);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsPageScrolled(
+        window.scrollY > 0,
+      );
+    };
+
+    handleScroll();
+
+    window.addEventListener(
+      "scroll",
+      handleScroll,
+      {
+        passive: true,
+      },
+    );
+
+    return () => {
+      window.removeEventListener(
+        "scroll",
+        handleScroll,
+      );
+    };
+  }, []);
+
+  const handleToggleSidebar =
+    () => {
+      if (isSidebarPinned) {
+        setIsSidebarPinned(false);
+        setIsSidebarHovered(false);
+        setCanSidebarHoverExpand(false);
+        return;
+      }
+
+      setIsSidebarPinned(true);
+      setIsSidebarHovered(false);
+      setCanSidebarHoverExpand(true);
+    };
+
+  const openSidebarForSearch =
+    () => {
+      setIsSidebarPinned(true);
+      setIsSidebarHovered(false);
+      setCanSidebarHoverExpand(true);
+
+      requestAnimationFrame(
+        () => {
+          projectSearchInputRef.current?.focus();
+        },
+      );
+    };
+
+  const openSidebarForProjects =
+    () => {
+      setIsSidebarPinned(true);
+      setIsSidebarHovered(false);
+      setCanSidebarHoverExpand(true);
+      setProjectFilter("all");
+    };
+
+  /* =========================
      프로젝트
      ========================= */
 
@@ -1761,6 +1979,94 @@ export default function ArchivePage() {
         }),
       );
     }, [projects]);
+
+  const personalCount =
+    useMemo(
+      () =>
+        projects.filter(
+          (project) =>
+            project.type ===
+            "개인",
+        ).length,
+      [projects],
+    );
+
+  const teamCount =
+    useMemo(
+      () =>
+        projects.filter(
+          (project) =>
+            project.type === "팀",
+        ).length,
+      [projects],
+    );
+
+  const filteredSidebarProjects =
+    useMemo(() => {
+      const normalizedSearch =
+        projectSearch
+          .trim()
+          .toLowerCase();
+
+      return projects.filter(
+        (project) => {
+          const matchesSearch =
+            !normalizedSearch ||
+            project.name
+              .toLowerCase()
+              .includes(
+                normalizedSearch,
+              ) ||
+            project.description
+              .toLowerCase()
+              .includes(
+                normalizedSearch,
+              );
+
+          const matchesFilter =
+            projectFilter ===
+              "all" ||
+            (projectFilter ===
+              "personal" &&
+              project.type ===
+                "개인") ||
+            (projectFilter ===
+              "team" &&
+              project.type ===
+                "팀");
+
+          return (
+            matchesSearch &&
+            matchesFilter
+          );
+        },
+      );
+    }, [
+      projectFilter,
+      projectSearch,
+      projects,
+    ]);
+
+  const personalProjects =
+    useMemo(
+      () =>
+        filteredSidebarProjects.filter(
+          (project) =>
+            project.type ===
+            "개인",
+        ),
+      [filteredSidebarProjects],
+    );
+
+  const teamProjects =
+    useMemo(
+      () =>
+        filteredSidebarProjects.filter(
+          (project) =>
+            project.type === "팀",
+        ),
+      [filteredSidebarProjects],
+    );
 
   const selectedProject =
     useMemo(() => {
@@ -1856,12 +2162,6 @@ export default function ArchivePage() {
       selectedProjectId,
       sortType,
     ]);
-
-  const activeArchive =
-    archiveTabs.find(
-      (tab) =>
-        tab.key === activeArchiveTab,
-    );
 
   const totalDesignCount =
     designRequirements.length +
@@ -2837,7 +3137,7 @@ export default function ArchivePage() {
             .join("")
         : `
           <div class="empty small-empty">
-            작성된 데이터 플로우가 없습니다.
+            작성된 화면 흐름이 없습니다.
           </div>
         `;
 
@@ -2867,7 +3167,7 @@ export default function ArchivePage() {
 
       "design-flow": `
         <p class="body-text section-description">
-          화면, 서버, DB, 외부 서비스 사이의 데이터 흐름을 시각화한 다이어그램입니다.
+          설계단계에서 작성한 화면 사이의 이동 흐름을 시각화한 다이어그램입니다.
         </p>
 
         ${flowDiagramHtml}
@@ -3169,6 +3469,55 @@ export default function ArchivePage() {
               font-weight: 700;
             }
 
+            /* 화면 흐름 상자에 쓰는 작은 글씨들. 화면용과 같은 값이어야 한다. */
+            .diagram-route {
+              fill: #6b7280;
+              font-size: 10px;
+              font-weight: 700;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
+
+            .diagram-entry {
+              fill: #047857;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-chip {
+              fill: #475569;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-chip-warn {
+              fill: #dc2626;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-chip-muted {
+              fill: #9ca3af;
+              font-size: 9px;
+              font-weight: 900;
+            }
+
+            .diagram-api {
+              fill: #6b7280;
+              font-size: 9px;
+              font-weight: 700;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            }
+
+            /* 화살표 위에 얹는 이동 조건. 선과 겹쳐도 읽히도록 흰 테를 두른다. */
+            .diagram-edge-label {
+              fill: #475569;
+              font-size: 10px;
+              font-weight: 700;
+              stroke: #ffffff;
+              stroke-width: 3px;
+              paint-order: stroke;
+            }
+
             @media print {
               body {
                 -webkit-print-color-adjust: exact;
@@ -3286,543 +3635,561 @@ export default function ArchivePage() {
      ========================================================= */
 
   return (
-    <main className="waivs-page min-h-[calc(100dvh-72px)] text-slate-950">
-      <div className="grid w-full grid-cols-1 gap-5 p-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+    <main className="waivs-page min-h-[calc(100dvh-72px)] bg-[#F7F8FA] p-4 text-slate-950 md:p-5">
+      <div className="mx-auto flex max-w-[1880px] gap-4">
         {/* =================================================
-            왼쪽 자료실 사이드바
+            PROJECT SIDEBAR
            ================================================= */}
 
-        <aside className="self-start xl:sticky xl:top-5 xl:h-[calc(100dvh-112px)]">
-          <section className="waivs-sidebar flex h-full flex-col overflow-hidden">
-            {/* 제목 */}
+        <aside
+          onMouseEnter={() => {
+            if (
+              !isSidebarPinned &&
+              canSidebarHoverExpand
+            ) {
+              setIsSidebarHovered(
+                true,
+              );
+            }
+          }}
+          onMouseLeave={() => {
+            setIsSidebarHovered(false);
+            setCanSidebarHoverExpand(
+              true,
+            );
+          }}
+          className={cn(
+            "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
+            isPageScrolled
+              ? "top-[88px]"
+              : "top-4",
+            sidebarExpanded
+              ? "w-[288px]"
+              : "w-16",
+          )}
+        >
+          {/* SIDEBAR HEADER */}
 
-            <div className="shrink-0 border-b border-[var(--waivs-border-soft)] p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#EEF3FF] text-[#5873F9]">
-                  <FileArchive
-                    size={19}
+          <div
+            className={cn(
+              "border-b border-slate-100",
+              sidebarExpanded
+                ? "p-3"
+                : "flex h-[64px] items-center justify-center p-0",
+            )}
+          >
+            <div
+              className={cn(
+                "flex items-center",
+                sidebarExpanded
+                  ? "justify-between gap-2"
+                  : "justify-center",
+              )}
+            >
+              {sidebarExpanded && (
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
+                      <FolderOpen
+                        size={16}
+                        strokeWidth={2.4}
+                      />
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-black text-slate-900">
+                        프로젝트
+                      </p>
+
+                      <p className="text-[10px] font-semibold text-slate-400">
+                        전체{" "}
+                        {projects.length}
+                        {" · "}
+                        개인{" "}
+                        {personalCount}
+                        {" · "}
+                        팀 {teamCount}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={
+                  handleToggleSidebar
+                }
+                className={cn(
+                  "grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700",
+                  sidebarExpanded
+                    ? "h-8 w-8"
+                    : "h-9 w-9",
+                )}
+                title={
+                  isSidebarPinned
+                    ? "사이드바 접기"
+                    : "사이드바 펼치기"
+                }
+              >
+                {sidebarExpanded ? (
+                  <PanelLeftClose
+                    size={17}
+                  />
+                ) : (
+                  <PanelLeftOpen
+                    size={18}
+                  />
+                )}
+              </button>
+            </div>
+
+            {sidebarExpanded && (
+              <>
+                <div className="relative mt-3">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    ref={
+                      projectSearchInputRef
+                    }
+                    value={
+                      projectSearch
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setProjectSearch(
+                        event.target
+                          .value,
+                      )
+                    }
+                    placeholder="프로젝트 검색"
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
                   />
                 </div>
 
-                <div className="min-w-0">
-                  <h1 className="text-base font-black tracking-tight text-slate-950">
-                    프로젝트 자료실
-                  </h1>
-
-                  <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
-                    프로젝트 문서 통합 관리
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 메뉴 */}
-
-            <div className="shrink-0 p-3">
-              <p className="mb-2 px-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
-                Archive
-              </p>
-
-              <div className="space-y-1">
-                {archiveTabs.map(
-                  (tab) => {
-                    const Icon =
-                      tab.icon;
-
-                    const isActive =
-                      activeArchiveTab ===
-                      tab.key;
-
-                    return (
+                <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+                  {(
+                    [
+                      [
+                        "all",
+                        "전체",
+                      ],
+                      [
+                        "personal",
+                        "개인",
+                      ],
+                      [
+                        "team",
+                        "팀",
+                      ],
+                    ] as const
+                  ).map(
+                    ([
+                      value,
+                      label,
+                    ]) => (
                       <button
                         key={
-                          tab.key
+                          value
                         }
                         type="button"
                         onClick={() =>
-                          setActiveArchiveTab(
-                            tab.key,
+                          setProjectFilter(
+                            value,
                           )
                         }
-                        className={[
-                          "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition",
-
-                          isActive
-                            ? "bg-[#EEF3FF] text-[#5873F9]"
-                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-                        ].join(" ")}
+                        className={cn(
+                          "rounded-lg px-2 py-1.5 text-[11px] font-black transition",
+                          projectFilter ===
+                            value
+                            ? "bg-white text-[#5873F9] shadow-sm"
+                            : "text-slate-400 hover:text-slate-700",
+                        )}
                       >
-                        <span
-                          className={[
-                            "grid h-8 w-8 shrink-0 place-items-center rounded-lg transition",
-
-                            isActive
-                              ? "bg-white text-[#5873F9] shadow-sm"
-                              : "bg-slate-50 text-slate-500",
-                          ].join(
-                            " ",
-                          )}
-                        >
-                          <Icon
-                            size={16}
-                          />
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span
-                            className={[
-                              "block text-sm font-black",
-
-                              isActive
-                                ? "text-[#5873F9]"
-                                : "text-slate-800",
-                            ].join(
-                              " ",
-                            )}
-                          >
-                            {
-                              tab.label
-                            }
-                          </span>
-
-                          <span
-                            className={[
-                              "mt-0.5 block truncate text-[11px] font-semibold",
-
-                              isActive
-                                ? "text-[#5873F9]/70"
-                                : "text-slate-400",
-                            ].join(
-                              " ",
-                            )}
-                          >
-                            {
-                              tab.description
-                            }
-                          </span>
-                        </span>
+                        {
+                          label
+                        }
                       </button>
-                    );
-                  },
+                    ),
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* SIDEBAR BODY */}
+
+          <div
+            className={cn(
+              "min-h-0 flex-1",
+              sidebarExpanded
+                ? "overflow-y-auto p-3"
+                : "overflow-hidden",
+            )}
+          >
+            {sidebarExpanded ? (
+              <div className="space-y-5">
+                {projectFilter !==
+                  "team" && (
+                  <ArchiveProjectSection
+                    title="개인 프로젝트"
+                    mode="personal"
+                    items={
+                      personalProjects
+                    }
+                    selectedProjectId={
+                      selectedProjectId
+                    }
+                    onSelect={
+                      setSelectedProjectId
+                    }
+                  />
+                )}
+
+                {projectFilter !==
+                  "personal" && (
+                  <ArchiveProjectSection
+                    title="팀 프로젝트"
+                    mode="team"
+                    items={
+                      teamProjects
+                    }
+                    selectedProjectId={
+                      selectedProjectId
+                    }
+                    onSelect={
+                      setSelectedProjectId
+                    }
+                  />
                 )}
               </div>
-            </div>
+            ) : (
+              <div className="flex h-full flex-col items-center pt-4">
+                <button
+                  type="button"
+                  onClick={
+                    openSidebarForSearch
+                  }
+                  className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+                  title="프로젝트 검색"
+                >
+                  <Search
+                    size={19}
+                    strokeWidth={2}
+                  />
+                </button>
 
-            {/* 프로젝트 선택 */}
+                <button
+                  type="button"
+                  onClick={
+                    openSidebarForProjects
+                  }
+                  className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+                  title="프로젝트 목록"
+                >
+                  <FolderOpen
+                    size={19}
+                    strokeWidth={2}
+                  />
+                </button>
 
-            <div className="shrink-0 border-t border-[var(--waivs-border-soft)] p-4">
-              <p className="text-xs font-black text-slate-700">
-                프로젝트
-              </p>
+                <div className="my-3 h-px w-8 bg-slate-100" />
 
-              <select
-                value={
-                  selectedProjectId
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setSelectedProjectId(
-                    event.target
-                      .value,
+                <div
+                  className="flex h-8 w-8 items-center justify-center text-xs font-black text-slate-300"
+                  title={`전체 프로젝트 ${projects.length}개`}
+                >
+                  {projects.length}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SIDEBAR FOOTER */}
+
+          {sidebarExpanded && (
+            <div className="border-t border-slate-100 p-3">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/main",
                   )
                 }
-                disabled={
-                  projectOptions.length ===
-                  0
-                }
-                className="mt-2 h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-700 outline-none transition disabled:cursor-not-allowed disabled:opacity-50 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
               >
-                {projectOptions.length ===
-                  0 && (
-                  <option value="">
-                    프로젝트 없음
-                  </option>
-                )}
+                전체 프로젝트
 
-                {projectOptions.map(
-                  (project) => (
-                    <option
-                      key={
-                        project.id
-                      }
-                      value={
-                        project.id
-                      }
-                    >
-                      {
-                        project.name
-                      }
-                    </option>
-                  ),
-                )}
-              </select>
-
-              {selectedProject && (
-                <div className="mt-3 rounded-xl bg-slate-50 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-[#5873F9]">
-                      {
-                        selectedProject.type
-                      }
-                    </span>
-
-                    <span className="text-[11px] font-black text-slate-500">
-                      진행률{" "}
-                      {
-                        selectedProject.progress
-                      }
-                      %
-                    </span>
-                  </div>
-
-                  <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
-                    {selectedProject.description ||
-                      "설명이 없습니다."}
-                  </p>
-                </div>
-              )}
+                <ArrowRight
+                  size={14}
+                />
+              </button>
             </div>
-
-            {/* 현재 프로젝트 */}
-
-            <div className="mt-auto shrink-0 border-t border-[var(--waivs-border-soft)] p-4">
-              <div className="rounded-xl bg-slate-50 px-3 py-3">
-                <p className="text-[11px] font-black text-slate-500">
-                  현재 프로젝트
-                </p>
-
-                <p className="mt-1 truncate text-sm font-black text-slate-900">
-                  {selectedProject?.name ??
-                    "프로젝트 없음"}
-                </p>
-
-                <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  필요한 문서를 선택해서
-                  조회하거나 PDF로 저장할 수
-                  있습니다.
-                </p>
-              </div>
-            </div>
-          </section>
+          )}
         </aside>
 
         {/* =================================================
-            오른쪽 메인
+            MAIN
            ================================================= */}
 
-        <section className="min-w-0">
+        <section className="min-w-0 flex-1">
+          {/* ===============================================
+              ARCHIVE HEADER
+             =============================================== */}
+
           <section className="waivs-panel overflow-visible">
-            {/* =================================================
-                압축된 메인 헤더
-               ================================================= */}
-
-            <div className="p-5">
-              <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
-                {/* 현재 프로젝트 + 현재 자료 */}
-
-                <div className="min-w-0 flex-1">
+            <div className="px-5 py-3.5">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* 프로젝트 이름 */}
-
-                    <h2 className="truncate text-2xl font-black tracking-tight text-slate-950">
-                      {selectedProject?.name ??
-                        "프로젝트 없음"}
-                    </h2>
-
-                    {selectedProject && (
-                      <span className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
-                        {
-                          selectedProject.type
-                        }
-                      </span>
-                    )}
-
-                    {/* 구분 */}
-
-                    <span className="mx-1 text-lg font-light text-slate-300">
-                      /
+                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-[#5873F9]">
+                      Archive
                     </span>
 
-                    {/* 현재 자료 종류 */}
+                    {selectedProject && (
+                      <>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[10px] font-black",
+                            selectedProject.type ===
+                              "팀"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-[#EEF3FF] text-[#5873F9]",
+                          )}
+                        >
+                          {selectedProject.type ===
+                          "팀"
+                            ? "TEAM"
+                            : "PERSONAL"}
+                        </span>
 
-                    <div className="flex items-center gap-2">
-                      <span className="h-5 w-1 rounded-full bg-[#5873F9]" />
-
-                      <h3 className="text-lg font-black text-slate-900">
-                        {
-                          activeArchive?.label
-                        }
-                      </h3>
-                    </div>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+                          {selectedProject.role.toUpperCase()}
+                        </span>
+                      </>
+                    )}
                   </div>
 
-                  <p className="mt-1 text-sm font-medium text-slate-500">
-                    {
-                      activeArchive?.description
-                    }
+                  <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                    <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
+                      {selectedProject?.name ??
+                        "프로젝트 없음"}
+                    </h1>
+
+                    <span className="text-xs font-bold text-slate-400">
+                      프로젝트 자료실
+                    </span>
+                  </div>
+
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">
+                    개발 과정에서 생성된 프로젝트 문서를 한곳에서 확인합니다.
                   </p>
                 </div>
 
-                {/* 검색 / 정렬 / PDF */}
+                {/* PDF */}
 
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                  <div className="relative">
-                    <Search
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setIsPdfMenuOpen(
+                        (prev) =>
+                          !prev,
+                      )
+                    }
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-white px-3.5 text-xs font-black text-[#5873F9] transition hover:bg-[#F7F9FF]"
+                  >
+                    <Download
                       size={16}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                     />
 
-                    <input
-                      value={keyword}
-                      onChange={(
-                        event,
-                      ) =>
-                        setKeyword(
-                          event
-                            .target
-                            .value,
-                        )
+                    PDF 저장
+
+                    <span className="rounded-full bg-[#EEF3FF] px-1.5 py-0.5 text-[10px] text-[#5873F9]">
+                      {
+                        selectedPdfSections.length
                       }
-                      placeholder="자료실 검색"
-                      className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white pl-10 pr-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10 sm:w-[260px]"
-                    />
-                  </div>
+                    </span>
+                  </button>
 
-                  {activeArchiveTab ===
-                    "devlog" && (
-                    <select
-                      value={
-                        sortType
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setSortType(
-                          event
-                            .target
-                            .value as DevlogSortType,
-                        )
-                      }
-                      className="h-10 rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-[#5873F9]"
-                    >
-                      <option value="latest">
-                        최신순
-                      </option>
+                  {isPdfMenuOpen && (
+                    <div className="absolute right-0 top-11 z-50 w-[330px] rounded-2xl border border-[var(--waivs-border)] bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.16)]">
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-black text-slate-950">
+                            PDF 출력 항목
+                          </p>
 
-                      <option value="oldest">
-                        오래된순
-                      </option>
-                    </select>
-                  )}
-
-                  {/* PDF */}
-
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setIsPdfMenuOpen(
-                          (prev) =>
-                            !prev,
-                        )
-                      }
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-sm font-black text-white transition hover:bg-[#4863E8]"
-                    >
-                      <Download
-                        size={16}
-                      />
-
-                      PDF 저장
-
-                      <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] text-white">
-                        {
-                          selectedPdfSections.length
-                        }
-                      </span>
-                    </button>
-
-                    {isPdfMenuOpen && (
-                      <div className="absolute right-0 top-12 z-50 w-[330px] rounded-2xl border border-[var(--waivs-border)] bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.16)]">
-                        <div className="mb-3 flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-black text-slate-950">
-                              PDF 출력 항목
-                            </p>
-
-                            <p className="mt-0.5 text-[11px] font-medium leading-5 text-slate-500">
-                              원하는 문서를 선택해
-                              하나의 PDF로
-                              출력합니다.
-                            </p>
-                          </div>
-
-                          <span className="shrink-0 rounded-full bg-[#EEF3FF] px-2 py-1 text-[10px] font-black text-[#5873F9]">
-                            {
-                              selectedPdfSections.length
-                            }
-                            개
-                          </span>
+                          <p className="mt-0.5 text-[11px] font-medium leading-5 text-slate-500">
+                            원하는 문서를 선택해 하나의 PDF로 출력합니다.
+                          </p>
                         </div>
 
-                        <div className="mb-3 grid grid-cols-3 gap-1.5">
-                          <button
-                            type="button"
-                            onClick={
-                              selectAllPdfSections
-                            }
-                            className="h-7 rounded-lg bg-[#EEF3FF] px-2 text-[11px] font-black text-[#5873F9] transition hover:bg-[#E4EAFF]"
-                          >
-                            전체
-                          </button>
+                        <span className="shrink-0 rounded-full bg-[#EEF3FF] px-2 py-1 text-[10px] font-black text-[#5873F9]">
+                          {
+                            selectedPdfSections.length
+                          }
+                          개
+                        </span>
+                      </div>
 
-                          <button
-                            type="button"
-                            onClick={
-                              selectCurrentArchivePdfSections
-                            }
-                            className="h-7 rounded-lg bg-slate-100 px-2 text-[11px] font-black text-slate-600 transition hover:bg-slate-200"
-                          >
-                            현재 탭
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={
-                              clearPdfSections
-                            }
-                            className="h-7 rounded-lg bg-slate-50 px-2 text-[11px] font-black text-slate-400 transition hover:bg-slate-100"
-                          >
-                            해제
-                          </button>
-                        </div>
-
-                        <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
-                          {[
-                            "개발일지",
-                            "설계 문서",
-                            "최종 보고서",
-                          ].map(
-                            (group) => (
-                              <section
-                                key={
-                                  group
-                                }
-                              >
-                                <p className="mb-1.5 px-1 text-[11px] font-black text-slate-400">
-                                  {
-                                    group
-                                  }
-                                </p>
-
-                                <div className="space-y-1.5">
-                                  {archivePdfSectionItems
-                                    .filter(
-                                      (
-                                        item,
-                                      ) =>
-                                        item.group ===
-                                        group,
-                                    )
-                                    .map(
-                                      (
-                                        item,
-                                      ) => {
-                                        const checked =
-                                          selectedPdfSections.includes(
-                                            item.key,
-                                          );
-
-                                        return (
-                                          <label
-                                            key={
-                                              item.key
-                                            }
-                                            className={[
-                                              "flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2 text-sm transition",
-
-                                              checked
-                                                ? "border-[#5873F9]/30 bg-[#EEF3FF] text-[#405ED9]"
-                                                : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50",
-                                            ].join(
-                                              " ",
-                                            )}
-                                          >
-                                            <span className="font-bold">
-                                              {
-                                                item.label
-                                              }
-                                            </span>
-
-                                            <input
-                                              type="checkbox"
-                                              checked={
-                                                checked
-                                              }
-                                              onChange={() =>
-                                                togglePdfSection(
-                                                  item.key,
-                                                )
-                                              }
-                                              className="h-4 w-4 accent-[#5873F9]"
-                                            />
-                                          </label>
-                                        );
-                                      },
-                                    )}
-                                </div>
-                              </section>
-                            ),
-                          )}
-                        </div>
+                      <div className="mb-3 grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={
+                            selectAllPdfSections
+                          }
+                          className="h-7 rounded-lg bg-[#EEF3FF] px-2 text-[11px] font-black text-[#5873F9] transition hover:bg-[#E4EAFF]"
+                        >
+                          전체
+                        </button>
 
                         <button
                           type="button"
-                          onClick={() => {
-                            handlePrintPdf();
-
-                            if (
-                              selectedPdfSections.length >
-                              0
-                            ) {
-                              setIsPdfMenuOpen(
-                                false,
-                              );
-                            }
-                          }}
-                          disabled={
-                            selectedPdfSections.length ===
-                            0
+                          onClick={
+                            selectCurrentArchivePdfSections
                           }
-                          className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-[#5873F9] text-xs font-extrabold text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:bg-slate-300"
+                          className="h-7 rounded-lg bg-slate-100 px-2 text-[11px] font-black text-slate-600 transition hover:bg-slate-200"
                         >
-                          <Download
-                            size={14}
-                          />
-
-                          선택 항목 PDF 저장
+                          현재 탭
                         </button>
 
-                        <p className="mt-2 truncate text-[11px] font-medium text-slate-400">
-                          선택됨:{" "}
-                          {selectedPdfSectionLabels.length >
-                          0
-                            ? selectedPdfSectionLabels.join(
-                                ", ",
-                              )
-                            : "없음"}
-                        </p>
+                        <button
+                          type="button"
+                          onClick={
+                            clearPdfSections
+                          }
+                          className="h-7 rounded-lg bg-slate-50 px-2 text-[11px] font-black text-slate-400 transition hover:bg-slate-100"
+                        >
+                          해제
+                        </button>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
+                        {[
+                          "개발일지",
+                          "설계 문서",
+                          "최종 보고서",
+                        ].map(
+                          (group) => (
+                            <section
+                              key={
+                                group
+                              }
+                            >
+                              <p className="mb-1.5 px-1 text-[11px] font-black text-slate-400">
+                                {
+                                  group
+                                }
+                              </p>
+
+                              <div className="space-y-1.5">
+                                {archivePdfSectionItems
+                                  .filter(
+                                    (
+                                      item,
+                                    ) =>
+                                      item.group ===
+                                      group,
+                                  )
+                                  .map(
+                                    (
+                                      item,
+                                    ) => {
+                                      const checked =
+                                        selectedPdfSections.includes(
+                                          item.key,
+                                        );
+
+                                      return (
+                                        <label
+                                          key={
+                                            item.key
+                                          }
+                                          className={cn(
+                                            "flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2 text-sm transition",
+                                            checked
+                                              ? "border-[#5873F9]/30 bg-[#EEF3FF] text-[#405ED9]"
+                                              : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50",
+                                          )}
+                                        >
+                                          <span className="font-bold">
+                                            {
+                                              item.label
+                                            }
+                                          </span>
+
+                                          <input
+                                            type="checkbox"
+                                            checked={
+                                              checked
+                                            }
+                                            onChange={() =>
+                                              togglePdfSection(
+                                                item.key,
+                                              )
+                                            }
+                                            className="h-4 w-4 accent-[#5873F9]"
+                                          />
+                                        </label>
+                                      );
+                                    },
+                                  )}
+                              </div>
+                            </section>
+                          ),
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handlePrintPdf();
+
+                          if (
+                            selectedPdfSections.length >
+                            0
+                          ) {
+                            setIsPdfMenuOpen(
+                              false,
+                            );
+                          }
+                        }}
+                        disabled={
+                          selectedPdfSections.length ===
+                          0
+                        }
+                        className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-[#5873F9] text-xs font-extrabold text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        <Download
+                          size={14}
+                        />
+
+                        선택 항목 PDF 저장
+                      </button>
+
+                      <p className="mt-2 truncate text-[11px] font-medium text-slate-400">
+                        선택됨:{" "}
+                        {selectedPdfSectionLabels.length >
+                        0
+                          ? selectedPdfSectionLabels.join(
+                              ", ",
+                            )
+                          : "없음"}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* =================================================
-                  한 줄 자료 현황
-                 ================================================= */}
+              {/* SUMMARY */}
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--waivs-border-soft)] pt-4 text-sm">
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-3 text-xs">
                 <ArchiveSummaryItem
                   label="개발일지"
                   value={`${filteredDevlogs.length}개`}
@@ -3866,12 +4233,110 @@ export default function ArchivePage() {
                 />
               </div>
             </div>
+          </section>
 
-            {/* =================================================
-                자료 콘텐츠
-               ================================================= */}
+          {/* ===============================================
+              ARCHIVE CONTENT
+             =============================================== */}
 
-            <div className="border-t border-[var(--waivs-border-soft)] p-5">
+          <section className="waivs-panel mt-4 overflow-visible">
+            {/* MAIN ARCHIVE TABS */}
+
+            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex w-fit max-w-full items-center gap-1 rounded-xl bg-slate-100 p-1">
+                {archiveTabs.map(
+                  (tab) => {
+                    const Icon =
+                      tab.icon;
+
+                    const isActive =
+                      activeArchiveTab ===
+                      tab.key;
+
+                    return (
+                      <button
+                        key={
+                          tab.key
+                        }
+                        type="button"
+                        onClick={() =>
+                          setActiveArchiveTab(
+                            tab.key,
+                          )
+                        }
+                        className={cn(
+                          "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-xs font-black transition",
+                          isActive
+                            ? "bg-white text-[#5873F9] shadow-sm"
+                            : "text-slate-500 hover:text-slate-800",
+                        )}
+                      >
+                        <Icon
+                          size={14}
+                        />
+
+                        {tab.label}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+
+              {/* DEVLOG ONLY TOOLS */}
+
+              {activeArchiveTab ===
+                "devlog" && (
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+                  <select
+                    value={
+                      sortType
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setSortType(
+                        event.target
+                          .value as DevlogSortType,
+                      )
+                    }
+                    className="h-10 rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-[#5873F9]"
+                  >
+                    <option value="latest">
+                      최신순
+                    </option>
+
+                    <option value="oldest">
+                      오래된순
+                    </option>
+                  </select>
+
+                  <div className="relative min-w-0">
+                    <Search
+                      size={16}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+
+                    <input
+                      value={keyword}
+                      onChange={(
+                        event,
+                      ) =>
+                        setKeyword(
+                          event.target
+                            .value,
+                        )
+                      }
+                      placeholder="개발일지 검색"
+                      className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white pl-10 pr-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10 sm:w-[300px]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* CONTENT */}
+
+            <div className="p-5">
               {activeArchiveTab ===
                 "devlog" && (
                 <ArchiveDevlogContent
@@ -3948,6 +4413,142 @@ export default function ArchivePage() {
         </section>
       </div>
     </main>
+  );
+}
+
+/* =========================================================
+   PROJECT SIDEBAR
+   ========================================================= */
+
+function ArchiveProjectSection({
+  title,
+  mode,
+  items,
+  selectedProjectId,
+  onSelect,
+}: {
+  title: string;
+  mode: "personal" | "team";
+  items: Project[];
+  selectedProjectId: string;
+  onSelect: (projectId: string) => void;
+}) {
+  const Icon =
+    mode === "team"
+      ? Users
+      : UserRound;
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2 text-slate-500">
+          <Icon size={14} />
+
+          <p className="text-xs font-black">
+            {title}
+          </p>
+        </div>
+
+        <span className="text-[10px] font-black text-slate-400">
+          {items.length}
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[10px] font-semibold text-slate-400">
+          표시할 프로젝트가 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map(
+            (project) => (
+              <ArchiveProjectItem
+                key={project.id}
+                project={project}
+                selected={
+                  selectedProjectId ===
+                  project.id
+                }
+                onSelect={
+                  onSelect
+                }
+              />
+            ),
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ArchiveProjectItem({
+  project,
+  selected,
+  onSelect,
+}: {
+  project: Project;
+  selected: boolean;
+  onSelect: (projectId: string) => void;
+}) {
+  const Icon =
+    project.type === "팀"
+      ? Users
+      : UserRound;
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onSelect(project.id)
+      }
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition",
+        selected
+          ? "bg-[#5873F9] text-white shadow-sm"
+          : "text-slate-700 hover:bg-slate-100",
+      )}
+    >
+      <span
+        className={cn(
+          "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
+          selected
+            ? "bg-white/15 text-white"
+            : project.type === "팀"
+              ? "bg-emerald-50 text-emerald-600"
+              : "bg-[#EEF3FF] text-[#5873F9]",
+        )}
+      >
+        <Icon
+          size={15}
+          strokeWidth={2.1}
+        />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            "block truncate text-xs font-black",
+            selected
+              ? "text-white"
+              : "text-slate-800",
+          )}
+        >
+          {project.name}
+        </span>
+
+        <span
+          className={cn(
+            "mt-0.5 block truncate text-[10px] font-semibold",
+            selected
+              ? "text-white/70"
+              : "text-slate-400",
+          )}
+        >
+          {project.type} 프로젝트 ·{" "}
+          {project.role.toUpperCase()}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -4194,7 +4795,7 @@ function ArchiveDesignContent({
         <EmptyState
           icon={FileText}
           title="아직 저장된 설계 문서가 없습니다."
-          message="설계관리에서 요구사항, API 명세, ERD 또는 데이터 플로우를 작성하면 이곳에서 문서 형태로 확인할 수 있습니다."
+          message="설계관리에서 요구사항, API 명세, ERD 또는 화면 흐름을 작성하면 이곳에서 문서 형태로 확인할 수 있습니다."
         />
       ) : (
         <>
@@ -4544,8 +5145,8 @@ function DesignFlowPage({
     return (
       <DesignEmptyText
         icon={GitBranch}
-        title="작성된 데이터 플로우가 없습니다."
-        text="설계관리에서 데이터 플로우를 작성하면 이곳에서 확인할 수 있습니다."
+        title="작성된 화면 흐름이 없습니다."
+        text="설계관리에서 화면 흐름을 작성하면 이곳에서 확인할 수 있습니다."
       />
     );
   }
@@ -4553,8 +5154,8 @@ function DesignFlowPage({
   return (
     <div className="space-y-4">
       <SectionTitle
-        title="데이터 플로우"
-        description="화면, 서버, DB, 외부 서비스 사이의 흐름을 시각화했습니다."
+        title="화면 흐름"
+        description="화면 사이의 이동 흐름을 시각화했습니다."
         count={`노드 ${nodes.length}개 · 연결 ${edgeCount}개`}
       />
 
@@ -4562,7 +5163,7 @@ function DesignFlowPage({
         nodes={nodes}
         edges={edges}
         type="flow"
-        title="데이터 플로우 미리보기"
+        title="화면 흐름 미리보기"
         description="설계단계에서 작성한 흐름도를 그대로 표시합니다."
       />
 
@@ -4609,6 +5210,180 @@ function DesignFlowPage({
 /* =========================================================
    DIAGRAM PREVIEW
    ========================================================= */
+
+/**
+ * 화면 흐름 상자.
+ *
+ * 설계단계의 화면 카드(src/components/design/tabs/screens/ScreenNode.tsx)와
+ * 같은 것을 보여 준다. 같은 데이터인데 그림이 다르면 다른 자료로 오해한다.
+ */
+function ScreenFlowNodeShape({
+  node,
+  width,
+  height,
+}: {
+  node: NormalizedDiagramNode;
+  width: number;
+  height: number;
+}) {
+  const shownApis = node.apiLabels.slice(0, 3);
+  const restApis = node.apiLabels.length - shownApis.length;
+
+  return (
+    <g>
+      <rect
+        x={node.x}
+        y={node.y}
+        width={width}
+        height={height}
+        rx={16}
+        fill="#ffffff"
+        stroke={node.isEntry ? "#34d399" : "#e5e7eb"}
+        strokeWidth={node.isEntry ? 2 : 1}
+      />
+
+      {node.isEntry ? (
+        <>
+          <rect
+            x={node.x + 12}
+            y={node.y + 12}
+            width={34}
+            height={17}
+            rx={6}
+            fill="#ecfdf5"
+          />
+          <text
+            x={node.x + 29}
+            y={node.y + 24}
+            textAnchor="middle"
+            fill="#047857"
+            fontSize={9}
+            fontWeight={900}
+          >
+            시작
+          </text>
+        </>
+      ) : null}
+
+      <text
+        x={node.x + (node.isEntry ? 54 : 14)}
+        y={node.y + 25}
+        fill="#0f172a"
+        fontSize={13}
+        fontWeight={900}
+      >
+        {node.label}
+      </text>
+
+      {node.requiresAuth ? (
+        <text
+          x={node.x + width - 14}
+          y={node.y + 25}
+          textAnchor="end"
+          fill="#9ca3af"
+          fontSize={9}
+          fontWeight={900}
+        >
+          로그인
+        </text>
+      ) : null}
+
+      <line
+        x1={node.x}
+        y1={node.y + 38}
+        x2={node.x + width}
+        y2={node.y + 38}
+        stroke="#eef1f4"
+      />
+
+      <text
+        x={node.x + 14}
+        y={node.y + 56}
+        fill="#6b7280"
+        fontSize={10}
+        fontWeight={700}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+      >
+        {node.route}
+      </text>
+
+      <rect
+        x={node.x + 14}
+        y={node.y + 64}
+        width={62}
+        height={17}
+        rx={5}
+        fill={node.requirementCount === 0 ? "#fef2f2" : "#f1f5f9"}
+      />
+      <text
+        x={node.x + 20}
+        y={node.y + 76}
+        fill={node.requirementCount === 0 ? "#dc2626" : "#475569"}
+        fontSize={9}
+        fontWeight={900}
+      >
+        요구사항 {node.requirementCount}
+      </text>
+
+      <rect
+        x={node.x + 82}
+        y={node.y + 64}
+        width={34}
+        height={17}
+        rx={5}
+        fill="#f1f5f9"
+      />
+      <text
+        x={node.x + 99}
+        y={node.y + 76}
+        textAnchor="middle"
+        fill="#475569"
+        fontSize={9}
+        fontWeight={900}
+      >
+        {node.roleLabel}
+      </text>
+
+      {shownApis.length === 0 ? (
+        <text
+          x={node.x + 14}
+          y={node.y + 100}
+          fill="#9ca3af"
+          fontSize={9}
+          fontWeight={700}
+        >
+          호출하는 API 없음
+        </text>
+      ) : (
+        shownApis.map((label, index) => (
+          <text
+            key={label}
+            x={node.x + 14}
+            y={node.y + 100 + index * 14}
+            fill="#6b7280"
+            fontSize={9}
+            fontWeight={700}
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          >
+            {label}
+          </text>
+        ))
+      )}
+
+      {restApis > 0 ? (
+        <text
+          x={node.x + 14}
+          y={node.y + 100 + shownApis.length * 14}
+          fill="#9ca3af"
+          fontSize={9}
+          fontWeight={700}
+        >
+          외 {restApis}개
+        </text>
+      ) : null}
+    </g>
+  );
+}
 
 function DesignDiagramPreview({
   nodes,
@@ -4774,31 +5549,61 @@ function DesignDiagramPreview({
                 layout.nodeHeight /
                   2;
 
+              // 화면 흐름에서는 "무엇을 했을 때 넘어가는가" 가
+              // 핵심 정보다. 선만 그리면 그림에서 통째로 빠진다.
+              const edgeLabel =
+                typeof edge.label ===
+                "string"
+                  ? edge.label.trim()
+                  : "";
+
               return (
-                <path
+                <g
                   key={String(
                     edge.id ??
                       index,
                   )}
-                  d={buildSvgPath(
-                    sourceX,
-                    sourceY,
-                    targetX,
-                    targetY,
-                  )}
-                  fill="none"
-                  stroke={
-                    strokeColor
-                  }
-                  strokeWidth={2}
-                  strokeDasharray={
-                    type ===
-                    "flow"
-                      ? "6 5"
-                      : undefined
-                  }
-                  markerEnd={`url(#archive-arrow-${type})`}
-                />
+                >
+                  <path
+                    d={buildSvgPath(
+                      sourceX,
+                      sourceY,
+                      targetX,
+                      targetY,
+                    )}
+                    fill="none"
+                    stroke={
+                      strokeColor
+                    }
+                    strokeWidth={2}
+                    markerEnd={`url(#archive-arrow-${type})`}
+                  />
+
+                  {edgeLabel ? (
+                    <text
+                      x={
+                        (sourceX +
+                          targetX) /
+                        2
+                      }
+                      y={
+                        (sourceY +
+                          targetY) /
+                          2 -
+                        8
+                      }
+                      textAnchor="middle"
+                      fill="#475569"
+                      fontSize={10}
+                      fontWeight={700}
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      paintOrder="stroke"
+                    >
+                      {edgeLabel}
+                    </text>
+                  ) : null}
+                </g>
               );
             },
           )}
@@ -4834,7 +5639,7 @@ function DesignDiagramPreview({
                       }
                       height={42}
                       rx={14}
-                      fill="#111827"
+                      fill="#5873F9"
                     />
 
                     <text
@@ -4926,6 +5731,11 @@ function DesignDiagramPreview({
                                   700
                                 }
                               >
+                                {column.isPk
+                                  ? "PK "
+                                  : column.isFk
+                                    ? "FK "
+                                    : ""}
                                 {
                                   columnName
                                 }{" "}
@@ -4943,67 +5753,16 @@ function DesignDiagramPreview({
               }
 
               return (
-                <g key={node.id}>
-                  <rect
-                    x={node.x}
-                    y={node.y}
-                    width={
-                      layout.nodeWidth
-                    }
-                    height={
-                      layout.nodeHeight
-                    }
-                    rx={16}
-                    fill="#f8fafc"
-                    stroke="#dbe1ea"
-                  />
-
-                  <circle
-                    cx={
-                      node.x +
-                      28
-                    }
-                    cy={
-                      node.y +
-                      32
-                    }
-                    r={14}
-                    fill="#ffffff"
-                    stroke="#dbe1ea"
-                  />
-
-                  <text
-                    x={
-                      node.x +
-                      52
-                    }
-                    y={
-                      node.y +
-                      33
-                    }
-                    fill="#0f172a"
-                    fontSize={13}
-                    fontWeight={900}
-                  >
-                    {node.label}
-                  </text>
-
-                  <text
-                    x={
-                      node.x +
-                      52
-                    }
-                    y={
-                      node.y +
-                      58
-                    }
-                    fill="#64748b"
-                    fontSize={10}
-                    fontWeight={700}
-                  >
-                    {node.subText}
-                  </text>
-                </g>
+                <ScreenFlowNodeShape
+                  key={node.id}
+                  node={node}
+                  width={
+                    layout.nodeWidth
+                  }
+                  height={
+                    layout.nodeHeight
+                  }
+                />
               );
             },
           )}
@@ -5113,7 +5872,7 @@ function ArchiveFinalReportContent({
 
             <p className="mt-1 text-xs font-medium text-slate-500">
               PDF 저장 시 아래 초안,
-              ERD, 데이터 플로우가 함께
+              ERD, 화면 흐름이 함께
               출력됩니다.
             </p>
           </div>
@@ -5214,7 +5973,7 @@ function FinalReportDesignVisuals({
       <DesignEmptyText
         icon={Database}
         title="표시할 설계 다이어그램이 없습니다."
-        text="설계관리에서 ERD 또는 데이터 플로우를 작성하면 최종 보고서에 함께 표시됩니다."
+        text="설계관리에서 ERD 또는 화면 흐름을 작성하면 최종 보고서에 함께 표시됩니다."
       />
     );
   }
@@ -5236,7 +5995,7 @@ function FinalReportDesignVisuals({
           nodes={flowNodes}
           edges={flowEdges}
           type="flow"
-          title="최종 보고서 데이터 플로우"
+          title="최종 보고서 화면 흐름"
           description="PDF 저장 시 최종 보고서에 포함됩니다."
         />
       )}

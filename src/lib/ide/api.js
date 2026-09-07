@@ -724,6 +724,33 @@ export const createFileApi = async (
   }
 };
 
+/**
+ * 이 방의 최초 내용을 넣을 권한을 서버에 물어본다.
+ *
+ * 협업 서버는 문서를 보관하지 않으므로, 파일을 처음 여는 사람이 디스크
+ * 내용을 문서에 넣어야 한다. 그런데 누가 처음인지는 클라이언트끼리 알 수
+ * 없다 — 접속 정보가 오가기 전에 판단하게 되기 때문이다. 그래서 둘이 같은
+ * 파일을 동시에 열면 같은 내용을 두 번 넣거나(중복) 아무도 안 넣는다(빈 화면).
+ *
+ * 방마다 한 사람만 허락받는다. 못 받았으면 절대 넣지 말고, 먼저 들어온
+ * 사람의 내용이 동기화로 오기를 기다려야 한다.
+ */
+export const claimCollabSeedApi = async (room) => {
+  const response = await authFetch("/api/collab/rooms/seed-claim", {
+    method: "POST",
+    body: JSON.stringify({ room }),
+  });
+
+  if (!response.ok) {
+    // 물어보지 못했으면 넣지 않는 쪽이 안전하다. 중복은 되돌리기 어렵고,
+    // 빈 화면은 상대가 넣어 주면 곧 채워진다.
+    return false;
+  }
+
+  const result = await response.json().catch(() => null);
+  return Boolean(result?.granted);
+};
+
 export const saveFileApi = async (
   workspaceId,
   projectName,

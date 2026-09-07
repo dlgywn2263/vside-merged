@@ -36,7 +36,6 @@
     "app/(project-wizard)/new/workspace/page.jsx",
     "app/(project-wizard)/new/layout.jsx",
     "app/(project-wizard)/layout.jsx",
-    "app/design/page.jsx",
     "app/providers.jsx"
 , "src/lib/ide/api.js"  ],
   "exclude": ["node_modules"]

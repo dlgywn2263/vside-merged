@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
+import { CollabWebSocket } from "@/lib/ide/collabSocket";
+import { CollabFileSaver } from "@/lib/ide/collabFileSaver";
 import { VscCheck, VscClose, VscSparkle, VscLoading, VscLock, VscWarning, VscArrowRight } from "react-icons/vsc";
 
 import {
@@ -17,6 +19,7 @@ import {
 } from "@/store/slices/fileSystemSlice";
 
 import {
+  claimCollabSeedApi,
   saveFileApi,
   fetchAiAssistApi,
   fetchAiAutocompleteApi,
@@ -186,19 +189,9 @@ const configureTypeScriptMonaco = (monacoInstance) => {
   );
 };
 
-class CustomWebSocket extends WebSocket {
-  constructor(url, protocols) {
-    const parsedUrl = new URL(url);
-    const pathParts = parsedUrl.pathname.split("/ws/collab/");
-    const roomName =
-      pathParts.length > 1 ? decodeURIComponent(pathParts[1]) : "default-room";
-    
-    const safeUrl = `${WS_BASE}/ws/collab?room=${encodeURIComponent(
-      roomName,
-    )}`;
-    super(safeUrl, protocols);
-  }
-}
+// 방 접속 규약은 /ws/collab 을 쓰는 세 곳이 공유한다.
+// 서버가 핸드셰이크에서 토큰을 확인하므로 공용 폴리필을 써야 한다.
+const CustomWebSocket = CollabWebSocket;
 
 const normalizeCollabKeyPart = (value, fallback = "") => {
   return String(value ?? fallback)
@@ -320,6 +313,15 @@ export default function CodeEditor() {
   
   const lockedLinesRef = useRef({});
   const lockDecosRef = useRef([]);
+
+  /** 이 방의 최초 내용을 넣어도 되는지. 서버가 방마다 한 사람에게만 준다. */
+  const seedGrantedRef = useRef(false);
+
+  /** 넣을 디스크 내용. 허락이 늦게 와도 넣을 수 있게 들고 있는다. */
+  const localContentRef = useRef("");
+
+  /** 팀 모드에서 파일을 자동으로 저장하는 담당. */
+  const fileSaverRef = useRef(null);
   const conflictDecosRef = useRef([]);
   const conflictOriginalContentRef = useRef({});
   const cursorListenerRef = useRef(null); 
@@ -540,6 +542,25 @@ export default function CodeEditor() {
   });
   bindTimeoutsRef.current = [];
 
+  // 저장 담당인지는 연결을 끊기 전에 물어봐야 한다.
+  //
+  // 끊고 나면 누가 접속해 있는지 알 수 없어 모두가 자기를 담당이라고
+  // 여기게 되고, 나가는 사람마다 저장을 보내면서 남아서 계속 고치던
+  // 팀원의 최신 내용을 옛 것으로 덮을 수 있다.
+  const saver = fileSaverRef.current;
+  fileSaverRef.current = null;
+
+  if (saver) {
+    const shouldSave = saver.shouldSaveOnLeave();
+
+    // 저장이 끝난 뒤에 정리한다. 저장이 문서를 읽어야 한다.
+    if (shouldSave) {
+      void saver.flush().finally(() => saver.destroy());
+    } else {
+      saver.destroy();
+    }
+  }
+
   const provider = providerRef.current;
   const statusListener = providerStatusListenerRef.current;
   const syncListener = providerSyncListenerRef.current;
@@ -709,6 +730,33 @@ export default function CodeEditor() {
       normalizeCollabKeyPart(activeFileId),
     ].join(":");
 
+    // 이 방의 최초 내용을 넣을 권한을 서버에 물어본다.
+    //
+    // 답이 오기 전에 연결이 끝나 bind 가 실행될 수 있으므로 기본값은
+    // "넣지 않음"이다. 넣지 않아 잠깐 비어 보이는 것은 상대의 내용이 오면
+    // 채워지지만, 잘못 넣은 중복은 되돌리기 어렵다.
+    seedGrantedRef.current = false;
+
+    claimCollabSeedApi(roomName)
+      .then((granted) => {
+        if (collabSessionRef.current !== sessionId) return;
+
+        seedGrantedRef.current = granted;
+
+        // 이미 bind 가 끝났는데 이제야 허락이 왔고 문서가 비어 있다면
+        // 여기서 넣는다. 아니면 파일이 빈 채로 남는다.
+        if (granted) {
+          const yText = ydocRef.current?.getText("monaco");
+
+          if (yText && yText.length === 0 && localContentRef.current !== "") {
+            yText.insert(0, localContentRef.current);
+          }
+        }
+      })
+      .catch(() => {
+        // 물어보지 못했으면 넣지 않는다. 위와 같은 이유다.
+      });
+
     console.log("[COLLAB ROOM ENTER]", {
       activeFileId,
       collabFileKey: normalizeCollabKeyPart(activeFileId),
@@ -877,6 +925,7 @@ export default function CodeEditor() {
       "";
 
     const localContent = String(rawContent).replace(/\r\n/g, "\n");
+    localContentRef.current = localContent;
 
     const doBind = () => {
       if (!isLiveSession()) return;
@@ -886,23 +935,22 @@ export default function CodeEditor() {
 
       if (!currentModel || currentModel.isDisposed()) return;
 
-      if (yText.length === 0 && localContent !== "") {
-        const clients = Array.from(awareness.getStates().keys()).sort();
-
-        if (clients.length === 0 || clients[0] === awareness.clientID) {
-          yText.insert(0, localContent);
-        }
+      // 최초 내용을 넣을지는 서버가 준 허락으로만 정한다.
+      //
+      // 예전에는 awareness 에 누가 있는지를 보고 정했는데, bind 가 타이머로
+      // 먼저 실행되면 상대 정보가 아직 안 와서 양쪽 다 자기가 처음이라고
+      // 판단해 같은 내용을 두 번 넣었다.
+      if (seedGrantedRef.current && yText.length === 0 && localContent !== "") {
+        yText.insert(0, localContent);
       }
 
       if (!isLiveSession()) return;
 
-      const yTextValue = yText.toString();
-
-      if (!currentModel.isDisposed() && currentModel.getValue() !== yTextValue) {
-        currentModel.setValue(yTextValue);
-      }
-
-      if (!isLiveSession()) return;
+      // 여기서 model.setValue 를 하지 않는다.
+      //
+      // MonacoBinding 이 붙는 순간 문서 내용이 에디터에 반영된다. 예전에는
+      // 손으로 덮었는데, 상대의 내용이 아직 안 온 상태에서 실행되면 빈
+      // 문자열로 덮어 화면이 비고 그 빈 상태가 상대에게도 퍼졌다.
 
       try {
         bindingRef.current = new MonacoBinding(
@@ -920,6 +968,40 @@ export default function CodeEditor() {
         });
       } catch (error) {
         console.error("[YJS MonacoBinding failed]", error);
+      }
+
+      // 자동 저장을 붙인다.
+      //
+      // 방이 비면 서버에는 아무것도 남지 않으므로, 아무도 Ctrl+S 를 누르지
+      // 않고 창을 닫으면 함께 고친 것이 통째로 사라진다. 접속자 중 한 명을
+      // 담당으로 정해 그 사람만 저장한다.
+      if (!fileSaverRef.current) {
+        const savedFileId = activeFileId;
+        const savedProject = activeProject;
+        const savedBranch = activeBranch || "master";
+
+        fileSaverRef.current = new CollabFileSaver({
+          yText,
+          awareness,
+          clientId: ydoc.clientID,
+          save: async (content) => {
+            await saveFileApi(
+              workspaceId,
+              savedProject,
+              savedBranch,
+              savedFileId,
+              content,
+            );
+
+            // 파일 트리와 미저장 표시가 어긋나지 않게 맞춰 준다.
+            // 팀 모드는 편집 중에 Redux 를 갱신하지 않기 때문이다.
+            latestContentRef.current[savedFileId] = content;
+            dispatch(updateFileContent({ filePath: savedFileId, content }));
+          },
+          onError: (error) => {
+            console.error("[협업] 자동 저장 실패", error);
+          },
+        });
       }
     };
 
@@ -987,6 +1069,30 @@ const syncHandler = (isSynced) => {
     safeDoBind("final-fallback");
   }, 2000);
 
+  // 허락을 못 받았는데 문서가 계속 비어 있고 방에 나 혼자라면, 먼저 있던
+  // 사람이 그새 나간 것이다. 그대로 두면 파일이 빈 채로 열리므로 한 번 더
+  // 물어본다.
+  const reclaimTimerId = window.setTimeout(() => {
+    if (!isLiveSession()) return;
+    if (seedGrantedRef.current) return;
+    if (yText.length > 0) return;
+    if (awareness.getStates().size > 1) return;
+
+    claimCollabSeedApi(roomName)
+      .then((granted) => {
+        if (!isLiveSession() || !granted) return;
+
+        seedGrantedRef.current = true;
+
+        if (yText.length === 0 && localContentRef.current !== "") {
+          yText.insert(0, localContentRef.current);
+        }
+      })
+      .catch(() => {});
+  }, 3000);
+
+  bindTimeoutsRef.current.push(reclaimTimerId);
+
   bindTimeoutsRef.current.push(finalFallbackTimerId);
   },
   [
@@ -995,6 +1101,7 @@ const syncHandler = (isSynced) => {
     activeProject,
     collabFileKey,
     cleanupCollaboration,
+    dispatch,
     workspaceId,
   ],
 );

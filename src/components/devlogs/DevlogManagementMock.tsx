@@ -1,22 +1,25 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowRight,
+  CalendarDays,
   Download,
   FilePenLine,
   FolderOpen,
+  Link2,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
   Pencil,
   Plus,
   Search,
   Trash2,
   UserRound,
   UsersRound,
+  X,
 } from "lucide-react";
 
 import {
@@ -53,7 +56,6 @@ import { DevlogListPanel } from "./components/DevlogListPanel";
 
 type WorkspaceMode = "personal" | "team";
 type ProjectFilter = "all" | WorkspaceMode;
-type SidebarPanelMode = "projects" | "devlog";
 
 type WorkspaceLike = {
   id?: string;
@@ -81,9 +83,6 @@ type WorkspaceSidebarItem = {
   childCount: number;
 };
 
-const DETAIL_SIDEBAR_DEFAULT_WIDTH = 340;
-const DETAIL_SIDEBAR_MIN_WIDTH = 300;
-const DETAIL_SIDEBAR_MAX_WIDTH = 620;
 
 function mapScheduleFromApi(item: ScheduleApiItem): ScheduleOption {
   return {
@@ -195,6 +194,7 @@ function getDevlogDocumentTypeLabel(devlog: DevlogItem) {
 }
 
 export default function DevlogManagementMock() {
+  
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -220,19 +220,39 @@ export default function DevlogManagementMock() {
   const [filter, setFilter] = useState<DevlogFilter>("all");
   const [query, setQuery] = useState("");
 
-  const [isProjectSidebarOpen, setIsProjectSidebarOpen] = useState(true);
+  const [isSidebarPinned, setIsSidebarPinned] = useState(true);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const [canSidebarHoverExpand, setCanSidebarHoverExpand] = useState(true);
 
-  const [sidebarPanelMode, setSidebarPanelMode] =
-    useState<SidebarPanelMode>("projects");
+  // 화면 최상단에서는 메인과 정확히 같은 시작 위치를 유지하고,
+  // 스크롤이 시작된 뒤에만 sticky 기준을 헤더 아래로 바꿉니다.
+  const [isPageScrolled, setIsPageScrolled] = useState(false);
 
-  const [isDetailSidebarOpen, setIsDetailSidebarOpen] = useState(true);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
+  const [showNoDevlogPanel, setShowNoDevlogPanel] = useState(false);
 
-  const [detailSidebarWidth, setDetailSidebarWidth] = useState(
-    DETAIL_SIDEBAR_DEFAULT_WIDTH,
-  );
+  const projectSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const autoCreateHandledRef = useRef("");
 
-  const [isDetailSidebarResizing, setIsDetailSidebarResizing] =
-    useState(false);
+  const sidebarExpanded =
+    isSidebarPinned ||
+    (canSidebarHoverExpand && isSidebarHovered);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsPageScrolled(window.scrollY > 0);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -504,6 +524,23 @@ export default function DevlogManagementMock() {
     });
   }, [devlogs, schedules]);
 
+  const currentWorkspace = useMemo(() => {
+    return (
+      workspaces.find((workspace) =>
+        isSameWorkspace(workspace, workspaceId),
+      ) ?? null
+    );
+  }, [workspaceId, workspaces]);
+
+  const currentWorkspaceMode: WorkspaceMode =
+    currentWorkspace?.mode ||
+    (searchParams.get("mode") === "team" ? "team" : "personal");
+
+  const currentWorkspaceRole =
+    currentWorkspace?.role?.toUpperCase() === "OWNER"
+      ? "OWNER"
+      : "MEMBER";
+
   const filteredDevlogs = useMemo(() => {
     return devlogs.filter((item) => {
       const matchesFilter =
@@ -612,85 +649,6 @@ export default function DevlogManagementMock() {
       item.status === "done",
   ).length;
 
-  const shouldShowDetailSidebar = Boolean(
-    isDetailSidebarOpen && selectedDevlog,
-  );
-
-  const layoutGridTemplateColumns = useMemo(() => {
-    const leftColumn = isProjectSidebarOpen
-      ? "300px"
-      : "84px";
-
-    if (shouldShowDetailSidebar) {
-      return `${leftColumn} minmax(0, 1fr) ${detailSidebarWidth}px`;
-    }
-
-    return `${leftColumn} minmax(0, 1fr)`;
-  }, [
-    detailSidebarWidth,
-    isProjectSidebarOpen,
-    shouldShowDetailSidebar,
-  ]);
-
-  const handleDetailSidebarResizeStart = (
-    event: React.PointerEvent<HTMLDivElement>,
-  ) => {
-    event.preventDefault();
-
-    setIsDetailSidebarResizing(true);
-  };
-
-  useEffect(() => {
-    if (!isDetailSidebarResizing) return;
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const nextWidth =
-        window.innerWidth - event.clientX;
-
-      const limitedWidth = Math.min(
-        DETAIL_SIDEBAR_MAX_WIDTH,
-        Math.max(
-          DETAIL_SIDEBAR_MIN_WIDTH,
-          nextWidth,
-        ),
-      );
-
-      setDetailSidebarWidth(limitedWidth);
-    };
-
-    const handlePointerUp = () => {
-      setIsDetailSidebarResizing(false);
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    window.addEventListener(
-      "pointermove",
-      handlePointerMove,
-    );
-
-    window.addEventListener(
-      "pointerup",
-      handlePointerUp,
-    );
-
-    return () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-
-      window.removeEventListener(
-        "pointermove",
-        handlePointerMove,
-      );
-
-      window.removeEventListener(
-        "pointerup",
-        handlePointerUp,
-      );
-    };
-  }, [isDetailSidebarResizing]);
-
   const handleSelectWorkspace = (
     workspace: WorkspaceSidebarItem,
   ) => {
@@ -706,11 +664,41 @@ export default function DevlogManagementMock() {
     );
   };
 
+  const handleToggleSidebar = () => {
+    if (isSidebarPinned) {
+      setIsSidebarPinned(false);
+      setIsSidebarHovered(false);
+      setCanSidebarHoverExpand(false);
+      return;
+    }
+
+    setIsSidebarPinned(true);
+    setIsSidebarHovered(false);
+    setCanSidebarHoverExpand(true);
+  };
+
+  const openSidebarForSearch = () => {
+    setIsSidebarPinned(true);
+    setIsSidebarHovered(false);
+    setCanSidebarHoverExpand(true);
+
+    requestAnimationFrame(() => {
+      projectSearchInputRef.current?.focus();
+    });
+  };
+
+  const openSidebarForProjects = () => {
+    setIsSidebarPinned(true);
+    setIsSidebarHovered(false);
+    setCanSidebarHoverExpand(true);
+    setProjectFilter("all");
+  };
+
   const handleSelectDevlog = (
     devlogId: string,
   ) => {
     setSelectedDevlogId(devlogId);
-    setIsDetailSidebarOpen(true);
+    setIsDetailModalOpen(true);
   };
 
   const resetForm = () => {
@@ -734,6 +722,67 @@ export default function DevlogManagementMock() {
     setFormStatusChange("progress");
     setIsCreateModalOpen(true);
   };
+
+  /* =====================================================
+     일정관리 -> 개발일지 자동 연결
+
+     /devlogs?workspaceId=...&create=1&scheduleId=...
+     로 진입하면 해당 일정을 자동 선택하고 작성 모달을 연다.
+     ===================================================== */
+  useEffect(() => {
+    const shouldCreate = searchParams.get("create") === "1";
+    const requestedScheduleId = searchParams.get("scheduleId");
+
+    if (
+      !shouldCreate ||
+      !requestedScheduleId ||
+      !workspaceId ||
+      workspaceLoading ||
+      loading
+    ) {
+      return;
+    }
+
+    const targetSchedule = schedules.find(
+      (schedule) => String(schedule.id) === String(requestedScheduleId),
+    );
+
+    if (!targetSchedule) {
+      return;
+    }
+
+    const handledKey = `${workspaceId}:${requestedScheduleId}`;
+
+    if (autoCreateHandledRef.current === handledKey) {
+      return;
+    }
+
+    autoCreateHandledRef.current = handledKey;
+
+    openCreateModalWithSchedule(targetSchedule.id);
+    setShowNoDevlogPanel(false);
+
+    // 모달을 닫은 뒤 같은 URL 때문에 다시 열리지 않도록
+    // 1회 처리용 query만 제거한다. workspaceId/mode는 유지한다.
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.delete("create");
+    params.delete("scheduleId");
+
+    const queryString = params.toString();
+
+    router.replace(
+      queryString ? `${pathname}?${queryString}` : pathname,
+    );
+  }, [
+    loading,
+    pathname,
+    router,
+    schedules,
+    searchParams,
+    workspaceId,
+    workspaceLoading,
+  ]);
 
   const closeCreateModal = () => {
     if (saving) return;
@@ -790,7 +839,7 @@ export default function DevlogManagementMock() {
 
       setSelectedDevlogId(mapped.id);
 
-      setIsDetailSidebarOpen(true);
+      setIsDetailModalOpen(true);
 
       await loadDevlogData();
 
@@ -811,6 +860,7 @@ export default function DevlogManagementMock() {
   const openEditModal = (
     devlog: DevlogItem,
   ) => {
+    setIsDetailModalOpen(false);
     setEditingDevlog(devlog);
 
     setFormTitle(devlog.title ?? "");
@@ -884,7 +934,7 @@ export default function DevlogManagementMock() {
 
       setSelectedDevlogId(mapped.id);
 
-      setIsDetailSidebarOpen(true);
+      setIsDetailModalOpen(true);
 
       await loadDevlogData();
 
@@ -913,6 +963,10 @@ export default function DevlogManagementMock() {
       setDeletingDevlogId(devlog.id);
 
       await deleteDevlogApi(devlog.id);
+
+      if (selectedDevlogId === devlog.id) {
+        setIsDetailModalOpen(false);
+      }
 
       setDevlogs((prev) => {
         const next = prev.filter(
@@ -1365,264 +1419,227 @@ export default function DevlogManagementMock() {
   };
 
   return (
-    <div className="waivs-page text-slate-900">
-      <div
-        className={[
-          "grid min-h-[calc(100dvh-72px)]",
-          isDetailSidebarResizing
-            ? "transition-none"
-            : "transition-[grid-template-columns] duration-300",
-        ].join(" ")}
-        style={{
-          gridTemplateColumns:
-            layoutGridTemplateColumns,
-        }}
-      >
+    <div className="waivs-page min-h-[calc(100dvh-72px)] bg-[#F7F8FA] p-4 text-slate-900 md:p-5">
+      <div className="mx-auto flex max-w-[1880px] items-start gap-4">
+        {/* =================================================
+            PROJECT SIDEBAR
+            Dashboard / 일정관리와 동일한 구조
+           ================================================= */}
         <DevlogProjectSidebar
-          isOpen={isProjectSidebarOpen}
-          panelMode={sidebarPanelMode}
+          expanded={sidebarExpanded}
+          pinned={isSidebarPinned}
+          canHoverExpand={canSidebarHoverExpand}
+          isPageScrolled={isPageScrolled}
           workspaces={workspaces}
           selectedWorkspaceId={workspaceId}
-          workspaceLoading={workspaceLoading}
-          workspaceErrorMessage={
-            workspaceErrorMessage
-          }
-          noDevlogSchedules={
-            noDevlogSchedules
-          }
-          onToggleOpen={() =>
-            setIsProjectSidebarOpen(
-              (prev) => !prev,
-            )
-          }
-          onChangePanelMode={(mode) => {
-            setSidebarPanelMode(mode);
-
-            setIsProjectSidebarOpen(true);
-          }}
-          onSelectWorkspace={
-            handleSelectWorkspace
-          }
-          onCreateWithSchedule={
-            openCreateModalWithSchedule
-          }
+          loading={workspaceLoading}
+          errorMessage={workspaceErrorMessage}
+          search={projectSearch}
+          filter={projectFilter}
+          searchInputRef={projectSearchInputRef}
+          onSearch={setProjectSearch}
+          onFilter={setProjectFilter}
+          onHover={setIsSidebarHovered}
+          onCanHoverExpand={setCanSidebarHoverExpand}
+          onToggle={handleToggleSidebar}
+          onOpenSearch={openSidebarForSearch}
+          onOpenProjects={openSidebarForProjects}
+          onSelectWorkspace={handleSelectWorkspace}
+          onAllProjects={() => router.push("/main")}
         />
 
-        <main className="flex min-h-[calc(100dvh-72px)] min-w-0 flex-col gap-5 bg-transparent p-5">
+        {/* =================================================
+            MAIN DEVLOG AREA
+           ================================================= */}
+        <main className="flex min-h-[calc(100dvh-104px)] min-w-0 flex-1 flex-col gap-4">
           {/* =========================
               개발일지 상단 요약
              ========================= */}
-          <section className="waivs-panel shrink-0 p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-[#5873F9]">
-                  Devlog
-                </p>
+          <section className="waivs-panel shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="px-5 py-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#5873F9]">
+                      Devlog
+                    </p>
 
-                <h1 className="mt-1 line-clamp-2 break-keep text-xl font-black leading-snug text-slate-950 xl:text-2xl">
-                  {workspaceName}
-                </h1>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                        currentWorkspaceMode === "team"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-blue-50 text-blue-700"
+                      }`}
+                    >
+                      {currentWorkspaceMode === "team" ? "TEAM" : "PERSONAL"}
+                    </span>
 
-                <p className="mt-1 max-w-[720px] text-sm leading-6 text-slate-500">
-                  일정에 연결된 일지는 작업
-                  진행 근거로, 일반 일지는 회고와
-                  오류 해결 기록으로 관리합니다.
-                </p>
-              </div>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">
+                      {currentWorkspaceRole}
+                    </span>
+                  </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
-                <button
-                  type="button"
-                  onClick={
-                    handlePrintDevlogsPdf
-                  }
-                  className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#5873F9]/20 bg-white px-5 text-sm font-semibold text-[#5873F9] transition hover:bg-[#5873F9]/5"
-                >
-                  <Download size={17} />
+                  <div className="mt-1 flex min-w-0 items-end gap-3">
+                    <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
+                      {workspaceName}
+                    </h1>
 
-                  PDF 저장
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openCreateModal}
-                  className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-5 text-sm font-semibold text-white transition hover:bg-[#4863E8]"
-                >
-                  <Plus size={17} />
-
-                  새 개발일지 작성
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 text-sm font-bold text-slate-500">
-                  <span>
-                    전체{" "}
-                    <strong className="text-slate-950">
-                      {totalDevlogs}개
-                    </strong>
-                  </span>
-
-                  <span className="text-slate-300">
-                    ·
-                  </span>
-
-                  <span>
-                    일정 연결{" "}
-                    <strong className="text-slate-950">
-                      {linkedDevlogs}개
-                    </strong>
-                  </span>
-
-                  <span className="text-slate-300">
-                    ·
-                  </span>
-
-                  <span>
-                    일반{" "}
-                    <strong className="text-slate-950">
-                      {generalDevlogs}개
-                    </strong>
-                  </span>
-
-                  <span className="text-slate-300">
-                    ·
-                  </span>
-
-                  <span>
-                    {currentWeekRange.label}{" "}
-                    <strong className="text-slate-950">
-                      {weeklyDevlogs}개
-                    </strong>
-                  </span>
+                    <span className="hidden pb-0.5 text-xs font-semibold text-slate-400 sm:inline">
+                      개발일지 관리
+                    </span>
+                  </div>
                 </div>
 
-                <span className="w-fit rounded-full bg-slate-100 px-3 py-2 text-[10px] font-black text-slate-600">
-                  완료 처리{" "}
-                  {doneLinkedSchedules}개
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintDevlogsPdf}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#D9E1FF] bg-white px-4 text-xs font-black text-[#5873F9] transition hover:bg-[#F7F9FF]"
+                  >
+                    <Download size={15} />
+                    PDF 저장
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={openCreateModal}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8]"
+                  >
+                    <Plus size={15} />
+                    새 개발일지
+                  </button>
+                </div>
+              </div>
+
+              {/* compact stats */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
+                <DevlogMetric label="전체" value={totalDevlogs} />
+                <DevlogMetric label="일정 연결" value={linkedDevlogs} active />
+                <DevlogMetric label="일반" value={generalDevlogs} />
+                <DevlogMetric label="이번 주" value={weeklyDevlogs} />
+                <DevlogMetric label="완료 처리" value={doneLinkedSchedules} />
+
+                <span className="ml-auto text-[10px] font-bold text-slate-400">
+                  {currentWeekRange.label}
                 </span>
               </div>
             </div>
           </section>
 
           {/* =========================
-              개발일지 목록
+              개발일지 목록 + 사이드 기능 통합
              ========================= */}
-          <section className="waivs-panel flex min-h-[520px] flex-1 flex-col p-5">
-            <div className="shrink-0">
-              <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h2 className="text-xl font-bold">
-                    개발일지 목록
-                  </h2>
+          <section className="waivs-panel flex min-h-[560px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {/* toolbar */}
+            <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNoDevlogPanel((prev) => !prev)}
+                    className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[11px] font-black transition ${
+                      showNoDevlogPanel
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
+                    <FilePenLine size={13} />
+                    일지 미작성 {noDevlogSchedules.length}
+                  </button>
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    일정 연결 여부와 진행 상태
-                    기준으로 일지를 확인합니다.
-                  </p>
+                  <div className="hidden h-5 w-px bg-slate-200 sm:block" />
+
+                  <DevlogFilterButton
+                    active={filter === "all"}
+                    label="전체"
+                    onClick={() => setFilter("all")}
+                  />
+
+                  <DevlogFilterButton
+                    active={filter === "linked"}
+                    label="일정 연결"
+                    onClick={() => setFilter("linked")}
+                  />
+
+                  <DevlogFilterButton
+                    active={filter === "general"}
+                    label="일반 일지"
+                    onClick={() => setFilter("general")}
+                  />
+
+                  <DevlogFilterButton
+                    active={filter === "progress"}
+                    label="진행 중"
+                    onClick={() => setFilter("progress")}
+                  />
+
+                  <DevlogFilterButton
+                    active={filter === "done"}
+                    label="완료"
+                    onClick={() => setFilter("done")}
+                  />
                 </div>
 
-                <div className="relative w-full xl:w-[420px]">
+                <div className="relative w-full xl:w-[320px]">
                   <Search
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
 
                   <input
                     value={query}
-                    onChange={(event) =>
-                      setQuery(
-                        event.target.value,
-                      )
-                    }
+                    onChange={(event) => setQuery(event.target.value)}
                     placeholder="제목, 내용, 태그, 연결 일정 검색"
-                    className="h-12 w-full rounded-xl border border-[var(--waivs-border)] bg-white pl-11 pr-4 text-sm outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-semibold outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
                   />
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                <DevlogFilterButton
-                  active={filter === "all"}
-                  label="전체"
-                  onClick={() =>
-                    setFilter("all")
-                  }
-                />
-
-                <DevlogFilterButton
-                  active={filter === "linked"}
-                  label="일정 연결"
-                  onClick={() =>
-                    setFilter("linked")
-                  }
-                />
-
-                <DevlogFilterButton
-                  active={
-                    filter === "general"
-                  }
-                  label="일반 일지"
-                  onClick={() =>
-                    setFilter("general")
-                  }
-                />
-
-                <DevlogFilterButton
-                  active={
-                    filter === "progress"
-                  }
-                  label="진행 중"
-                  onClick={() =>
-                    setFilter("progress")
-                  }
-                />
-
-                <DevlogFilterButton
-                  active={filter === "done"}
-                  label="완료"
-                  onClick={() =>
-                    setFilter("done")
-                  }
-                />
-              </div>
             </div>
 
-            <DataState
-              loading={loading}
-              errorMessage={errorMessage}
-            >
-              <div className="mt-6">
-                <DevlogListPanel
-                  filteredDevlogs={
-                    filteredDevlogs
-                  }
-                  selectedDevlog={
-                    selectedDevlog
-                  }
-                  onSelectDevlog={
-                    handleSelectDevlog
-                  }
-                />
+            {/* 기존 왼쪽 사이드바의 '일지 미작성 일정' 기능을 메인으로 이동 */}
+            {showNoDevlogPanel && (
+              <NoDevlogMainPanel
+                schedules={noDevlogSchedules}
+                onCreateWithSchedule={openCreateModalWithSchedule}
+                onClose={() => setShowNoDevlogPanel(false)}
+              />
+            )}
+
+            {/* list header */}
+            <div className="flex items-center justify-between px-5 pt-4">
+              <div>
+                <h2 className="text-base font-black text-slate-900">
+                  개발일지 목록
+                </h2>
+                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                  일정 연결 여부와 진행 상태 기준으로 기록을 확인합니다.
+                </p>
               </div>
-            </DataState>
+
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+                {filteredDevlogs.length}개
+              </span>
+            </div>
+
+            <div className="min-h-0 flex-1 px-5 pb-5">
+              <DataState loading={loading} errorMessage={errorMessage}>
+                <div className="mt-4">
+                  <DevlogListPanel
+                    filteredDevlogs={filteredDevlogs}
+                    selectedDevlog={selectedDevlog}
+                    onSelectDevlog={handleSelectDevlog}
+                  />
+                </div>
+              </DataState>
+            </div>
           </section>
         </main>
 
-        {shouldShowDetailSidebar && (
-          <DevlogDetailAside
+        {isDetailModalOpen && selectedDevlog && (
+          <DevlogDetailModal
             selectedDevlog={selectedDevlog}
-            deletingDevlogId={
-              deletingDevlogId
-            }
-            onResizeStart={
-              handleDetailSidebarResizeStart
-            }
-            onClose={() =>
-              setIsDetailSidebarOpen(false)
-            }
+            deletingDevlogId={deletingDevlogId}
+            onClose={() => setIsDetailModalOpen(false)}
             onEdit={openEditModal}
             onDelete={deleteDevlog}
           />
@@ -1631,692 +1648,544 @@ export default function DevlogManagementMock() {
 
       {isCreateModalOpen && (
         <CreateDevlogModal
-          selectedProjectName={
-            workspaceName
-          }
+          selectedProjectName={workspaceName}
           visibleSchedules={schedules}
           formTitle={formTitle}
           formContent={formContent}
           formDate={formDate}
           formScheduleId={formScheduleId}
-          formStatusChange={
-            formStatusChange
-          }
+          formStatusChange={formStatusChange}
           saving={saving}
           onChangeTitle={setFormTitle}
-          onChangeContent={
-            setFormContent
-          }
+          onChangeContent={setFormContent}
           onChangeDate={setFormDate}
-          onChangeScheduleId={
-            setFormScheduleId
-          }
-          onChangeStatus={
-            setFormStatusChange
-          }
+          onChangeScheduleId={setFormScheduleId}
+          onChangeStatus={setFormStatusChange}
           onClose={closeCreateModal}
           onSubmit={createDevlog}
         />
       )}
 
-      {isEditModalOpen &&
-        editingDevlog && (
-          <CreateDevlogModal
-            selectedProjectName={
-              workspaceName
-            }
-            visibleSchedules={schedules}
-            formTitle={formTitle}
-            formContent={formContent}
-            formDate={formDate}
-            formScheduleId={
-              formScheduleId
-            }
-            formStatusChange={
-              formStatusChange
-            }
-            saving={saving}
-            onChangeTitle={
-              setFormTitle
-            }
-            onChangeContent={
-              setFormContent
-            }
-            onChangeDate={setFormDate}
-            onChangeScheduleId={
-              setFormScheduleId
-            }
-            onChangeStatus={
-              setFormStatusChange
-            }
-            onClose={closeEditModal}
-            onSubmit={updateDevlog}
-          />
-        )}
+      {isEditModalOpen && editingDevlog && (
+        <CreateDevlogModal
+         mode="edit"
+          selectedProjectName={workspaceName}
+          visibleSchedules={schedules}
+          formTitle={formTitle}
+          formContent={formContent}
+          formDate={formDate}
+          formScheduleId={formScheduleId}
+          formStatusChange={formStatusChange}
+          saving={saving}
+          onChangeTitle={setFormTitle}
+          onChangeContent={setFormContent}
+          onChangeDate={setFormDate}
+          onChangeScheduleId={setFormScheduleId}
+          onChangeStatus={setFormStatusChange}
+          onClose={closeEditModal}
+          onSubmit={updateDevlog}
+        />
+      )}
     </div>
   );
 }
 
 /* =========================================================
-   왼쪽 개발일지 사이드바
+   PROJECT SIDEBAR
+   - Dashboard / 일정관리와 동일
+   - 개발일지 전용 기능은 메인 화면으로 이동
    ========================================================= */
 
 function DevlogProjectSidebar({
-  isOpen,
-  panelMode,
-  workspaces,
-  selectedWorkspaceId,
-  workspaceLoading,
-  workspaceErrorMessage,
-  noDevlogSchedules,
-  onToggleOpen,
-  onChangePanelMode,
-  onSelectWorkspace,
-  onCreateWithSchedule,
-}: {
-  isOpen: boolean;
-  panelMode: SidebarPanelMode;
-  workspaces: WorkspaceSidebarItem[];
-  selectedWorkspaceId: string;
-  workspaceLoading: boolean;
-  workspaceErrorMessage: string;
-  noDevlogSchedules: ScheduleOption[];
-  onToggleOpen: () => void;
-  onChangePanelMode: (
-    mode: SidebarPanelMode,
-  ) => void;
-  onSelectWorkspace: (
-    workspace: WorkspaceSidebarItem,
-  ) => void;
-  onCreateWithSchedule: (
-    scheduleId: string,
-  ) => void;
-}) {
-  /* =========================
-     접힌 상태
-     일정관리와 동일한 sticky 방식
-     ========================= */
-  if (!isOpen) {
-    return (
-      <aside className="sticky top-5 h-[calc(100dvh-112px)] self-start pt-5 pl-5">
-        <div className="waivs-sidebar flex h-full w-[60px] flex-col items-center gap-3 overflow-hidden py-4">
-          <button
-            type="button"
-            onClick={onToggleOpen}
-            className="grid h-9 w-9 place-items-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-            title="프로젝트 사이드바 펼치기"
-            aria-label="프로젝트 사이드바 펼치기"
-          >
-            <PanelLeftOpen
-              size={17}
-              strokeWidth={2.4}
-            />
-          </button>
-
-          <div className="h-px w-7 bg-[var(--waivs-border)]" />
-
-          <CollapsedSidebarButton
-            active={
-              panelMode === "projects"
-            }
-            icon={
-              <FolderOpen size={17} />
-            }
-            title="프로젝트 목록"
-            onClick={() =>
-              onChangePanelMode(
-                "projects",
-              )
-            }
-          />
-
-          <CollapsedSidebarButton
-            active={
-              panelMode === "devlog"
-            }
-            icon={
-              <FilePenLine size={17} />
-            }
-            title="일지 미작성 일정"
-            count={
-              noDevlogSchedules.length
-            }
-            onClick={() =>
-              onChangePanelMode(
-                "devlog",
-              )
-            }
-          />
-        </div>
-      </aside>
-    );
-  }
-
-  /* =========================
-     펼쳐진 상태
-     ========================= */
-  return (
-   <aside className="sticky top-5 h-[calc(100dvh-112px)] self-start pt-5 pl-5">
-      <div className="waivs-sidebar flex h-full w-full overflow-hidden">
-        {/* 기능 아이콘 Rail */}
-        <div className="flex w-[52px] shrink-0 flex-col items-center gap-3 border-r border-[var(--waivs-border-soft)] bg-white py-4">
-          {/*
-            프로젝트 패널의 상단 헤더와
-            기능 아이콘 시작 위치를 맞추기 위한 공간
-          */}
-          <div className="h-9 w-9 shrink-0" />
-
-          <div className="h-px w-7 bg-[var(--waivs-border)]" />
-
-          <CollapsedSidebarButton
-            active={
-              panelMode === "projects"
-            }
-            icon={
-              <FolderOpen size={17} />
-            }
-            title="프로젝트 목록"
-            onClick={() =>
-              onChangePanelMode(
-                "projects",
-              )
-            }
-          />
-
-          <CollapsedSidebarButton
-            active={
-              panelMode === "devlog"
-            }
-            icon={
-              <FilePenLine size={17} />
-            }
-            title="일지 미작성 일정"
-            count={
-              noDevlogSchedules.length
-            }
-            onClick={() =>
-              onChangePanelMode(
-                "devlog",
-              )
-            }
-          />
-        </div>
-
-        {/* 오른쪽 내용 */}
-        <div className="min-w-0 flex-1 bg-white">
-          {panelMode ===
-            "projects" && (
-            <MainStyleProjectListPanel
-              workspaces={workspaces}
-              selectedWorkspaceId={
-                selectedWorkspaceId
-              }
-              loading={
-                workspaceLoading
-              }
-              errorMessage={
-                workspaceErrorMessage
-              }
-              onSelectWorkspace={
-                onSelectWorkspace
-              }
-              onClose={onToggleOpen}
-            />
-          )}
-
-          {panelMode === "devlog" && (
-            <NoDevlogSchedulePanel
-              schedules={
-                noDevlogSchedules
-              }
-              onCreateWithSchedule={
-                onCreateWithSchedule
-              }
-            />
-          )}
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function CollapsedSidebarButton({
-  active,
-  icon,
-  title,
-  count,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  title: string;
-  count?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`relative grid h-9 w-9 place-items-center rounded-xl transition ${
-        active
-          ? "bg-[#EEF3FF] text-[#5873F9]"
-          : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-      }`}
-    >
-      {icon}
-
-      {typeof count === "number" &&
-        count > 0 && (
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#5873F9] px-1 text-[10px] font-black text-white">
-            {count > 9 ? "9+" : count}
-          </span>
-        )}
-    </button>
-  );
-}
-
-function MainStyleProjectListPanel({
+  expanded,
+  pinned,
+  canHoverExpand,
+  isPageScrolled,
   workspaces,
   selectedWorkspaceId,
   loading,
   errorMessage,
+  search,
+  filter,
+  searchInputRef,
+  onSearch,
+  onFilter,
+  onHover,
+  onCanHoverExpand,
+  onToggle,
+  onOpenSearch,
+  onOpenProjects,
   onSelectWorkspace,
-  onClose,
+  onAllProjects,
 }: {
+  expanded: boolean;
+  pinned: boolean;
+  canHoverExpand: boolean;
+  isPageScrolled: boolean;
   workspaces: WorkspaceSidebarItem[];
   selectedWorkspaceId: string;
   loading: boolean;
   errorMessage: string;
-  onSelectWorkspace: (
-    workspace: WorkspaceSidebarItem,
-  ) => void;
-  onClose: () => void;
+  search: string;
+  filter: ProjectFilter;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  onSearch: (value: string) => void;
+  onFilter: (value: ProjectFilter) => void;
+  onHover: (value: boolean) => void;
+  onCanHoverExpand: (value: boolean) => void;
+  onToggle: () => void;
+  onOpenSearch: () => void;
+  onOpenProjects: () => void;
+  onSelectWorkspace: (workspace: WorkspaceSidebarItem) => void;
+  onAllProjects: () => void;
 }) {
-  const [
-    projectQuery,
-    setProjectQuery,
-  ] = useState("");
+  const personalCount = workspaces.filter(
+    (workspace) => workspace.mode === "personal",
+  ).length;
 
-  const [filter, setFilter] =
-    useState<ProjectFilter>("all");
+  const teamCount = workspaces.filter(
+    (workspace) => workspace.mode === "team",
+  ).length;
 
-  const totalCount = workspaces.length;
+  const filteredWorkspaces = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
 
-  const personalCount =
-    workspaces.filter(
-      (workspace) =>
-        workspace.mode === "personal",
-    ).length;
+    return workspaces.filter((workspace) => {
+      const matchesMode = filter === "all" || workspace.mode === filter;
+      const matchesKeyword =
+        !keyword || workspace.name.toLowerCase().includes(keyword);
 
-  const teamCount =
-    workspaces.filter(
-      (workspace) =>
-        workspace.mode === "team",
-    ).length;
+      return matchesMode && matchesKeyword;
+    });
+  }, [filter, search, workspaces]);
 
-  const filteredWorkspaces =
-    useMemo(() => {
-      const keyword = projectQuery
-        .trim()
-        .toLowerCase();
+  const personalWorkspaces = filteredWorkspaces.filter(
+    (workspace) => workspace.mode === "personal",
+  );
 
-      return workspaces.filter(
-        (workspace) => {
-          const matchFilter =
-            filter === "all" ||
-            workspace.mode === filter;
-
-          const matchKeyword =
-            !keyword ||
-            workspace.name
-              .toLowerCase()
-              .includes(keyword) ||
-            workspace.mode
-              .toLowerCase()
-              .includes(keyword) ||
-            workspace.role
-              ?.toLowerCase()
-              .includes(keyword);
-
-          return (
-            matchFilter &&
-            matchKeyword
-          );
-        },
-      );
-    }, [
-      workspaces,
-      projectQuery,
-      filter,
-    ]);
+  const teamWorkspaces = filteredWorkspaces.filter(
+    (workspace) => workspace.mode === "team",
+  );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-[var(--waivs-border-soft)] p-4">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-black text-slate-950">
-              프로젝트
-            </h2>
+    <aside
+      onMouseEnter={() => {
+        if (!pinned && canHoverExpand) {
+          onHover(true);
+        }
+      }}
+      onMouseLeave={() => {
+        onHover(false);
+        onCanHoverExpand(true);
+      }}
+      className={`waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col ${
+        isPageScrolled ? "top-[88px]" : "top-4"
+      } ${expanded ? "w-[288px]" : "w-16"}`}
+    >
+      {/* header */}
+      <div
+        className={
+          expanded
+            ? "border-b border-slate-100 p-3"
+            : "flex h-[64px] items-center justify-center border-b border-slate-100 p-0"
+        }
+      >
+        <div
+          className={`flex items-center ${
+            expanded ? "justify-between gap-2" : "justify-center"
+          }`}
+        >
+          {expanded && (
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
+                  <FolderOpen size={16} strokeWidth={2.4} />
+                </div>
 
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              전체 {totalCount}개 · 개인{" "}
-              {personalCount}개 · 팀{" "}
-              {teamCount}개
-            </p>
-          </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">프로젝트</p>
+                  <p className="text-[10px] font-semibold text-slate-400">
+                    전체 {workspaces.length} · 개인 {personalCount} · 팀 {teamCount}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* 일정관리와 동일한 접기 아이콘 */}
           <button
             type="button"
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-            title="프로젝트 사이드바 접기"
-            aria-label="프로젝트 사이드바 접기"
+            onClick={onToggle}
+            className={`grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 ${
+              expanded ? "h-8 w-8" : "h-9 w-9"
+            }`}
+            title={pinned ? "사이드바 접기" : "사이드바 펼치기"}
           >
-            <PanelLeftClose
-              size={17}
-              strokeWidth={2.4}
-            />
+            {expanded ? (
+              <PanelLeftClose size={17} />
+            ) : (
+              <PanelLeftOpen size={18} />
+            )}
           </button>
         </div>
 
-        {/* 프로젝트 검색 */}
-        <div className="relative">
-          <Search
-            size={17}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-
-          <input
-            value={projectQuery}
-            onChange={(event) =>
-              setProjectQuery(
-                event.target.value,
-              )
-            }
-            placeholder="프로젝트 검색"
-            className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white pl-10 pr-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-          />
-        </div>
-
-        {/* 프로젝트 필터 */}
-        <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1">
-          <ProjectFilterButton
-            active={filter === "all"}
-            label="전체"
-            onClick={() =>
-              setFilter("all")
-            }
-          />
-
-          <ProjectFilterButton
-            active={
-              filter === "personal"
-            }
-            label="개인"
-            onClick={() =>
-              setFilter("personal")
-            }
-          />
-
-          <ProjectFilterButton
-            active={filter === "team"}
-            label="팀"
-            onClick={() =>
-              setFilter("team")
-            }
-          />
-        </div>
-      </div>
-
-      {/* 프로젝트 목록 */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {loading ? (
-          <div className="grid h-40 place-items-center text-sm font-bold text-slate-400">
-            <div className="flex items-center gap-2">
-              <Loader2
-                size={16}
-                className="animate-spin"
+        {expanded && (
+          <>
+            <div className="relative mt-3">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
-              프로젝트 불러오는 중
+              <input
+                ref={searchInputRef}
+                value={search}
+                onChange={(event) => onSearch(event.target.value)}
+                placeholder="프로젝트 검색"
+                className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+              />
             </div>
+
+            <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+              {(
+                [
+                  ["all", "전체"],
+                  ["personal", "개인"],
+                  ["team", "팀"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onFilter(value)}
+                  className={`rounded-lg px-2 py-1.5 text-[11px] font-black transition ${
+                    filter === value
+                      ? "bg-white text-[#5873F9] shadow-sm"
+                      : "text-slate-400 hover:text-slate-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* body */}
+      <div
+        className={`min-h-0 flex-1 ${
+          expanded ? "overflow-y-auto p-3" : "overflow-hidden"
+        }`}
+      >
+        {loading ? (
+          <div className="grid h-32 place-items-center">
+            <Loader2 size={18} className="animate-spin text-[#5873F9]" />
           </div>
         ) : errorMessage ? (
-          <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-xs font-bold leading-5 text-rose-700">
-            {errorMessage}
-          </div>
-        ) : filteredWorkspaces.length ===
-          0 ? (
-          <DevlogEmptyBox text="조건에 맞는 프로젝트가 없습니다." />
-        ) : (
-          <div className="flex flex-col gap-1">
-            {filteredWorkspaces.map(
-              (workspace) => {
-                const selected =
-                  workspace.id ===
-                  selectedWorkspaceId;
-
-                return (
-                  <button
-                    key={workspace.id}
-                    type="button"
-                    onClick={() =>
-                      onSelectWorkspace(
-                        workspace,
-                      )
-                    }
-                    className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${
-                      selected
-                        ? "bg-[#5873F9] text-white shadow-sm"
-                        : "text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span
-                      className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                        selected
-                          ? "bg-white/15 text-white"
-                          : workspace.mode ===
-                              "team"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-blue-50 text-blue-700"
-                      }`}
-                    >
-                      {workspace.mode ===
-                      "team" ? (
-                        <UsersRound
-                          size={17}
-                        />
-                      ) : (
-                        <UserRound
-                          size={17}
-                        />
-                      )}
-                    </span>
-
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-black">
-                        {workspace.name}
-                      </span>
-
-                      <span
-                        className={`mt-1 block truncate text-xs font-medium ${
-                          selected
-                            ? "text-white/70"
-                            : "text-slate-400"
-                        }`}
-                      >
-                        {workspace.mode ===
-                        "team"
-                          ? "팀"
-                          : "개인"}{" "}
-                        · 작업 폴더{" "}
-                        {
-                          workspace.childCount
-                        }
-                        개
-                      </span>
-                    </span>
-                  </button>
-                );
-              },
+          expanded ? (
+            <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-600">
+              {errorMessage}
+            </div>
+          ) : null
+        ) : expanded ? (
+          <div className="space-y-5">
+            {filter !== "team" && (
+              <WorkspaceSection
+                title="개인 프로젝트"
+                mode="personal"
+                items={personalWorkspaces}
+                selectedWorkspaceId={selectedWorkspaceId}
+                onSelect={onSelectWorkspace}
+              />
             )}
+
+            {filter !== "personal" && (
+              <WorkspaceSection
+                title="팀 프로젝트"
+                mode="team"
+                items={teamWorkspaces}
+                selectedWorkspaceId={selectedWorkspaceId}
+                onSelect={onSelectWorkspace}
+              />
+            )}
+          </div>
+        ) : (
+          /* Dashboard와 동일한 접힌 상태 */
+          <div className="flex h-full flex-col items-center pt-4">
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+              title="프로젝트 검색"
+            >
+              <Search size={19} strokeWidth={2} />
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenProjects}
+              className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+              title="프로젝트 목록"
+            >
+              <FolderOpen size={19} strokeWidth={2} />
+            </button>
+
+            <div className="my-3 h-px w-8 bg-slate-100" />
+
+            <div
+              className="flex h-8 w-8 items-center justify-center text-xs font-black text-slate-300"
+              title={`전체 프로젝트 ${workspaces.length}개`}
+            >
+              {workspaces.length}
+            </div>
           </div>
         )}
       </div>
-    </div>
+
+      {expanded && (
+        <div className="border-t border-slate-100 p-3">
+          <button
+            type="button"
+            onClick={onAllProjects}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
+          >
+            전체 프로젝트
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+    </aside>
   );
 }
 
-function ProjectFilterButton({
-  active,
-  label,
+function WorkspaceSection({
+  title,
+  mode,
+  items,
+  selectedWorkspaceId,
+  onSelect,
+}: {
+  title: string;
+  mode: WorkspaceMode;
+  items: WorkspaceSidebarItem[];
+  selectedWorkspaceId: string;
+  onSelect: (workspace: WorkspaceSidebarItem) => void;
+}) {
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between px-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
+          {mode === "team" ? (
+            <UsersRound size={13} />
+          ) : (
+            <UserRound size={13} />
+          )}
+          {title}
+        </div>
+
+        <span className="text-[10px] font-black text-slate-400">
+          {items.length}
+        </span>
+      </div>
+
+      <div className="space-y-1">
+        {items.length === 0 ? (
+          <p className="px-2 py-2 text-[11px] font-medium text-slate-400">
+            프로젝트가 없습니다.
+          </p>
+        ) : (
+          items.map((workspace) => (
+            <WorkspaceButton
+              key={workspace.id}
+              workspace={workspace}
+              selected={workspace.id === selectedWorkspaceId}
+              onClick={() => onSelect(workspace)}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceButton({
+  workspace,
+  selected,
   onClick,
 }: {
-  active: boolean;
-  label: string;
+  workspace: WorkspaceSidebarItem;
+  selected: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`h-8 rounded-lg text-xs font-black transition ${
-        active
-          ? "bg-white text-slate-950 shadow-sm"
-          : "text-slate-500 hover:text-slate-900"
+      className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition ${
+        selected
+          ? "bg-[#5873F9] text-white shadow-sm"
+          : "text-slate-700 hover:bg-slate-100"
       }`}
     >
-      {label}
+      <div
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+          selected
+            ? "bg-white/15 text-white"
+            : workspace.mode === "team"
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-blue-50 text-blue-700"
+        }`}
+      >
+        {workspace.mode === "team" ? (
+          <UsersRound size={15} />
+        ) : (
+          <UserRound size={15} />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-black">{workspace.name}</p>
+        <p
+          className={`mt-0.5 truncate text-[10px] font-semibold ${
+            selected ? "text-white/70" : "text-slate-400"
+          }`}
+        >
+          {workspace.mode === "team" ? "팀 프로젝트" : "개인 프로젝트"}
+          {workspace.role ? ` · ${workspace.role.toUpperCase()}` : ""}
+        </p>
+      </div>
     </button>
   );
 }
 
-function NoDevlogSchedulePanel({
-  schedules,
-  onCreateWithSchedule,
+function DevlogMetric({
+  label,
+  value,
+  active,
 }: {
-  schedules: ScheduleOption[];
-  onCreateWithSchedule: (
-    scheduleId: string,
-  ) => void;
+  label: string;
+  value: number;
+  active?: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-[var(--waivs-border-soft)] p-4">
-        <p className="text-[11px] font-black uppercase tracking-wide text-[#5873F9]">
-          DEVLOG
-        </p>
-
-        <h2 className="mt-1 text-sm font-black text-slate-950">
-          일지 미작성 일정
-        </h2>
-
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          아직 개발일지가 연결되지 않은
-          일정입니다.
-        </p>
-
-        <div className="mt-3 rounded-xl border border-[var(--waivs-border)] bg-slate-50 p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-slate-500">
-              미작성 일정
-            </p>
-
-            <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-slate-600">
-              {schedules.length}개
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3">
-        {schedules.length === 0 ? (
-          <DevlogEmptyBox text="모든 일정에 개발일지가 작성되었습니다." />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {schedules.map(
-              (schedule) => (
-                <div
-                  key={schedule.id}
-                  className="rounded-xl border border-[var(--waivs-border)] bg-white p-3 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm font-black leading-5 text-slate-900">
-                        {schedule.title}
-                      </p>
-
-                      <p className="mt-1 truncate text-xs text-slate-500">
-                        {
-                          schedule.projectName
-                        }
-                      </p>
-                    </div>
-
-                    <span
-                      className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold ${
-                        statusStyle[
-                          schedule.status
-                        ]
-                      }`}
-                    >
-                      {
-                        scheduleStatusLabel[
-                          schedule.status
-                        ]
-                      }
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onCreateWithSchedule(
-                        schedule.id,
-                      )
-                    }
-                    className="mt-3 flex h-8 w-full items-center justify-center gap-1 rounded-xl bg-[#EEF3FF] text-xs font-bold text-[#5873F9] transition hover:bg-[#E4EAFF]"
-                  >
-                    <FilePenLine
-                      size={14}
-                    />
-
-                    이 일정으로 일지 작성
-                  </button>
-                </div>
-              ),
-            )}
-          </div>
-        )}
-      </div>
+    <div className="flex items-center gap-1.5">
+      <span className="text-[11px] font-bold text-slate-400">{label}</span>
+      <span
+        className={`text-sm font-black ${
+          active ? "text-[#5873F9]" : "text-slate-800"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
 
-function DevlogDetailAside({
+/* =========================================================
+   기존 사이드바 기능 -> 메인 화면 패널
+   ========================================================= */
+
+function NoDevlogMainPanel({
+  schedules,
+  onCreateWithSchedule,
+  onClose,
+}: {
+  schedules: ScheduleOption[];
+  onCreateWithSchedule: (scheduleId: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="shrink-0 border-b border-slate-100 bg-[#FBFCFF] px-5 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-50 text-amber-600">
+              <FilePenLine size={15} />
+            </span>
+
+            <div>
+              <h3 className="text-sm font-black text-slate-900">
+                일지 미작성 일정
+              </h3>
+              <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                아직 수행 기록이 없는 일정에서 바로 개발일지를 작성할 수 있습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-white hover:text-slate-700"
+          aria-label="일지 미작성 일정 닫기"
+        >
+          <PanelLeftClose size={15} />
+        </button>
+      </div>
+
+      {schedules.length === 0 ? (
+        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
+          모든 일정에 개발일지가 연결되어 있습니다.
+        </div>
+      ) : (
+        <div className="mt-3 grid max-h-[260px] gap-2 overflow-y-auto pr-1 md:grid-cols-2 2xl:grid-cols-3">
+          {schedules.map((schedule) => (
+            <div
+              key={schedule.id}
+              className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-xs font-black text-slate-800">
+                    {schedule.title}
+                  </p>
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black ${statusStyle[schedule.status]}`}
+                  >
+                    {scheduleStatusLabel[schedule.status]}
+                  </span>
+                </div>
+
+                <p className="mt-1 truncate text-[10px] font-semibold text-slate-400">
+                  {schedule.startDate === schedule.endDate
+                    ? schedule.startDate
+                    : `${schedule.startDate} ~ ${schedule.endDate}`}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onCreateWithSchedule(schedule.id)}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[#EEF3FF] px-2.5 text-[10px] font-black text-[#5873F9] transition hover:bg-[#E4EAFF]"
+              >
+                <FilePenLine size={11} />
+                작성
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function DevlogDetailModal({
   selectedDevlog,
   deletingDevlogId,
-  onResizeStart,
   onClose,
   onEdit,
   onDelete,
 }: {
-  selectedDevlog: DevlogItem | null;
+  selectedDevlog: DevlogItem;
   deletingDevlogId: string;
-  onResizeStart: (
-    event: React.PointerEvent<HTMLDivElement>,
-  ) => void;
   onClose: () => void;
   onEdit: (devlog: DevlogItem) => void;
-  onDelete: (
-    devlog: DevlogItem,
-  ) => void;
+  onDelete: (devlog: DevlogItem) => void;
 }) {
-  if (!selectedDevlog) return null;
-
   const workedDate =
     selectedDevlog.workedDate ||
     selectedDevlog.date ||
@@ -2329,135 +2198,247 @@ function DevlogDetailAside({
     deletingDevlogId ===
     selectedDevlog.id;
 
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPaddingRight = body.style.paddingRight;
+
+    const scrollbarWidth =
+      window.innerWidth - html.clientWidth;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.paddingRight = previousBodyPaddingRight;
+    };
+  }, []);
+
   return (
-    <aside className="relative min-w-0 border-l border-slate-200 bg-white">
+    <>
       <div
-        role="separator"
-        aria-orientation="vertical"
-        title="사이드바 너비 조절"
-        onPointerDown={onResizeStart}
-        className="absolute left-0 top-0 z-30 h-full w-3 -translate-x-1/2 cursor-col-resize touch-none"
-      >
-        <div className="mx-auto h-full w-px bg-transparent transition hover:bg-blue-400" />
-      </div>
+        className="fixed inset-0 z-[8998] bg-slate-950/25 backdrop-blur-[2px]"
+        onMouseDown={onClose}
+      />
 
-      <div className="sticky top-[72px] flex h-[calc(100vh-72px)] flex-col overflow-hidden">
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-wide text-[#5873F9]">
-              Selected Devlog
-            </p>
-
-            <h2 className="truncate text-sm font-black text-slate-900">
-              개발일지 상세
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            title="상세 닫기"
-          >
-            <PanelRightClose
-              size={16}
-            />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-black text-[#5873F9]">
-              {selectedDevlog.projectName}
-            </p>
-
-            <h3 className="mt-3 break-keep text-lg font-black leading-snug text-slate-950">
-              {selectedDevlog.title ||
-                "제목 없는 개발일지"}
-            </h3>
-
-            <p className="mt-3 text-xs font-semibold text-slate-500">
-              작업한 날짜: {workedDate}
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-black ${
-                  isLinked
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {isLinked
-                  ? "일정 연결"
-                  : "일반 일지"}
-              </span>
-
-              {selectedDevlog.status && (
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-black ${
-                    statusStyle[
-                      selectedDevlog.status
-                    ]
-                  }`}
-                >
-                  {
-                    scheduleStatusLabel[
-                      selectedDevlog.status
-                    ]
-                  }
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 top-[72px] z-[8999] flex items-center justify-center overflow-hidden p-4">
+        <article
+          onMouseDown={(event) => event.stopPropagation()}
+          className="pointer-events-auto flex max-h-[calc(100dvh-104px)] w-full max-w-[760px] flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.2)]"
+        >
+          {/* header */}
+          <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-6 py-5">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5873F9]">
+                  Development Log
                 </span>
+
+                <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[9px] font-black text-[#5873F9]">
+                  DETAIL
+                </span>
+              </div>
+
+              <h2 className="mt-1 break-keep text-xl font-black leading-snug tracking-tight text-slate-950">
+                {selectedDevlog.title || "제목 없는 개발일지"}
+              </h2>
+
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                개발 기록의 연결 일정과 작성 내용을 확인합니다.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              aria-label="개발일지 상세 닫기"
+            >
+              <X size={17} />
+            </button>
+          </header>
+
+          {/* content */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="space-y-5 px-6 py-5">
+              <section className="overflow-hidden rounded-xl border border-slate-200">
+                <DevlogDetailMetaRow
+                  icon={<FolderOpen size={15} />}
+                  label="프로젝트"
+                >
+                  <span className="text-xs font-black text-slate-700">
+                    {selectedDevlog.projectName}
+                  </span>
+                </DevlogDetailMetaRow>
+
+                <DevlogDetailMetaRow
+                  icon={<CalendarDays size={15} />}
+                  label="작업일"
+                >
+                  <span className="text-xs font-bold text-slate-600">
+                    {workedDate}
+                  </span>
+                </DevlogDetailMetaRow>
+
+                <DevlogDetailMetaRow
+                  icon={<FilePenLine size={15} />}
+                  label="유형"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                        isLinked
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {isLinked ? "일정 연결" : "일반 일지"}
+                    </span>
+
+                    {selectedDevlog.status && (
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${
+                          statusStyle[selectedDevlog.status]
+                        }`}
+                      >
+                        {scheduleStatusLabel[selectedDevlog.status]}
+                      </span>
+                    )}
+                  </div>
+                </DevlogDetailMetaRow>
+
+                <DevlogDetailMetaRow
+                  icon={<Link2 size={15} />}
+                  label="연결 일정"
+                  last
+                >
+                  {selectedDevlog.scheduleTitle ? (
+                    <span className="inline-flex min-w-0 items-center rounded-lg bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9]">
+                      <span className="truncate">
+                        {selectedDevlog.scheduleTitle}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-400">
+                      연결된 일정이 없습니다.
+                    </span>
+                  )}
+                </DevlogDetailMetaRow>
+              </section>
+
+              <section>
+                <div className="mb-2">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    Work Log
+                  </p>
+                  <h3 className="mt-0.5 text-sm font-black text-slate-800">
+                    작성 내용
+                  </h3>
+                </div>
+
+                <div className="min-h-[220px] rounded-xl border border-slate-200 bg-[#FBFCFE] p-5">
+                  <p className="whitespace-pre-wrap break-words text-sm font-medium leading-7 text-slate-700">
+                    {selectedDevlog.content ||
+                      "작성된 내용이 없습니다."}
+                  </p>
+                </div>
+              </section>
+
+              {selectedDevlog.tags.length > 0 && (
+                <section>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    Tags
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDevlog.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </section>
               )}
             </div>
+          </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+          {/* footer */}
+          <footer className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-white px-6 py-4">
+            <p className="hidden text-[10px] font-semibold text-slate-400 sm:block">
+              목록으로 돌아가 다른 개발일지를 계속 확인할 수 있습니다.
+            </p>
+
+            <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  onEdit(selectedDevlog)
-                }
-                className="flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white text-xs font-black text-blue-700 hover:bg-blue-50"
-              >
-                <Pencil size={15} />
-
-                수정
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  onDelete(selectedDevlog)
-                }
+                onClick={() => onDelete(selectedDevlog)}
                 disabled={deleting}
-                className="flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-white text-xs font-black text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-white px-4 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {deleting ? (
-                  <Loader2
-                    size={15}
-                    className="animate-spin"
-                  />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
-                  <Trash2 size={15} />
+                  <Trash2 size={14} />
                 )}
-
                 삭제
               </button>
+
+              <button
+                type="button"
+                onClick={() => onEdit(selectedDevlog)}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8]"
+              >
+                <Pencil size={14} />
+                수정
+              </button>
             </div>
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="text-sm font-black text-slate-900">
-              작성 내용
-            </h3>
-
-            <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-7 text-slate-600">
-              {selectedDevlog.content ||
-                "작성된 내용이 없습니다."}
-            </p>
-          </section>
-        </div>
+          </footer>
+        </article>
       </div>
-    </aside>
+    </>
+  );
+}
+
+function DevlogDetailMetaRow({
+  icon,
+  label,
+  children,
+  last,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={`grid grid-cols-[100px_minmax(0,1fr)] gap-4 px-4 py-3 ${
+        last ? "" : "border-b border-slate-100"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-slate-400">
+        {icon}
+        <span className="text-[10px] font-black text-slate-500">
+          {label}
+        </span>
+      </div>
+
+      <div className="min-w-0 flex items-center">
+        {children}
+      </div>
+    </div>
   );
 }
 
