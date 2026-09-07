@@ -28,7 +28,6 @@ import "reactflow/dist/style.css";
 import { AlertTriangle, Check, Lock, RefreshCw } from "lucide-react";
 import type { Awareness } from "y-protocols/awareness";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 import type { DesignModel } from "../../model/schema";

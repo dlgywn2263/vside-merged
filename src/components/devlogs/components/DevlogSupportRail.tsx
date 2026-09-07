@@ -1,4 +1,4 @@
-import { FilePenLine, ListTodo, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 
 export function DevlogSupportRail({
   isPinned,

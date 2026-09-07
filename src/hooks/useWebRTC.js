@@ -1641,7 +1641,6 @@ export const useWebRTC = (arg1, arg2, arg3) => {
     remoteMutedUsers,
 
     selectedChannelId,
-    joinedChannelId: joinedChannelIdRef.current,
 
     isConnected,
     isVoiceJoined,

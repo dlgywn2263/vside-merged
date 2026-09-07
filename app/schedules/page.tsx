@@ -144,7 +144,6 @@ type ScheduleForm = {
    CONSTANT
    ========================================================= */
 
-const PRIMARY = "#5873F9";
 
 const STATUS_META: Record<
   ScheduleStatus,

@@ -1,4 +1,4 @@
-import { FileEdit, GitCommit, NotebookPen, CalendarCheck } from "lucide-react";
+import { GitCommit, NotebookPen, CalendarCheck } from "lucide-react";
 
 export function ActivityKpis() {
   /**

@@ -15,7 +15,6 @@ import {
   Github,
   Link2,
   PlayCircle,
-  PlusCircle,
   RefreshCw,
   Rocket,
   Search,

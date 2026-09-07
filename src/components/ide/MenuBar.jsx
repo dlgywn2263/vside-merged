@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { closeFile, openCodeMapTab, setWorkspaceTree } from "@/store/slices/fileSystemSlice";
 import {
@@ -73,7 +73,6 @@ const avatarColors = [
 ];
 
 export default function MenuBar({ mode = "personal" }) {
-  const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
   const { user } = useAuth();
@@ -96,7 +95,6 @@ export default function MenuBar({ mode = "personal" }) {
     isVoiceConnected,
     isRunning,
     isDebugMode,
-    isRightPanelVisible, 
   } = useSelector((state) => state.ui);
 
   const [activeMenu, setActiveMenu] = useState(null);
@@ -817,7 +815,7 @@ if (tree && tree.children) {
                 </div>
                 {activeMenu === menu.name && (
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-gray-200 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-lg py-1.5 z-[99999] animate-fade-in-up">
-                    {menu.items.map((item, idx) => (
+                    {menu.items.map((item) => (
                       <div
                         key={item.label}
                         onClick={() => handleMenuItemClick(menu.name, item.label)}

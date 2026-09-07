@@ -31,7 +31,7 @@ export default function CommentSection() {
       const newComment = await createComment(Number(id), content);
       setComments((prev) => [...prev, newComment]); // 작성 성공 시 즉시 목록에 추가
       setContent(""); // 입력창 초기화
-    } catch (error) {
+    } catch {
       alert("댓글 작성에 실패했습니다. 로그인을 확인해주세요.");
     } finally {
       setIsLoading(false);

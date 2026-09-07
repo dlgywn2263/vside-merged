@@ -25,7 +25,6 @@ import {
   Search,
   Settings,
   Trash2,
-  TrendingUp,
   UserRound,
   Users,
   UsersRound,

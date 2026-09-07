@@ -27,8 +27,6 @@ import {
   setWorkspaceTree,
   setWorkspaceId,
   setProjectList,
-  setVirtualTree,
-  clearVirtualTree,
   setActiveProject,
   setActiveBranch,
   closeAllFiles,

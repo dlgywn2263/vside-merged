@@ -478,26 +478,6 @@ export default function DevlogPanel() {
     );
   }, [workspaceDisplayName, workspaceNameFromState, logs]);
 
-  const linkedCount = useMemo(
-    () => logs.filter((log) => log.scheduleId).length,
-    [logs],
-  );
-
-  const generalCount = useMemo(
-    () => logs.filter((log) => !log.scheduleId).length,
-    [logs],
-  );
-
-  const progressCount = useMemo(
-    () => logs.filter((log) => log.status === "progress").length,
-    [logs],
-  );
-
-  const doneCount = useMemo(
-    () => logs.filter((log) => log.status === "done").length,
-    [logs],
-  );
-
   const filteredLogs = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
 

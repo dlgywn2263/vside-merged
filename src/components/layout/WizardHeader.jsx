@@ -1,7 +1,5 @@
 "use client";
 
-import { Bell } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
