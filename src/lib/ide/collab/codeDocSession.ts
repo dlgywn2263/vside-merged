@@ -44,6 +44,13 @@ export const TEXT_KEY = "monaco";
 
 export type CodeDocStatus = "loading" | "ready" | "error";
 
+/** y-protocols 의 awareness "change" 가 넘겨주는 것. 누가 들어오고 나갔는지. */
+interface AwarenessChanges {
+  added: number[];
+  updated: number[];
+  removed: number[];
+}
+
 export interface CodeDocSessionOptions {
   /** `{workspaceId}:{project}:{branch}:{file}` 형식의 방 이름. */
   room: string;
@@ -77,7 +84,8 @@ export class CodeDocSession {
   private forceTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly handleDocUpdate = () => this.markDirty();
-  private readonly handleAwarenessChange = () => this.onPeersChanged();
+  private readonly handleAwarenessChange = (changes: AwarenessChanges) =>
+    this.onPeersChanged(changes);
 
   /**
    * 탭을 숨기거나 닫을 때 마지막으로 한 번 저장한다.
@@ -243,8 +251,19 @@ export class CodeDocSession {
    *
    * 앞 담당자의 탭이 갑자기 죽었다면 마지막 저장 이후의 편집이 아직 아무
    * 데도 남아 있지 않을 수 있다.
+   *
+   * **사람이 들고 난 경우만 본다.** awareness 는 커서가 움직일 때마다
+   * 바뀐다. 우리가 커서 위치를 lockData 로 계속 올리기 때문인데, 그 변화까지
+   * 저장 신호로 받으면 글자를 한 자 칠 때마다 저장 요청이 나간다. 여기서
+   * 확인하려는 것은 "저장 담당이 바뀌었을 수 있다" 뿐이므로 added/removed
+   * 만 보고, 평소 저장은 markDirty 의 유휴 타이머에 맡긴다.
    */
-  private onPeersChanged(): void {
+  private onPeersChanged(changes?: AwarenessChanges): void {
+    const membershipChanged =
+      (changes?.added?.length ?? 0) > 0 || (changes?.removed?.length ?? 0) > 0;
+
+    if (!membershipChanged) return;
+
     if (this.destroyed || !this.dirty) return;
     if (this.isWriter()) void this.flush();
   }
