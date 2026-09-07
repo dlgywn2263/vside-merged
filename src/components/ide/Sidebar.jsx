@@ -424,6 +424,20 @@ export default function Sidebar() {
       );
     } catch (e) {
       console.error("파일 내용 로드 실패:", e);
+
+      // 조용히 넘기면 안 된다.
+      //
+      // 내용을 못 받아오면 빈 에디터가 열린 채로 남는데, 사용자에게는 그냥
+      // "빈 파일"로 보인다. 그 위에 새로 타이핑하면 원본을 덮어쓸 수 있다.
+      //
+      // 여기서 fileContents 를 빈 문자열로 채우지 않는 것도 같은 이유다.
+      // 채우면 협업 세션이 시작되고 자동 저장이 돌아, 디스크에 멀쩡히 있는
+      // 내용을 빈 것으로 덮어쓴다. 비워 두면 세션이 시작되지 않아 안전하다.
+      dispatch(
+        writeToTerminal(
+          `[Error] 파일을 불러오지 못했습니다: ${targetFilePath} — ${e.message}\n`,
+        ),
+      );
     }
   };
 
@@ -683,14 +697,22 @@ export default function Sidebar() {
           }),
         );
 
-        if (skeletonCode) {
-          dispatch(
-            updateFileContent({
-              filePath: path,
-              content: skeletonCode,
-            }),
-          );
+        // 내용을 반드시 등록한다. 템플릿이 없으면 빈 문자열이다.
+        //
+        // 협업 세션은 fileContents 에 값이 들어와야 시작된다. 예전에는
+        // 템플릿이 있을 때만 등록해서, 템플릿이 없는 확장자로 파일을 만들면
+        // 세션이 아예 시작되지 않았다. 그러면 타이핑해도 팀원에게 전파되지
+        // 않고 자동 저장도 돌지 않아, 팀원이 그 파일을 열면 빈 파일이 보였다.
+        //
+        // 새로 만든 파일은 실제로 비어 있으므로 빈 문자열이 정확한 값이다.
+        dispatch(
+          updateFileContent({
+            filePath: path,
+            content: skeletonCode || "",
+          }),
+        );
 
+        if (skeletonCode) {
           try {
             await saveFileApi(
               workspaceId,
