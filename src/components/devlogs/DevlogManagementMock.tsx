@@ -1450,13 +1450,14 @@ export default function DevlogManagementMock() {
 
         {/* =================================================
             MAIN DEVLOG AREA
+            일정관리와 동일하게 상단/하단을 하나의 카드로 통합
            ================================================= */}
-        <main className="flex min-h-[calc(100dvh-104px)] min-w-0 flex-1 flex-col gap-4">
-          {/* =========================
-              개발일지 상단 요약
-             ========================= */}
-          <section className="waivs-panel shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="px-5 py-4">
+        <main className="flex min-h-[calc(100dvh-104px)] min-w-0 flex-1 flex-col">
+          <section className="waivs-panel flex min-h-[calc(100dvh-104px)] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {/* =================================================
+                HEADER
+               ================================================= */}
+            <div className="shrink-0 px-5 py-4">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1511,7 +1512,7 @@ export default function DevlogManagementMock() {
                 </div>
               </div>
 
-              {/* compact stats */}
+              {/* 일정관리의 상단 통계 행과 동일한 흐름 */}
               <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
                 <DevlogMetric label="전체" value={totalDevlogs} />
                 <DevlogMetric label="일정 연결" value={linkedDevlogs} active />
@@ -1524,14 +1525,12 @@ export default function DevlogManagementMock() {
                 </span>
               </div>
             </div>
-          </section>
 
-          {/* =========================
-              개발일지 목록 + 사이드 기능 통합
-             ========================= */}
-          <section className="waivs-panel flex min-h-[560px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            {/* toolbar */}
-            <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+            {/* =================================================
+                TOOLBAR
+                별도 카드가 아니라 같은 카드 내부의 한 행
+               ================================================= */}
+            <div className="shrink-0 border-t border-slate-100 px-5 py-3">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -1596,7 +1595,7 @@ export default function DevlogManagementMock() {
               </div>
             </div>
 
-            {/* 기존 왼쪽 사이드바의 '일지 미작성 일정' 기능을 메인으로 이동 */}
+            {/* 기존 사이드바 기능인 '일지 미작성 일정'도 동일 카드 내부에 유지 */}
             {showNoDevlogPanel && (
               <NoDevlogMainPanel
                 schedules={noDevlogSchedules}
@@ -1605,32 +1604,37 @@ export default function DevlogManagementMock() {
               />
             )}
 
-            {/* list header */}
-            <div className="flex items-center justify-between px-5 pt-4">
-              <div>
-                <h2 className="text-base font-black text-slate-900">
-                  개발일지 목록
-                </h2>
-                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                  일정 연결 여부와 진행 상태 기준으로 기록을 확인합니다.
-                </p>
+            {/* =================================================
+                DEVLOG LIST
+               ================================================= */}
+            <div className="flex min-h-0 flex-1 flex-col border-t border-slate-100">
+              <div className="flex shrink-0 items-center justify-between px-5 pt-4">
+                <div>
+                  <h2 className="text-base font-black text-slate-900">
+                    개발일지 목록
+                  </h2>
+
+                  <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                    일정 연결 여부와 진행 상태 기준으로 기록을 확인합니다.
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+                  {filteredDevlogs.length}개
+                </span>
               </div>
 
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
-                {filteredDevlogs.length}개
-              </span>
-            </div>
-
-            <div className="min-h-0 flex-1 px-5 pb-5">
-              <DataState loading={loading} errorMessage={errorMessage}>
-                <div className="mt-4">
-                  <DevlogListPanel
-                    filteredDevlogs={filteredDevlogs}
-                    selectedDevlog={selectedDevlog}
-                    onSelectDevlog={handleSelectDevlog}
-                  />
-                </div>
-              </DataState>
+              <div className="min-h-0 flex-1 px-5 pb-5">
+                <DataState loading={loading} errorMessage={errorMessage}>
+                  <div className="mt-4">
+                    <DevlogListPanel
+                      filteredDevlogs={filteredDevlogs}
+                      selectedDevlog={selectedDevlog}
+                      onSelectDevlog={handleSelectDevlog}
+                    />
+                  </div>
+                </DataState>
+              </div>
             </div>
           </section>
         </main>
@@ -2476,4 +2480,4 @@ function DataState({
   }
 
   return <>{children}</>;
-}
+} 

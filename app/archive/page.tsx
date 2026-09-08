@@ -3943,7 +3943,7 @@ export default function ArchivePage() {
              =============================================== */}
 
           <section className="waivs-panel overflow-visible">
-            <div className="px-5 py-3.5">
+            <div className=" border-b border-slate-100 px-5 pt-4 pb-3">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -3975,15 +3975,11 @@ export default function ArchivePage() {
                     )}
                   </div>
 
-                  <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                  <div className="mt-1">
                     <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
                       {selectedProject?.name ??
                         "프로젝트 없음"}
                     </h1>
-
-                    <span className="text-xs font-bold text-slate-400">
-                      프로젝트 자료실
-                    </span>
                   </div>
 
                   <p className="mt-0.5 text-xs font-medium text-slate-500">
@@ -4189,42 +4185,16 @@ export default function ArchivePage() {
 
               {/* SUMMARY */}
 
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-3 text-xs">
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px]">
                 <ArchiveSummaryItem
                   label="개발일지"
                   value={`${filteredDevlogs.length}개`}
                 />
 
-                <span className="hidden text-slate-300 sm:block">
-                  ·
-                </span>
-
                 <ArchiveSummaryItem
-                  label="설계자료"
+                  label="설계 문서"
                   value={`${totalDesignCount}개`}
                 />
-
-                <span className="hidden text-slate-300 sm:block">
-                  ·
-                </span>
-
-                <ArchiveSummaryItem
-                  label="요구사항"
-                  value={`${designRequirements.length}개`}
-                />
-
-                <span className="hidden text-slate-300 sm:block">
-                  ·
-                </span>
-
-                <ArchiveSummaryItem
-                  label="API"
-                  value={`${designApiSpecs.length}개`}
-                />
-
-                <span className="hidden text-slate-300 sm:block">
-                  ·
-                </span>
 
                 <ArchiveSummaryItem
                   label="진행률"
@@ -4233,16 +4203,14 @@ export default function ArchivePage() {
                 />
               </div>
             </div>
-          </section>
-
           {/* ===============================================
               ARCHIVE CONTENT
+              상단 프로젝트 요약 + 자료실 메인을 하나의 카드로 연결
              =============================================== */}
 
-          <section className="waivs-panel mt-4 overflow-visible">
             {/* MAIN ARCHIVE TABS */}
 
-            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-3 px-5 pb-4 pt-1 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex w-fit max-w-full items-center gap-1 rounded-xl bg-slate-100 p-1">
                 {archiveTabs.map(
                   (tab) => {
@@ -4336,7 +4304,7 @@ export default function ArchivePage() {
 
             {/* CONTENT */}
 
-            <div className="p-5">
+            <div className="px-5 pb-5 pt-1">
               {activeArchiveTab ===
                 "devlog" && (
                 <ArchiveDevlogContent
@@ -4597,23 +4565,11 @@ function ArchiveDevlogContent({
 }) {
   return (
     <section>
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-black text-slate-950">
-            개발일지 목록
-          </h3>
-
-          <p className="mt-1 text-sm font-medium text-slate-500">
-            일정 기반 일지와 일반 일지를
-            문서 형태로 한곳에서
-            확인합니다.
-          </p>
-        </div>
-
-        <span className="rounded-full bg-[#EEF3FF] px-3 py-1 text-[11px] font-black text-[#5873F9]">
-          {devlogs.length}개
+      {/* <div className="mb-3 flex justify-end">
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+          기록 {devlogs.length}개
         </span>
-      </div>
+      </div> */}
 
       {devlogs.length === 0 ? (
         <EmptyState
@@ -4732,7 +4688,7 @@ function ArchiveDesignContent({
         </div>
       )}
 
-      <div className="mb-5 flex flex-col gap-3 border-b border-[var(--waivs-border-soft)] pb-5 xl:flex-row xl:items-center xl:justify-between">
+      <div className="mb-4">
         <div className="flex flex-wrap gap-2">
           {designSectionTabs.map(
             (tab) => {
@@ -4769,14 +4725,6 @@ function ArchiveDesignContent({
             },
           )}
         </div>
-
-        <span className="w-fit text-xs font-bold text-slate-400">
-          선택 프로젝트 ·{" "}
-          <strong className="text-slate-700">
-            {selectedProject?.name ??
-              "프로젝트 없음"}
-          </strong>
-        </span>
       </div>
 
       {isLoading ? (
@@ -5815,39 +5763,41 @@ function ArchiveFinalReportContent({
 
     textarea.style.height = `${Math.max(
       textarea.scrollHeight,
-      420,
+      360,
     )}px`;
   }, [draft]);
 
+  const diagramCount =
+    (designDocument.erdNodes.length > 0 ? 1 : 0) +
+    (designDocument.flowNodes.length > 0 ? 1 : 0);
+
   return (
     <section>
-      <div className="mb-5 flex flex-col justify-between gap-4 border-b border-[var(--waivs-border-soft)] pb-5 md:flex-row md:items-center">
-        <div>
-          <h3 className="text-lg font-black text-slate-950">
-            최종 보고서
-          </h3>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+            개발일지 {devlogCount}개
+          </span>
 
-          <p className="mt-1 text-sm font-medium text-slate-500">
-            개발일지와 설계 데이터를
-            기반으로 AI 초안을 생성하고
-            최종 문서로 구성합니다.
-          </p>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+            설계 다이어그램 {diagramCount}개
+          </span>
         </div>
 
         <button
           type="button"
           onClick={onGenerate}
           disabled={isGenerating}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-sm font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isGenerating ? (
             <Loader2
               className="animate-spin"
-              size={16}
+              size={15}
             />
           ) : (
             <Sparkles
-              size={16}
+              size={15}
             />
           )}
 
@@ -5858,79 +5808,52 @@ function ArchiveFinalReportContent({
       </div>
 
       {errorMessage && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
           {errorMessage}
         </div>
       )}
 
-      <div className="rounded-xl border border-[var(--waivs-border)] bg-slate-50/50 p-4">
-        <div className="mb-4 flex flex-col justify-between gap-2 border-b border-[var(--waivs-border-soft)] pb-4 md:flex-row md:items-center">
-          <div>
-            <p className="text-sm font-black text-slate-950">
-              프로젝트 최종 보고서
-            </p>
+      <div className="space-y-5">
+        <section>
+          <div className="mb-2">
+            <h4 className="text-sm font-black text-slate-900">
+              보고서 초안
+            </h4>
 
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              PDF 저장 시 아래 초안,
-              ERD, 화면 흐름이 함께
-              출력됩니다.
+            <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+              AI로 생성한 초안을 바로 수정할 수 있으며 PDF 저장 시 이 내용이 포함됩니다.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-[11px] font-black">
-            <span className="rounded-full bg-[#EEF3FF] px-3 py-1 text-[#5873F9]">
-              {selectedProject?.name ??
-                "프로젝트 미선택"}
-            </span>
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(
+              event,
+            ) =>
+              onDraftChange(
+                event.target.value,
+              )
+            }
+            placeholder={
+              isGenerating
+                ? "AI가 최종 보고서 초안을 생성하는 중입니다."
+                : "AI 초안 생성 버튼을 누르면 보고서 초안이 여기에 작성됩니다."
+            }
+            className="block min-h-[360px] w-full resize-none overflow-hidden rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+          />
+        </section>
 
-            <span className="rounded-full bg-white px-3 py-1 text-slate-600">
-              개발일지{" "}
-              {devlogCount}개
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-6">
+        {diagramCount > 0 && (
           <section>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-lg bg-[#5873F9] text-[11px] font-black text-white">
-                1
-              </span>
-
-              <h4 className="text-sm font-black text-slate-950">
-                AI 최종 보고서 초안
-              </h4>
-            </div>
-
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(
-                event,
-              ) =>
-                onDraftChange(
-                  event.target
-                    .value,
-                )
-              }
-              placeholder={
-                isGenerating
-                  ? "AI가 최종 보고서 초안을 생성하는 중입니다."
-                  : "AI 초안 생성 버튼을 누르면 최종 보고서 초안이 여기에 작성됩니다. 생성 후 직접 수정할 수 있습니다."
-              }
-              className="block min-h-[420px] w-full resize-none overflow-hidden rounded-xl border border-[var(--waivs-border)] bg-white p-4 text-sm font-medium leading-8 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-            />
-          </section>
-
-          <section>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-lg bg-[#5873F9] text-[11px] font-black text-white">
-                2
-              </span>
-
-              <h4 className="text-sm font-black text-slate-950">
+            <div className="mb-2">
+              <h4 className="text-sm font-black text-slate-900">
                 설계 다이어그램
               </h4>
+
+              <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                ERD와 화면 흐름이 저장되어 있으면 최종 보고서 PDF에 함께 포함됩니다.
+              </p>
             </div>
 
             <FinalReportDesignVisuals
@@ -5939,7 +5862,7 @@ function ArchiveFinalReportContent({
               }
             />
           </section>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -6017,18 +5940,18 @@ function SectionTitle({
   count: string;
 }) {
   return (
-    <div className="flex flex-col justify-between gap-2 border-b border-[var(--waivs-border-soft)] pb-4 md:flex-row md:items-center">
+    <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
       <div>
-        <h3 className="text-lg font-black text-slate-950">
+        <h3 className="text-base font-black text-slate-900">
           {title}
         </h3>
 
-        <p className="mt-1 text-sm font-medium text-slate-500">
+        <p className="mt-0.5 text-xs font-medium text-slate-400">
           {description}
         </p>
       </div>
 
-      <span className="w-fit rounded-full bg-[#EEF3FF] px-3 py-1 text-[11px] font-black text-[#5873F9]">
+      <span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
         {count}
       </span>
     </div>
@@ -6045,7 +5968,7 @@ function DesignEmptyText({
   text: string;
 }) {
   return (
-    <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-[var(--waivs-border)] bg-slate-50/70 px-6 py-10 text-center">
+    <div className="grid min-h-[260px] place-items-center rounded-xl bg-slate-50/70 px-6 py-10 text-center">
       <div className="max-w-[440px]">
         <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#EEF3FF] text-[#5873F9]">
           <Icon size={20} />
@@ -6073,7 +5996,7 @@ function EmptyState({
   message: string;
 }) {
   return (
-    <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-[var(--waivs-border)] bg-slate-50/70 px-6 py-12 text-center">
+    <div className="grid min-h-[280px] place-items-center rounded-xl bg-slate-50/70 px-6 py-10 text-center">
       <div className="max-w-[460px]">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#EEF3FF] text-[#5873F9]">
           <Icon size={22} />

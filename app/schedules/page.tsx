@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -14,12 +14,9 @@ import {
   Clock3,
   FilePenLine,
   Filter,
-  FolderOpen,
   GripVertical,
   ListTodo,
   Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -50,6 +47,10 @@ import {
   getWorkspaceMembersApi,
 } from "@/lib/ide/api";
 
+import ProjectSidebar, {
+  type WorkspaceSidebarItem,
+} from "@/components/layout/ProjectSidebar";
+
 /* =========================================================
    TYPES
    ========================================================= */
@@ -58,9 +59,7 @@ type ScheduleViewMode = "board" | "calendar" | "gantt" | "list";
 
 type WorkspaceMode = "personal" | "team";
 
-type ProjectFilter = "all" | WorkspaceMode;
-
-type SmartFilter = "all" | "today" | "mine" | "noDevlog";
+type SmartFilter = "all" | "today" | "noDevlog";
 
 type TodayScope = "selected" | "all";
 
@@ -86,20 +85,20 @@ type WorkspaceLike = {
   children?: unknown[];
 };
 
-type WorkspaceSidebarItem = {
-  id: string;
-  name: string;
-  mode: WorkspaceMode;
-  role?: string;
-  childCount: number;
-};
-
 type WorkspaceMember = {
   userId: number;
   email?: string;
   nickname?: string;
   name?: string;
   role: "OWNER" | "MEMBER" | "owner" | "member" | string;
+};
+
+type AssigneeFilterOption = {
+  key: string;
+  userId: number | null;
+  name: string;
+  role?: "OWNER" | "MEMBER";
+  isCurrentUser: boolean;
 };
 
 type ProjectScheduleItem = {
@@ -470,6 +469,34 @@ function getMemberRole(
     ?.toUpperCase() === "OWNER"
     ? "OWNER"
     : "MEMBER";
+}
+
+function normalizeAssigneeName(
+  value?: string,
+) {
+  return value
+    ?.trim()
+    .toLowerCase() || "";
+}
+
+function getAssigneeFilterKey(
+  userId?: number | null,
+  name?: string,
+) {
+  if (
+    userId !== null &&
+    userId !== undefined &&
+    Number.isFinite(userId)
+  ) {
+    return `id:${userId}`;
+  }
+
+  const normalizedName =
+    normalizeAssigneeName(name);
+
+  return normalizedName
+    ? `name:${normalizedName}`
+    : "";
 }
 
 /* =========================================================
@@ -848,95 +875,6 @@ export default function ScheduleManagementPage() {
   ] = useState("");
 
   /* =====================================================
-     SIDEBAR
-     ===================================================== */
-
-  const [
-    projectSearch,
-    setProjectSearch,
-  ] = useState("");
-
-const projectSearchInputRef =
-  useRef<HTMLInputElement | null>(null);
-
-  const [
-    projectFilter,
-    setProjectFilter,
-  ] = useState<ProjectFilter>(
-    "all",
-  );
-
-  const [
-    isSidebarPinned,
-    setIsSidebarPinned,
-  ] = useState(true);
-
-  const [
-    isSidebarHovered,
-    setIsSidebarHovered,
-  ] = useState(false);
-
-  const [
-    canSidebarHoverExpand,
-    setCanSidebarHoverExpand,
-  ] = useState(true);
-
-  // 화면 최상단에서는 메인 영역과 같은 시작 높이를 유지하고,
-  // 스크롤이 시작된 뒤에는 사이드바가 WAIVS 헤더 아래에 붙도록 합니다.
-  const [
-    isPageScrolled,
-    setIsPageScrolled,
-  ] = useState(false);
-
-  const sidebarExpanded =
-    isSidebarPinned ||
-    (canSidebarHoverExpand &&
-      isSidebarHovered);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsPageScrolled(
-        window.scrollY > 0,
-      );
-    };
-
-    handleScroll();
-
-    window.addEventListener(
-      "scroll",
-      handleScroll,
-      {
-        passive: true,
-      },
-    );
-
-    return () => {
-      window.removeEventListener(
-        "scroll",
-        handleScroll,
-      );
-    };
-  }, []);
-
-      const openSidebarForSearch = () => {
-  setIsSidebarPinned(true);
-  setIsSidebarHovered(false);
-  setCanSidebarHoverExpand(true);
-
-  requestAnimationFrame(() => {
-    projectSearchInputRef.current?.focus();
-  });
-};
-
-const openSidebarForProjects = () => {
-  setIsSidebarPinned(true);
-  setIsSidebarHovered(false);
-  setCanSidebarHoverExpand(true);
-
-  setProjectFilter("all");
-};
-
-  /* =====================================================
      VIEW / FILTER
      ===================================================== */
 
@@ -1134,24 +1072,6 @@ const openSidebarForProjects = () => {
         ) ?? null
       );
     }, [teamMembers]);
-
-  const myMember =
-    useMemo(() => {
-      if (!currentUserId) {
-        return null;
-      }
-
-      return (
-        teamMembers.find(
-          (member) =>
-            member.userId ===
-            currentUserId,
-        ) ?? null
-      );
-    }, [
-      currentUserId,
-      teamMembers,
-    ]);
 
   /* =====================================================
      LOAD CURRENT USER
@@ -1556,71 +1476,6 @@ const openSidebarForProjects = () => {
   ]);
 
   /* =====================================================
-     SIDEBAR DATA
-     ===================================================== */
-
-  const personalCount =
-    workspaces.filter(
-      (workspace) =>
-        workspace.mode ===
-        "personal",
-    ).length;
-
-  const teamCount =
-    workspaces.filter(
-      (workspace) =>
-        workspace.mode ===
-        "team",
-    ).length;
-
-  const filteredSidebarWorkspaces =
-    useMemo(() => {
-      const keyword =
-        projectSearch
-          .trim()
-          .toLowerCase();
-
-      return workspaces.filter(
-        (workspace) => {
-          const matchesMode =
-            projectFilter ===
-              "all" ||
-            workspace.mode ===
-              projectFilter;
-
-          const matchesKeyword =
-            !keyword ||
-            workspace.name
-              .toLowerCase()
-              .includes(keyword);
-
-          return (
-            matchesMode &&
-            matchesKeyword
-          );
-        },
-      );
-    }, [
-      projectFilter,
-      projectSearch,
-      workspaces,
-    ]);
-
-  const personalWorkspaces =
-    filteredSidebarWorkspaces.filter(
-      (workspace) =>
-        workspace.mode ===
-        "personal",
-    );
-
-  const teamWorkspaces =
-    filteredSidebarWorkspaces.filter(
-      (workspace) =>
-        workspace.mode ===
-        "team",
-    );
-
-  /* =====================================================
      SOURCE DATA
      ===================================================== */
 
@@ -1641,6 +1496,224 @@ const openSidebarForProjects = () => {
       smartFilter,
       todayScope,
     ]);
+
+  const assigneeOptions =
+    useMemo<AssigneeFilterOption[]>(() => {
+      const optionMap =
+        new Map<string, AssigneeFilterOption>();
+
+      const currentMember =
+        currentUserId
+          ? teamMembers.find(
+              (member) =>
+                member.userId ===
+                currentUserId,
+            ) ?? null
+          : null;
+
+      const currentUserName =
+        currentMember
+          ? getMemberName(
+              currentMember,
+            )
+          : "";
+
+      const addOption = (
+        option: Omit<
+          AssigneeFilterOption,
+          "key"
+        >,
+      ) => {
+        const key =
+          getAssigneeFilterKey(
+            option.userId,
+            option.name,
+          );
+
+        if (!key) {
+          return;
+        }
+
+        const existing =
+          optionMap.get(key);
+
+        if (existing) {
+          optionMap.set(
+            key,
+            {
+              ...existing,
+              role:
+                existing.role ??
+                option.role,
+              isCurrentUser:
+                existing.isCurrentUser ||
+                option.isCurrentUser,
+            },
+          );
+
+          return;
+        }
+
+        optionMap.set(
+          key,
+          {
+            ...option,
+            key,
+          },
+        );
+      };
+
+      /*
+       * 선택 프로젝트 범위에서는 현재 팀의 모든 구성원을 노출합니다.
+       * 전체 프로젝트의 오늘 일정에서는 실제 오늘 일정에 등장하는
+       * 담당자들을 일정 데이터에서 모아 보여줍니다.
+       */
+      if (
+        !(
+          smartFilter ===
+            "today" &&
+          todayScope ===
+            "all"
+        )
+      ) {
+        teamMembers.forEach(
+          (member) => {
+            addOption({
+              userId:
+                member.userId,
+              name:
+                getMemberName(
+                  member,
+                ),
+              role:
+                getMemberRole(
+                  member,
+                ),
+              isCurrentUser:
+                currentUserId ===
+                member.userId,
+            });
+          },
+        );
+      }
+
+      sourceSchedules.forEach(
+        (schedule) => {
+          const name =
+            schedule.assigneeName?.trim() ||
+            "";
+
+          if (
+            schedule.assigneeUserId ==
+              null &&
+            !name
+          ) {
+            return;
+          }
+
+          const matchedMember =
+            schedule.assigneeUserId !=
+            null
+              ? teamMembers.find(
+                  (member) =>
+                    member.userId ===
+                    schedule.assigneeUserId,
+                ) ?? null
+              : teamMembers.find(
+                  (member) =>
+                    normalizeAssigneeName(
+                      getMemberName(
+                        member,
+                      ),
+                    ) ===
+                    normalizeAssigneeName(
+                      name,
+                    ),
+                ) ?? null;
+
+          const resolvedName =
+            matchedMember
+              ? getMemberName(
+                  matchedMember,
+                )
+              : name ||
+                `User ${schedule.assigneeUserId}`;
+
+          addOption({
+            userId:
+              schedule.assigneeUserId ??
+              matchedMember?.userId ??
+              null,
+            name:
+              resolvedName,
+            role:
+              matchedMember
+                ? getMemberRole(
+                    matchedMember,
+                  )
+                : undefined,
+            isCurrentUser:
+              (currentUserId != null &&
+                schedule.assigneeUserId ===
+                  currentUserId) ||
+              Boolean(
+                currentUserName &&
+                  normalizeAssigneeName(
+                    resolvedName,
+                  ) ===
+                    normalizeAssigneeName(
+                      currentUserName,
+                    ),
+              ),
+          });
+        },
+      );
+
+      return Array.from(
+        optionMap.values(),
+      ).sort((a, b) => {
+        if (
+          a.isCurrentUser !==
+          b.isCurrentUser
+        ) {
+          return a.isCurrentUser
+            ? -1
+            : 1;
+        }
+
+        if (
+          a.role !== b.role
+        ) {
+          if (
+            a.role === "OWNER"
+          ) {
+            return -1;
+          }
+
+          if (
+            b.role === "OWNER"
+          ) {
+            return 1;
+          }
+        }
+
+        return a.name.localeCompare(
+          b.name,
+        );
+      });
+    }, [
+      currentUserId,
+      smartFilter,
+      sourceSchedules,
+      teamMembers,
+      todayScope,
+    ]);
+
+  const showAssigneeBar =
+    isTeam ||
+    (smartFilter === "today" &&
+      todayScope === "all" &&
+      assigneeOptions.length > 0);
 
   const filteredSchedules =
     useMemo(() => {
@@ -1682,61 +1755,37 @@ const openSidebarForProjects = () => {
           }
 
           if (
-            smartFilter ===
-            "mine"
-          ) {
-            if (
-              !currentUserId
-            ) {
-              return false;
-            }
-
-            const idMatched =
-              schedule.assigneeUserId ===
-              currentUserId;
-
-            const nameMatched =
-              myMember &&
-              schedule.assigneeName &&
-              schedule.assigneeName ===
-                getMemberName(
-                  myMember,
-                );
-
-            if (
-              !idMatched &&
-              !nameMatched
-            ) {
-              return false;
-            }
-          }
-
-          if (
             assigneeFilter !==
             "all"
           ) {
-            const targetId =
-              Number(
-                assigneeFilter,
+            const target =
+              assigneeOptions.find(
+                (option) =>
+                  option.key ===
+                  assigneeFilter,
               );
 
-            const targetMember =
-              teamMembers.find(
-                (member) =>
-                  member.userId ===
-                  targetId,
-              );
+            if (!target) {
+              return false;
+            }
 
             const idMatched =
+              target.userId !==
+                null &&
               schedule.assigneeUserId ===
-              targetId;
+                target.userId;
 
             const nameMatched =
-              targetMember &&
-              schedule.assigneeName ===
-                getMemberName(
-                  targetMember,
-                );
+              Boolean(
+                target.name &&
+                  schedule.assigneeName &&
+                  normalizeAssigneeName(
+                    schedule.assigneeName,
+                  ) ===
+                    normalizeAssigneeName(
+                      target.name,
+                    ),
+              );
 
             if (
               !idMatched &&
@@ -1771,13 +1820,11 @@ const openSidebarForProjects = () => {
       );
     }, [
       assigneeFilter,
-      currentUserId,
-      myMember,
+      assigneeOptions,
       query,
       smartFilter,
       sourceSchedules,
       statusFilter,
-      teamMembers,
       todayDate,
       todayScope,
     ]);
@@ -1831,6 +1878,12 @@ const openSidebarForProjects = () => {
           todayDate,
         ),
     ).length;
+
+  const displayedTodayCount =
+    smartFilter === "today" &&
+    todayScope === "all"
+      ? allProjectTodaySchedules.length
+      : todayCount;
 
   const progressRate =
     totalCount === 0
@@ -1918,33 +1971,6 @@ const openSidebarForProjects = () => {
       `${pathname}?${params.toString()}`,
     );
   };
-
-  const handleToggleSidebar =
-    () => {
-      if (
-        isSidebarPinned
-      ) {
-        setIsSidebarPinned(
-          false,
-        );
-
-        setIsSidebarHovered(
-          false,
-        );
-
-        setCanSidebarHoverExpand(
-          false,
-        );
-
-        return;
-      }
-
-      setIsSidebarPinned(true);
-
-      setCanSidebarHoverExpand(
-        true,
-      );
-    };
 
   /* =====================================================
      STATE UPDATE HELPERS
@@ -2846,296 +2872,26 @@ const openSidebarForProjects = () => {
      ===================================================== */
 
   return (
-    <main className="waivs-page min-h-[calc(100dvh-72px)] bg-[#F7F8FA] p-4 text-slate-950 md:p-5">
-      <div className="mx-auto flex max-w-[1880px] gap-4">
-     {/* =================================================
-    PROJECT SIDEBAR
-   ================================================= */}
-<aside
-  onMouseEnter={() => {
-    if (
-      !isSidebarPinned &&
-      canSidebarHoverExpand
-    ) {
-      setIsSidebarHovered(true);
-    }
-  }}
-  onMouseLeave={() => {
-    setIsSidebarHovered(false);
-    setCanSidebarHoverExpand(true);
-  }}
-  className={cn(
-    "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
-    isPageScrolled
-      ? "top-[88px]"
-      : "top-4",
-    sidebarExpanded
-      ? "w-[288px]"
-      : "w-16",
-  )}
->
-  {/* =================================================
-      SIDEBAR HEADER
-     ================================================= */}
-  <div
-    className={cn(
-      "border-b border-slate-100",
-      sidebarExpanded
-        ? "p-3"
-        : "flex h-[64px] items-center justify-center p-0",
-    )}
-  >
-    <div
-      className={cn(
-        "flex items-center",
-        sidebarExpanded
-          ? "justify-between gap-2"
-          : "justify-center",
-      )}
-    >
-      {sidebarExpanded && (
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
-              <FolderOpen
-                size={16}
-                strokeWidth={2.4}
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-black text-slate-900">
-                프로젝트
-              </p>
-
-              <p className="text-[10px] font-semibold text-slate-400">
-                전체 {workspaces.length}
-                {" · "}
-                개인 {personalCount}
-                {" · "}
-                팀 {teamCount}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={handleToggleSidebar}
-        className={cn(
-          "grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700",
-          sidebarExpanded
-            ? "h-8 w-8"
-            : "h-9 w-9",
-        )}
-        title={
-          isSidebarPinned
-            ? "사이드바 접기"
-            : "사이드바 펼치기"
-        }
-      >
-        {sidebarExpanded ? (
-          <PanelLeftClose size={17} />
-        ) : (
-          <PanelLeftOpen size={18} />
-        )}
-      </button>
-    </div>
-
-    {sidebarExpanded && (
-      <>
-        {/* 프로젝트 검색 */}
-        <div className="relative mt-3">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-
-          <input
-            ref={projectSearchInputRef}
-            value={projectSearch}
-            onChange={(event) =>
-              setProjectSearch(
-                event.target.value,
-              )
-            }
-            placeholder="프로젝트 검색"
-            className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
-          />
-        </div>
-
-        {/* 전체 / 개인 / 팀 */}
-        <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-          {(
-            [
-              ["all", "전체"],
-              ["personal", "개인"],
-              ["team", "팀"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() =>
-                setProjectFilter(value)
-              }
-              className={cn(
-                "rounded-lg px-2 py-1.5 text-[11px] font-black transition",
-                projectFilter === value
-                  ? "bg-white text-[#5873F9] shadow-sm"
-                  : "text-slate-400 hover:text-slate-700",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </>
-    )}
-  </div>
-
-  {/* =================================================
-      SIDEBAR BODY
-     ================================================= */}
-  <div
-    className={cn(
-      "min-h-0 flex-1",
-      sidebarExpanded
-        ? "overflow-y-auto p-3"
-        : "overflow-hidden",
-    )}
-  >
-    {workspaceLoading ? (
-      <div className="grid h-32 place-items-center">
-        <Loader2
-          size={18}
-          className="animate-spin text-[#5873F9]"
+    <main className="waivs-page flex min-h-0 flex-1 bg-[#F7F8FA] p-4 text-slate-950 md:p-5">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1880px] flex-1 gap-4">
+        <ProjectSidebar
+          workspaces={workspaces}
+          selectedWorkspaceId={workspaceId}
+          loading={workspaceLoading}
+          errorMessage={workspaceErrorMessage}
+          onSelectWorkspace={handleSelectWorkspace}
         />
-      </div>
-    ) : workspaceErrorMessage ? (
-      sidebarExpanded ? (
-        <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-600">
-          {workspaceErrorMessage}
-        </div>
-      ) : null
-    ) : sidebarExpanded ? (
-      /* ===============================================
-         펼쳐진 상태
-         기존 프로젝트 목록 그대로
-         =============================================== */
-      <div className="space-y-5">
-        {projectFilter !== "team" && (
-          <WorkspaceSection
-            title="개인 프로젝트"
-            mode="personal"
-            items={personalWorkspaces}
-            selectedWorkspaceId={
-              workspaceId
-            }
-            sidebarExpanded
-            onSelect={
-              handleSelectWorkspace
-            }
-          />
-        )}
-
-        {projectFilter !==
-          "personal" && (
-          <WorkspaceSection
-            title="팀 프로젝트"
-            mode="team"
-            items={teamWorkspaces}
-            selectedWorkspaceId={
-              workspaceId
-            }
-            sidebarExpanded
-            onSelect={
-              handleSelectWorkspace
-            }
-          />
-        )}
-      </div>
-    ) : (
-      /* ===============================================
-         접힌 상태
-         Dashboard Sidebar와 동일
-         =============================================== */
-      <div className="flex h-full flex-col items-center pt-4">
-        {/* 검색 */}
-        <button
-          type="button"
-          onClick={
-            openSidebarForSearch
-          }
-          className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
-          title="프로젝트 검색"
-        >
-          <Search
-            size={19}
-            strokeWidth={2}
-          />
-        </button>
-
-        {/* 프로젝트 */}
-        <button
-          type="button"
-          onClick={
-            openSidebarForProjects
-          }
-          className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
-          title="프로젝트 목록"
-        >
-          <FolderOpen
-            size={19}
-            strokeWidth={2}
-          />
-        </button>
-
-        {/* Dashboard와 동일한 구분선 */}
-        <div className="my-3 h-px w-8 bg-slate-100" />
-
-        {/* 전체 프로젝트 수 */}
-        <div
-          className="flex h-8 w-8 items-center justify-center text-xs font-black text-slate-300"
-          title={`전체 프로젝트 ${workspaces.length}개`}
-        >
-          {workspaces.length}
-        </div>
-      </div>
-    )}
-  </div>
-
-  {/* =================================================
-      SIDEBAR FOOTER
-     ================================================= */}
-  {sidebarExpanded && (
-    <div className="border-t border-slate-100 p-3">
-      <button
-        type="button"
-        onClick={() =>
-          router.push("/main")
-        }
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
-      >
-        전체 프로젝트
-
-        <ArrowRight size={14} />
-      </button>
-    </div>
-  )}
-</aside>
 
         {/* =================================================
             MAIN WORKSPACE
            ================================================= */}
-        <section className="min-w-0 flex-1">
-          <div className="waivs-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="flex min-h-0 min-w-0 flex-1">
+          <div className="waivs-panel flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {/* ===============================================
                 COMPACT HEADER
                =============================================== */}
-            <div className="border-b border-slate-100 px-5 py-4">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="border-b border-slate-100 px-5 py-3">
+              <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#5873F9]">
@@ -3214,7 +2970,7 @@ const openSidebarForProjects = () => {
               </div>
 
               {/* compact stats */}
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-2.5">
                 <HeaderMetric
                   label="전체"
                   value={
@@ -3279,7 +3035,7 @@ const openSidebarForProjects = () => {
             {/* ===============================================
                 VIEW BAR
                =============================================== */}
-            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-2.5 border-b border-slate-100 px-5 py-2.5 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
                 <ViewButton
                   active={
@@ -3347,40 +3103,96 @@ const openSidebarForProjects = () => {
               </div>
 
               <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-                {/* smart filter */}
-                <SmartFilterButton
-                  active={
-                    smartFilter ===
-                    "today"
-                  }
-                  label={`오늘 ${todayCount}`}
-                  onClick={() =>
-                    setSmartFilter(
-                      smartFilter ===
-                        "today"
-                        ? "all"
-                        : "today",
-                    )
-                  }
-                />
-
-                {isTeam && (
+                {/* 오늘 일정 + 범위 선택
+                    별도 행을 만들지 않고 같은 툴바 안에서 처리해서
+                    메인 일정 영역이 아래로 밀리지 않도록 합니다. */}
+                <div className="flex shrink-0 items-center gap-1.5">
                   <SmartFilterButton
                     active={
                       smartFilter ===
-                      "mine"
+                      "today"
                     }
-                    label="내 작업"
-                    onClick={() =>
-                      setSmartFilter(
+                    label={`오늘 ${displayedTodayCount}`}
+                    onClick={() => {
+                      const next =
                         smartFilter ===
-                          "mine"
+                        "today"
                           ? "all"
-                          : "mine",
-                      )
-                    }
+                          : "today";
+
+                      setSmartFilter(
+                        next,
+                      );
+
+                      if (
+                        next ===
+                        "all"
+                      ) {
+                        setAssigneeFilter(
+                          "all",
+                        );
+                      }
+                    }}
                   />
-                )}
+
+                  {smartFilter ===
+                    "today" && (
+                    <div className="flex h-9 items-center rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTodayScope(
+                            "selected",
+                          );
+
+                          setAssigneeFilter(
+                            "all",
+                          );
+                        }}
+                        className={cn(
+                          "h-8 rounded-lg px-2.5 text-[10px] font-black transition",
+                          todayScope ===
+                            "selected"
+                            ? "bg-white text-[#5873F9] shadow-sm"
+                            : "text-slate-400 hover:text-slate-600",
+                        )}
+                      >
+                        선택 프로젝트
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTodayScope(
+                            "all",
+                          );
+
+                          setAssigneeFilter(
+                            "all",
+                          );
+                        }}
+                        className={cn(
+                          "flex h-8 items-center gap-1 rounded-lg px-2.5 text-[10px] font-black transition",
+                          todayScope ===
+                            "all"
+                            ? "bg-white text-[#5873F9] shadow-sm"
+                            : "text-slate-400 hover:text-slate-600",
+                        )}
+                      >
+                        전체 프로젝트
+
+                        {allTodayLoading &&
+                          todayScope ===
+                            "all" && (
+                            <Loader2
+                              size={10}
+                              className="animate-spin"
+                            />
+                          )}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <SmartFilterButton
                   active={
@@ -3465,164 +3277,110 @@ const openSidebarForProjects = () => {
             </div>
 
             {/* ===============================================
-                TODAY SCOPE
+                ASSIGNEE BAR
+                - 선택 프로젝트 / 전체 프로젝트 모두 동일하게 노출
+                - 현재 사용자도 담당자 칩에서 "나"로 구분
+                - 전체 프로젝트에서는 실제 오늘 일정에 등장한 담당자 기준
                =============================================== */}
-            {smartFilter ===
-              "today" && (
-              <div className="flex items-center gap-2 border-b border-slate-100 bg-[#FBFCFF] px-5 py-2.5">
-                <CalendarDays
-                  size={14}
-                  className="text-[#5873F9]"
-                />
+            {showAssigneeBar && (
+              <div className="border-b border-slate-100 bg-white px-5 py-2">
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  <div className="mr-1 flex shrink-0 items-center gap-1.5 text-[11px] font-black text-slate-400">
+                    <UsersRound
+                      size={14}
+                    />
+                    담당자
+                  </div>
 
-                <span className="text-[11px] font-black text-slate-500">
-                  오늘 일정
-                </span>
-
-                <div className="ml-2 flex rounded-lg bg-slate-100 p-0.5">
                   <button
                     type="button"
                     onClick={() =>
-                      setTodayScope(
-                        "selected",
+                      setAssigneeFilter(
+                        "all",
                       )
                     }
                     className={cn(
-                      "rounded-md px-2.5 py-1 text-[10px] font-black transition",
-                      todayScope ===
-                        "selected"
-                        ? "bg-white text-[#5873F9] shadow-sm"
-                        : "text-slate-400",
+                      "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black transition",
+                      assigneeFilter ===
+                        "all"
+                        ? "border-[#C9D2FF] bg-[#EEF3FF] text-[#5873F9]"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
                     )}
                   >
-                    선택 프로젝트
+                    전체
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTodayScope(
-                        "all",
-                      );
+                  {teamMemberLoading &&
+                  !(
+                    smartFilter ===
+                      "today" &&
+                    todayScope ===
+                      "all"
+                  ) ? (
+                    <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-400">
+                      <Loader2
+                        size={13}
+                        className="animate-spin"
+                      />
+                      팀원 조회 중
+                    </div>
+                  ) : (
+                    assigneeOptions.map(
+                      (option) => (
+                        <AssigneeFilterChip
+                          key={
+                            option.key
+                          }
+                          option={
+                            option
+                          }
+                          active={
+                            assigneeFilter ===
+                            option.key
+                          }
+                          onClick={() =>
+                            setAssigneeFilter(
+                              option.key,
+                            )
+                          }
+                        />
+                      ),
+                    )
+                  )}
 
-                      setAssigneeFilter(
-                        "all",
-                      );
-                    }}
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-[10px] font-black transition",
+                  {memberErrorMessage &&
+                    !(
+                      smartFilter ===
+                        "today" &&
                       todayScope ===
                         "all"
-                        ? "bg-white text-[#5873F9] shadow-sm"
-                        : "text-slate-400",
-                    )}
-                  >
-                    전체 프로젝트
-                  </button>
-                </div>
-
-                {allTodayLoading &&
-                  todayScope ===
-                    "all" && (
-                    <Loader2
-                      size={13}
-                      className="ml-1 animate-spin text-slate-400"
-                    />
+                    ) && (
+                    <span className="ml-2 shrink-0 text-[10px] font-semibold text-rose-500">
+                      {
+                        memberErrorMessage
+                      }
+                    </span>
                   )}
+
+                  {smartFilter ===
+                    "today" &&
+                    todayScope ===
+                      "all" &&
+                    assigneeOptions.length ===
+                      0 &&
+                    !allTodayLoading && (
+                    <span className="ml-1 shrink-0 text-[10px] font-semibold text-slate-400">
+                      담당자가 지정된 오늘 일정이 없습니다.
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 
             {/* ===============================================
-                TEAM MEMBER BAR
-               =============================================== */}
-            {isTeam &&
-              !(
-                smartFilter ===
-                  "today" &&
-                todayScope ===
-                  "all"
-              ) && (
-                <div className="border-b border-slate-100 bg-white px-5 py-2.5">
-                  <div className="flex items-center gap-2 overflow-x-auto">
-                    <div className="mr-1 flex shrink-0 items-center gap-1.5 text-[11px] font-black text-slate-400">
-                      <UsersRound
-                        size={14}
-                      />
-                      담당자
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAssigneeFilter(
-                          "all",
-                        )
-                      }
-                      className={cn(
-                        "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black transition",
-                        assigneeFilter ===
-                          "all"
-                          ? "border-[#C9D2FF] bg-[#EEF3FF] text-[#5873F9]"
-                          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
-                      )}
-                    >
-                      전체
-                    </button>
-
-                    {teamMemberLoading ? (
-                      <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-400">
-                        <Loader2
-                          size={13}
-                          className="animate-spin"
-                        />
-                        팀원 조회 중
-                      </div>
-                    ) : (
-                      teamMembers.map(
-                        (member) => (
-                          <MemberFilterChip
-                            key={
-                              member.userId
-                            }
-                            member={
-                              member
-                            }
-                            active={
-                              assigneeFilter ===
-                              String(
-                                member.userId,
-                              )
-                            }
-                            currentUserId={
-                              currentUserId
-                            }
-                            onClick={() =>
-                              setAssigneeFilter(
-                                String(
-                                  member.userId,
-                                ),
-                              )
-                            }
-                          />
-                        ),
-                      )
-                    )}
-
-                    {memberErrorMessage && (
-                      <span className="ml-2 shrink-0 text-[10px] font-semibold text-rose-500">
-                        {
-                          memberErrorMessage
-                        }
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-            {/* ===============================================
                 CONTENT
                =============================================== */}
-            <div className="min-h-[580px] bg-[#FBFCFE] p-4">
+            <div className="flex min-h-[360px] flex-1 flex-col bg-[#FBFCFE] p-3">
               {loading ? (
                 <LoadingBox />
               ) : errorMessage ? (
@@ -4018,198 +3776,6 @@ const openSidebarForProjects = () => {
 }
 
 /* =========================================================
-   PROJECT SIDEBAR
-   ========================================================= */
-
-function WorkspaceSection({
-  title,
-  mode,
-  items,
-  selectedWorkspaceId,
-  sidebarExpanded,
-  onSelect,
-}: {
-  title: string;
-  mode: WorkspaceMode;
-  items: WorkspaceSidebarItem[];
-  selectedWorkspaceId: string;
-  sidebarExpanded: boolean;
-  onSelect: (
-    workspace: WorkspaceSidebarItem,
-  ) => void;
-}) {
-  if (!sidebarExpanded) {
-    return (
-      <div className="space-y-1">
-        {items.map(
-          (workspace) => (
-            <WorkspaceButton
-              key={
-                workspace.id
-              }
-              workspace={
-                workspace
-              }
-              selected={
-                workspace.id ===
-                selectedWorkspaceId
-              }
-              sidebarExpanded={
-                false
-              }
-              onClick={() =>
-                onSelect(
-                  workspace,
-                )
-              }
-            />
-          ),
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <section>
-      <div className="mb-2 flex items-center justify-between px-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
-          {mode ===
-          "team" ? (
-            <UsersRound
-              size={13}
-            />
-          ) : (
-            <UserRound
-              size={13}
-            />
-          )}
-
-          {title}
-        </div>
-
-        <span className="text-[10px] font-black text-slate-400">
-          {items.length}
-        </span>
-      </div>
-
-      <div className="space-y-1">
-        {items.length === 0 ? (
-          <p className="px-2 py-2 text-[11px] font-medium text-slate-400">
-            프로젝트가 없습니다.
-          </p>
-        ) : (
-          items.map(
-            (workspace) => (
-              <WorkspaceButton
-                key={
-                  workspace.id
-                }
-                workspace={
-                  workspace
-                }
-                selected={
-                  workspace.id ===
-                  selectedWorkspaceId
-                }
-                sidebarExpanded
-                onClick={() =>
-                  onSelect(
-                    workspace,
-                  )
-                }
-              />
-            ),
-          )
-        )}
-      </div>
-    </section>
-  );
-}
-
-function WorkspaceButton({
-  workspace,
-  selected,
-  sidebarExpanded,
-  onClick,
-}: {
-  workspace: WorkspaceSidebarItem;
-  selected: boolean;
-  sidebarExpanded: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={
-        !sidebarExpanded
-          ? workspace.name
-          : undefined
-      }
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition",
-        selected
-          ? "bg-[#5873F9] text-white shadow-sm"
-          : "text-slate-700 hover:bg-slate-100",
-        !sidebarExpanded &&
-          "justify-center",
-      )}
-    >
-      <div
-        className={cn(
-          "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-          selected
-            ? "bg-white/15 text-white"
-            : workspace.mode ===
-                "team"
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-blue-50 text-blue-700",
-        )}
-      >
-        {workspace.mode ===
-        "team" ? (
-          <UsersRound
-            size={15}
-          />
-        ) : (
-          <UserRound
-            size={15}
-          />
-        )}
-      </div>
-
-      {sidebarExpanded && (
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-black">
-            {workspace.name}
-          </p>
-
-          <p
-            className={cn(
-              "mt-0.5 truncate text-[10px] font-semibold",
-              selected
-                ? "text-white/70"
-                : "text-slate-400",
-            )}
-          >
-            {workspace.mode ===
-            "team"
-              ? "팀 프로젝트"
-              : "개인 프로젝트"}
-            {" · "}
-            {
-              normalizeWorkspaceRole(
-                workspace.role,
-              )
-            }
-          </p>
-        </div>
-      )}
-    </button>
-  );
-}
-
-/* =========================================================
    HEADER
    ========================================================= */
 
@@ -4309,27 +3875,15 @@ function SmartFilterButton({
    TEAM FILTER
    ========================================================= */
 
-function MemberFilterChip({
-  member,
+function AssigneeFilterChip({
+  option,
   active,
-  currentUserId,
   onClick,
 }: {
-  member: WorkspaceMember;
+  option: AssigneeFilterOption;
   active: boolean;
-  currentUserId: number | null;
   onClick: () => void;
 }) {
-  const name =
-    getMemberName(member);
-
-  const role =
-    getMemberRole(member);
-
-  const mine =
-    currentUserId ===
-    member.userId;
-
   return (
     <button
       type="button"
@@ -4349,29 +3903,34 @@ function MemberFilterChip({
             : "bg-slate-100 text-slate-600",
         )}
       >
-        {getInitial(name)}
+        {getInitial(
+          option.name,
+        )}
       </span>
 
       <span className="text-[11px] font-black text-slate-700">
-        {name}
-        {mine && (
+        {option.name}
+
+        {option.isCurrentUser && (
           <span className="ml-1 text-[#5873F9]">
             나
           </span>
         )}
       </span>
 
-      <span
-        className={cn(
-          "text-[8px] font-black",
-          role ===
-            "OWNER"
-            ? "text-[#5873F9]"
-            : "text-slate-400",
-        )}
-      >
-        {role}
-      </span>
+      {option.role && (
+        <span
+          className={cn(
+            "text-[8px] font-black",
+            option.role ===
+              "OWNER"
+              ? "text-[#5873F9]"
+              : "text-slate-400",
+          )}
+        >
+          {option.role}
+        </span>
+      )}
     </button>
   );
 }
@@ -4408,7 +3967,7 @@ function BoardView({
   ) => void;
 }) {
   return (
-    <div className="grid min-h-[550px] grid-cols-1 gap-3 xl:grid-cols-4">
+    <div className="grid min-h-[360px] flex-1 grid-cols-1 gap-3 xl:grid-cols-4">
       {BOARD_STATUSES.map(
         (status) => {
           const meta =
@@ -4441,7 +4000,7 @@ function BoardView({
                 )
               }
               className={cn(
-                "flex min-h-[500px] min-w-0 flex-col rounded-xl border",
+                "flex min-h-[340px] min-w-0 flex-col rounded-xl border",
                 meta.board,
               )}
             >
@@ -6908,7 +6467,7 @@ function DetailValue({
 
 function LoadingBox() {
   return (
-    <div className="grid min-h-[500px] place-items-center">
+    <div className="grid min-h-[320px] flex-1 place-items-center">
       <div className="flex items-center gap-2 text-xs font-black text-slate-400">
         <Loader2
           size={16}
@@ -6927,7 +6486,7 @@ function ErrorBox({
   message: string;
 }) {
   return (
-    <div className="grid min-h-[500px] place-items-center">
+    <div className="grid min-h-[320px] flex-1 place-items-center">
       <div className="max-w-md rounded-xl border border-rose-100 bg-rose-50 p-4 text-center">
         <AlertTriangle
           size={20}
@@ -6952,7 +6511,7 @@ function EmptyBox({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="grid min-h-[500px] place-items-center">
+    <div className="grid min-h-[320px] flex-1 place-items-center">
       <div className="max-w-sm text-center">
         <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-[#EEF3FF] text-[#5873F9]">
           <CalendarDays
