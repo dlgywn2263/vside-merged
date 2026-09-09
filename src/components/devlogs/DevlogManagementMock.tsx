@@ -4,7 +4,6 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowRight,
   CalendarDays,
   Download,
   FilePenLine,
@@ -12,13 +11,10 @@ import {
   Link2,
   Loader2,
   PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Plus,
   Search,
   Trash2,
-  UserRound,
-  UsersRound,
   X,
 } from "lucide-react";
 
@@ -50,12 +46,13 @@ import {
 } from "./devlog.utils";
 
 import { CreateDevlogModal } from "./components/CreateDevlogModal";
-import { DevlogEmptyBox } from "./components/DevlogEmptyBox";
 import { DevlogFilterButton } from "./components/DevlogFilterButton";
 import { DevlogListPanel } from "./components/DevlogListPanel";
 
-type WorkspaceMode = "personal" | "team";
-type ProjectFilter = "all" | WorkspaceMode;
+import ProjectSidebar, {
+  type WorkspaceMode,
+  type WorkspaceSidebarItem as SharedWorkspaceSidebarItem,
+} from "@/components/layout/ProjectSidebar";
 
 type WorkspaceLike = {
   id?: string;
@@ -73,14 +70,9 @@ type WorkspaceLike = {
   children?: unknown[];
 };
 
-type WorkspaceSidebarItem = {
-  id: string;
+type WorkspaceSidebarItem = SharedWorkspaceSidebarItem & {
   uuid?: string;
   workspaceId?: string;
-  name: string;
-  mode: WorkspaceMode;
-  role?: string;
-  childCount: number;
 };
 
 
@@ -220,37 +212,9 @@ export default function DevlogManagementMock() {
   const [filter, setFilter] = useState<DevlogFilter>("all");
   const [query, setQuery] = useState("");
 
-  const [isSidebarPinned, setIsSidebarPinned] = useState(true);
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
-  const [canSidebarHoverExpand, setCanSidebarHoverExpand] = useState(true);
-
-  // 화면 최상단에서는 메인과 정확히 같은 시작 위치를 유지하고,
-  // 스크롤이 시작된 뒤에만 sticky 기준을 헤더 아래로 바꿉니다.
-  const [isPageScrolled, setIsPageScrolled] = useState(false);
-
-  const [projectSearch, setProjectSearch] = useState("");
-  const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
   const [showNoDevlogPanel, setShowNoDevlogPanel] = useState(false);
 
-  const projectSearchInputRef = useRef<HTMLInputElement | null>(null);
   const autoCreateHandledRef = useRef("");
-
-  const sidebarExpanded =
-    isSidebarPinned ||
-    (canSidebarHoverExpand && isSidebarHovered);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsPageScrolled(window.scrollY > 0);
-    };
-
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
 
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
@@ -650,7 +614,7 @@ export default function DevlogManagementMock() {
   ).length;
 
   const handleSelectWorkspace = (
-    workspace: WorkspaceSidebarItem,
+    workspace: SharedWorkspaceSidebarItem,
   ) => {
     const params = new URLSearchParams(
       searchParams.toString(),
@@ -662,36 +626,6 @@ export default function DevlogManagementMock() {
     router.push(
       `${pathname}?${params.toString()}`,
     );
-  };
-
-  const handleToggleSidebar = () => {
-    if (isSidebarPinned) {
-      setIsSidebarPinned(false);
-      setIsSidebarHovered(false);
-      setCanSidebarHoverExpand(false);
-      return;
-    }
-
-    setIsSidebarPinned(true);
-    setIsSidebarHovered(false);
-    setCanSidebarHoverExpand(true);
-  };
-
-  const openSidebarForSearch = () => {
-    setIsSidebarPinned(true);
-    setIsSidebarHovered(false);
-    setCanSidebarHoverExpand(true);
-
-    requestAnimationFrame(() => {
-      projectSearchInputRef.current?.focus();
-    });
-  };
-
-  const openSidebarForProjects = () => {
-    setIsSidebarPinned(true);
-    setIsSidebarHovered(false);
-    setCanSidebarHoverExpand(true);
-    setProjectFilter("all");
   };
 
   const handleSelectDevlog = (
@@ -1425,27 +1359,12 @@ export default function DevlogManagementMock() {
             PROJECT SIDEBAR
             Dashboard / 일정관리와 동일한 구조
            ================================================= */}
-        <DevlogProjectSidebar
-          expanded={sidebarExpanded}
-          pinned={isSidebarPinned}
-          canHoverExpand={canSidebarHoverExpand}
-          isPageScrolled={isPageScrolled}
+        <ProjectSidebar
           workspaces={workspaces}
           selectedWorkspaceId={workspaceId}
           loading={workspaceLoading}
           errorMessage={workspaceErrorMessage}
-          search={projectSearch}
-          filter={projectFilter}
-          searchInputRef={projectSearchInputRef}
-          onSearch={setProjectSearch}
-          onFilter={setProjectFilter}
-          onHover={setIsSidebarHovered}
-          onCanHoverExpand={setCanSidebarHoverExpand}
-          onToggle={handleToggleSidebar}
-          onOpenSearch={openSidebarForSearch}
-          onOpenProjects={openSidebarForProjects}
           onSelectWorkspace={handleSelectWorkspace}
-          onAllProjects={() => router.push("/main")}
         />
 
         {/* =================================================
@@ -1695,372 +1614,8 @@ export default function DevlogManagementMock() {
 }
 
 /* =========================================================
-   PROJECT SIDEBAR
-   - Dashboard / 일정관리와 동일
-   - 개발일지 전용 기능은 메인 화면으로 이동
+   DEVLOG METRIC
    ========================================================= */
-
-function DevlogProjectSidebar({
-  expanded,
-  pinned,
-  canHoverExpand,
-  isPageScrolled,
-  workspaces,
-  selectedWorkspaceId,
-  loading,
-  errorMessage,
-  search,
-  filter,
-  searchInputRef,
-  onSearch,
-  onFilter,
-  onHover,
-  onCanHoverExpand,
-  onToggle,
-  onOpenSearch,
-  onOpenProjects,
-  onSelectWorkspace,
-  onAllProjects,
-}: {
-  expanded: boolean;
-  pinned: boolean;
-  canHoverExpand: boolean;
-  isPageScrolled: boolean;
-  workspaces: WorkspaceSidebarItem[];
-  selectedWorkspaceId: string;
-  loading: boolean;
-  errorMessage: string;
-  search: string;
-  filter: ProjectFilter;
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
-  onSearch: (value: string) => void;
-  onFilter: (value: ProjectFilter) => void;
-  onHover: (value: boolean) => void;
-  onCanHoverExpand: (value: boolean) => void;
-  onToggle: () => void;
-  onOpenSearch: () => void;
-  onOpenProjects: () => void;
-  onSelectWorkspace: (workspace: WorkspaceSidebarItem) => void;
-  onAllProjects: () => void;
-}) {
-  const personalCount = workspaces.filter(
-    (workspace) => workspace.mode === "personal",
-  ).length;
-
-  const teamCount = workspaces.filter(
-    (workspace) => workspace.mode === "team",
-  ).length;
-
-  const filteredWorkspaces = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return workspaces.filter((workspace) => {
-      const matchesMode = filter === "all" || workspace.mode === filter;
-      const matchesKeyword =
-        !keyword || workspace.name.toLowerCase().includes(keyword);
-
-      return matchesMode && matchesKeyword;
-    });
-  }, [filter, search, workspaces]);
-
-  const personalWorkspaces = filteredWorkspaces.filter(
-    (workspace) => workspace.mode === "personal",
-  );
-
-  const teamWorkspaces = filteredWorkspaces.filter(
-    (workspace) => workspace.mode === "team",
-  );
-
-  return (
-    <aside
-      onMouseEnter={() => {
-        if (!pinned && canHoverExpand) {
-          onHover(true);
-        }
-      }}
-      onMouseLeave={() => {
-        onHover(false);
-        onCanHoverExpand(true);
-      }}
-      className={`waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col ${
-        isPageScrolled ? "top-[88px]" : "top-4"
-      } ${expanded ? "w-[288px]" : "w-16"}`}
-    >
-      {/* header */}
-      <div
-        className={
-          expanded
-            ? "border-b border-slate-100 p-3"
-            : "flex h-[64px] items-center justify-center border-b border-slate-100 p-0"
-        }
-      >
-        <div
-          className={`flex items-center ${
-            expanded ? "justify-between gap-2" : "justify-center"
-          }`}
-        >
-          {expanded && (
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
-                  <FolderOpen size={16} strokeWidth={2.4} />
-                </div>
-
-                <div>
-                  <p className="text-sm font-black text-slate-900">프로젝트</p>
-                  <p className="text-[10px] font-semibold text-slate-400">
-                    전체 {workspaces.length} · 개인 {personalCount} · 팀 {teamCount}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={onToggle}
-            className={`grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 ${
-              expanded ? "h-8 w-8" : "h-9 w-9"
-            }`}
-            title={pinned ? "사이드바 접기" : "사이드바 펼치기"}
-          >
-            {expanded ? (
-              <PanelLeftClose size={17} />
-            ) : (
-              <PanelLeftOpen size={18} />
-            )}
-          </button>
-        </div>
-
-        {expanded && (
-          <>
-            <div className="relative mt-3">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <input
-                ref={searchInputRef}
-                value={search}
-                onChange={(event) => onSearch(event.target.value)}
-                placeholder="프로젝트 검색"
-                className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
-              />
-            </div>
-
-            <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-              {(
-                [
-                  ["all", "전체"],
-                  ["personal", "개인"],
-                  ["team", "팀"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onFilter(value)}
-                  className={`rounded-lg px-2 py-1.5 text-[11px] font-black transition ${
-                    filter === value
-                      ? "bg-white text-[#5873F9] shadow-sm"
-                      : "text-slate-400 hover:text-slate-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* body */}
-      <div
-        className={`min-h-0 flex-1 ${
-          expanded ? "overflow-y-auto p-3" : "overflow-hidden"
-        }`}
-      >
-        {loading ? (
-          <div className="grid h-32 place-items-center">
-            <Loader2 size={18} className="animate-spin text-[#5873F9]" />
-          </div>
-        ) : errorMessage ? (
-          expanded ? (
-            <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-600">
-              {errorMessage}
-            </div>
-          ) : null
-        ) : expanded ? (
-          <div className="space-y-5">
-            {filter !== "team" && (
-              <WorkspaceSection
-                title="개인 프로젝트"
-                mode="personal"
-                items={personalWorkspaces}
-                selectedWorkspaceId={selectedWorkspaceId}
-                onSelect={onSelectWorkspace}
-              />
-            )}
-
-            {filter !== "personal" && (
-              <WorkspaceSection
-                title="팀 프로젝트"
-                mode="team"
-                items={teamWorkspaces}
-                selectedWorkspaceId={selectedWorkspaceId}
-                onSelect={onSelectWorkspace}
-              />
-            )}
-          </div>
-        ) : (
-          /* Dashboard와 동일한 접힌 상태 */
-          <div className="flex h-full flex-col items-center pt-4">
-            <button
-              type="button"
-              onClick={onOpenSearch}
-              className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
-              title="프로젝트 검색"
-            >
-              <Search size={19} strokeWidth={2} />
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenProjects}
-              className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
-              title="프로젝트 목록"
-            >
-              <FolderOpen size={19} strokeWidth={2} />
-            </button>
-
-            <div className="my-3 h-px w-8 bg-slate-100" />
-
-            <div
-              className="flex h-8 w-8 items-center justify-center text-xs font-black text-slate-300"
-              title={`전체 프로젝트 ${workspaces.length}개`}
-            >
-              {workspaces.length}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {expanded && (
-        <div className="border-t border-slate-100 p-3">
-          <button
-            type="button"
-            onClick={onAllProjects}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
-          >
-            전체 프로젝트
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      )}
-    </aside>
-  );
-}
-
-function WorkspaceSection({
-  title,
-  mode,
-  items,
-  selectedWorkspaceId,
-  onSelect,
-}: {
-  title: string;
-  mode: WorkspaceMode;
-  items: WorkspaceSidebarItem[];
-  selectedWorkspaceId: string;
-  onSelect: (workspace: WorkspaceSidebarItem) => void;
-}) {
-  return (
-    <section>
-      <div className="mb-2 flex items-center justify-between px-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
-          {mode === "team" ? (
-            <UsersRound size={13} />
-          ) : (
-            <UserRound size={13} />
-          )}
-          {title}
-        </div>
-
-        <span className="text-[10px] font-black text-slate-400">
-          {items.length}
-        </span>
-      </div>
-
-      <div className="space-y-1">
-        {items.length === 0 ? (
-          <p className="px-2 py-2 text-[11px] font-medium text-slate-400">
-            프로젝트가 없습니다.
-          </p>
-        ) : (
-          items.map((workspace) => (
-            <WorkspaceButton
-              key={workspace.id}
-              workspace={workspace}
-              selected={workspace.id === selectedWorkspaceId}
-              onClick={() => onSelect(workspace)}
-            />
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
-
-function WorkspaceButton({
-  workspace,
-  selected,
-  onClick,
-}: {
-  workspace: WorkspaceSidebarItem;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition ${
-        selected
-          ? "bg-[#5873F9] text-white shadow-sm"
-          : "text-slate-700 hover:bg-slate-100"
-      }`}
-    >
-      <div
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-          selected
-            ? "bg-white/15 text-white"
-            : workspace.mode === "team"
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-blue-50 text-blue-700"
-        }`}
-      >
-        {workspace.mode === "team" ? (
-          <UsersRound size={15} />
-        ) : (
-          <UserRound size={15} />
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-black">{workspace.name}</p>
-        <p
-          className={`mt-0.5 truncate text-[10px] font-semibold ${
-            selected ? "text-white/70" : "text-slate-400"
-          }`}
-        >
-          {workspace.mode === "team" ? "팀 프로젝트" : "개인 프로젝트"}
-          {workspace.role ? ` · ${workspace.role.toUpperCase()}` : ""}
-        </p>
-      </div>
-    </button>
-  );
-}
 
 function DevlogMetric({
   label,

@@ -8,25 +8,17 @@ import {
   type ElementType,
 } from "react";
 
-import { useRouter } from "next/navigation";
-
 import {
-  ArrowRight,
   BookOpen,
   CheckCircle2,
   Code2,
   Database,
   Download,
   FileText,
-  FolderOpen,
   GitBranch,
   Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Search,
   Sparkles,
-  UserRound,
-  Users,
 } from "lucide-react";
 
 import {
@@ -47,6 +39,10 @@ import {
   fetchWorkspaceDesignDocumentApi,
   fetchWorkspaceRequirementsApi,
 } from "@/lib/design/api";
+
+import ProjectSidebar, {
+  type WorkspaceSidebarItem,
+} from "@/components/layout/ProjectSidebar";
 
 /* =========================================================
    TYPE
@@ -73,8 +69,6 @@ type ArchivePdfSectionKey =
   | "final-flow";
 
 type DevlogSortType = "latest" | "oldest";
-
-type ProjectFilter = "all" | "personal" | "team";
 
 type Project = {
   id: string;
@@ -1750,8 +1744,6 @@ function buildFlowNodesForDraft(
    ========================================================= */
 
 export default function ArchivePage() {
-  const router = useRouter();
-
   const [projects, setProjects] =
     useState<Project[]>([]);
 
@@ -1857,113 +1849,6 @@ export default function ArchivePage() {
   ] = useState("");
 
   /* =========================
-     프로젝트 사이드바
-     ========================= */
-
-  const [
-    projectSearch,
-    setProjectSearch,
-  ] = useState("");
-
-  const projectSearchInputRef =
-    useRef<HTMLInputElement | null>(
-      null,
-    );
-
-  const [
-    projectFilter,
-    setProjectFilter,
-  ] =
-    useState<ProjectFilter>(
-      "all",
-    );
-
-  const [
-    isSidebarPinned,
-    setIsSidebarPinned,
-  ] = useState(true);
-
-  const [
-    isSidebarHovered,
-    setIsSidebarHovered,
-  ] = useState(false);
-
-  const [
-    canSidebarHoverExpand,
-    setCanSidebarHoverExpand,
-  ] = useState(true);
-
-  const [
-    isPageScrolled,
-    setIsPageScrolled,
-  ] = useState(false);
-
-  const sidebarExpanded =
-    isSidebarPinned ||
-    (canSidebarHoverExpand &&
-      isSidebarHovered);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsPageScrolled(
-        window.scrollY > 0,
-      );
-    };
-
-    handleScroll();
-
-    window.addEventListener(
-      "scroll",
-      handleScroll,
-      {
-        passive: true,
-      },
-    );
-
-    return () => {
-      window.removeEventListener(
-        "scroll",
-        handleScroll,
-      );
-    };
-  }, []);
-
-  const handleToggleSidebar =
-    () => {
-      if (isSidebarPinned) {
-        setIsSidebarPinned(false);
-        setIsSidebarHovered(false);
-        setCanSidebarHoverExpand(false);
-        return;
-      }
-
-      setIsSidebarPinned(true);
-      setIsSidebarHovered(false);
-      setCanSidebarHoverExpand(true);
-    };
-
-  const openSidebarForSearch =
-    () => {
-      setIsSidebarPinned(true);
-      setIsSidebarHovered(false);
-      setCanSidebarHoverExpand(true);
-
-      requestAnimationFrame(
-        () => {
-          projectSearchInputRef.current?.focus();
-        },
-      );
-    };
-
-  const openSidebarForProjects =
-    () => {
-      setIsSidebarPinned(true);
-      setIsSidebarHovered(false);
-      setCanSidebarHoverExpand(true);
-      setProjectFilter("all");
-    };
-
-  /* =========================
      프로젝트
      ========================= */
 
@@ -1980,92 +1865,20 @@ export default function ArchivePage() {
       );
     }, [projects]);
 
-  const personalCount =
-    useMemo(
+  const sidebarWorkspaces =
+    useMemo<WorkspaceSidebarItem[]>(
       () =>
-        projects.filter(
-          (project) =>
-            project.type ===
-            "개인",
-        ).length,
+        projects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          mode:
+            project.type === "팀"
+              ? "team"
+              : "personal",
+          role: project.role,
+          childCount: 0,
+        })),
       [projects],
-    );
-
-  const teamCount =
-    useMemo(
-      () =>
-        projects.filter(
-          (project) =>
-            project.type === "팀",
-        ).length,
-      [projects],
-    );
-
-  const filteredSidebarProjects =
-    useMemo(() => {
-      const normalizedSearch =
-        projectSearch
-          .trim()
-          .toLowerCase();
-
-      return projects.filter(
-        (project) => {
-          const matchesSearch =
-            !normalizedSearch ||
-            project.name
-              .toLowerCase()
-              .includes(
-                normalizedSearch,
-              ) ||
-            project.description
-              .toLowerCase()
-              .includes(
-                normalizedSearch,
-              );
-
-          const matchesFilter =
-            projectFilter ===
-              "all" ||
-            (projectFilter ===
-              "personal" &&
-              project.type ===
-                "개인") ||
-            (projectFilter ===
-              "team" &&
-              project.type ===
-                "팀");
-
-          return (
-            matchesSearch &&
-            matchesFilter
-          );
-        },
-      );
-    }, [
-      projectFilter,
-      projectSearch,
-      projects,
-    ]);
-
-  const personalProjects =
-    useMemo(
-      () =>
-        filteredSidebarProjects.filter(
-          (project) =>
-            project.type ===
-            "개인",
-        ),
-      [filteredSidebarProjects],
-    );
-
-  const teamProjects =
-    useMemo(
-      () =>
-        filteredSidebarProjects.filter(
-          (project) =>
-            project.type === "팀",
-        ),
-      [filteredSidebarProjects],
     );
 
   const selectedProject =
@@ -3637,301 +3450,15 @@ export default function ArchivePage() {
   return (
     <main className="waivs-page min-h-[calc(100dvh-72px)] bg-[#F7F8FA] p-4 text-slate-950 md:p-5">
       <div className="mx-auto flex max-w-[1880px] gap-4">
-        {/* =================================================
-            PROJECT SIDEBAR
-           ================================================= */}
-
-        <aside
-          onMouseEnter={() => {
-            if (
-              !isSidebarPinned &&
-              canSidebarHoverExpand
-            ) {
-              setIsSidebarHovered(
-                true,
-              );
-            }
-          }}
-          onMouseLeave={() => {
-            setIsSidebarHovered(false);
-            setCanSidebarHoverExpand(
-              true,
-            );
-          }}
-          className={cn(
-            "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
-            isPageScrolled
-              ? "top-[88px]"
-              : "top-4",
-            sidebarExpanded
-              ? "w-[288px]"
-              : "w-16",
-          )}
-        >
-          {/* SIDEBAR HEADER */}
-
-          <div
-            className={cn(
-              "border-b border-slate-100",
-              sidebarExpanded
-                ? "p-3"
-                : "flex h-[64px] items-center justify-center p-0",
-            )}
-          >
-            <div
-              className={cn(
-                "flex items-center",
-                sidebarExpanded
-                  ? "justify-between gap-2"
-                  : "justify-center",
-              )}
-            >
-              {sidebarExpanded && (
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
-                      <FolderOpen
-                        size={16}
-                        strokeWidth={2.4}
-                      />
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        프로젝트
-                      </p>
-
-                      <p className="text-[10px] font-semibold text-slate-400">
-                        전체{" "}
-                        {projects.length}
-                        {" · "}
-                        개인{" "}
-                        {personalCount}
-                        {" · "}
-                        팀 {teamCount}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={
-                  handleToggleSidebar
-                }
-                className={cn(
-                  "grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700",
-                  sidebarExpanded
-                    ? "h-8 w-8"
-                    : "h-9 w-9",
-                )}
-                title={
-                  isSidebarPinned
-                    ? "사이드바 접기"
-                    : "사이드바 펼치기"
-                }
-              >
-                {sidebarExpanded ? (
-                  <PanelLeftClose
-                    size={17}
-                  />
-                ) : (
-                  <PanelLeftOpen
-                    size={18}
-                  />
-                )}
-              </button>
-            </div>
-
-            {sidebarExpanded && (
-              <>
-                <div className="relative mt-3">
-                  <Search
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <input
-                    ref={
-                      projectSearchInputRef
-                    }
-                    value={
-                      projectSearch
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setProjectSearch(
-                        event.target
-                          .value,
-                      )
-                    }
-                    placeholder="프로젝트 검색"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
-                  />
-                </div>
-
-                <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
-                  {(
-                    [
-                      [
-                        "all",
-                        "전체",
-                      ],
-                      [
-                        "personal",
-                        "개인",
-                      ],
-                      [
-                        "team",
-                        "팀",
-                      ],
-                    ] as const
-                  ).map(
-                    ([
-                      value,
-                      label,
-                    ]) => (
-                      <button
-                        key={
-                          value
-                        }
-                        type="button"
-                        onClick={() =>
-                          setProjectFilter(
-                            value,
-                          )
-                        }
-                        className={cn(
-                          "rounded-lg px-2 py-1.5 text-[11px] font-black transition",
-                          projectFilter ===
-                            value
-                            ? "bg-white text-[#5873F9] shadow-sm"
-                            : "text-slate-400 hover:text-slate-700",
-                        )}
-                      >
-                        {
-                          label
-                        }
-                      </button>
-                    ),
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* SIDEBAR BODY */}
-
-          <div
-            className={cn(
-              "min-h-0 flex-1",
-              sidebarExpanded
-                ? "overflow-y-auto p-3"
-                : "overflow-hidden",
-            )}
-          >
-            {sidebarExpanded ? (
-              <div className="space-y-5">
-                {projectFilter !==
-                  "team" && (
-                  <ArchiveProjectSection
-                    title="개인 프로젝트"
-                    mode="personal"
-                    items={
-                      personalProjects
-                    }
-                    selectedProjectId={
-                      selectedProjectId
-                    }
-                    onSelect={
-                      setSelectedProjectId
-                    }
-                  />
-                )}
-
-                {projectFilter !==
-                  "personal" && (
-                  <ArchiveProjectSection
-                    title="팀 프로젝트"
-                    mode="team"
-                    items={
-                      teamProjects
-                    }
-                    selectedProjectId={
-                      selectedProjectId
-                    }
-                    onSelect={
-                      setSelectedProjectId
-                    }
-                  />
-                )}
-              </div>
-            ) : (
-              <div className="flex h-full flex-col items-center pt-4">
-                <button
-                  type="button"
-                  onClick={
-                    openSidebarForSearch
-                  }
-                  className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
-                  title="프로젝트 검색"
-                >
-                  <Search
-                    size={19}
-                    strokeWidth={2}
-                  />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={
-                    openSidebarForProjects
-                  }
-                  className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
-                  title="프로젝트 목록"
-                >
-                  <FolderOpen
-                    size={19}
-                    strokeWidth={2}
-                  />
-                </button>
-
-                <div className="my-3 h-px w-8 bg-slate-100" />
-
-                <div
-                  className="flex h-8 w-8 items-center justify-center text-xs font-black text-slate-300"
-                  title={`전체 프로젝트 ${projects.length}개`}
-                >
-                  {projects.length}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* SIDEBAR FOOTER */}
-
-          {sidebarExpanded && (
-            <div className="border-t border-slate-100 p-3">
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(
-                    "/main",
-                  )
-                }
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
-              >
-                전체 프로젝트
-
-                <ArrowRight
-                  size={14}
-                />
-              </button>
-            </div>
-          )}
-        </aside>
+        <ProjectSidebar
+          workspaces={sidebarWorkspaces}
+          selectedWorkspaceId={selectedProjectId}
+          loading={false}
+          errorMessage=""
+          onSelectWorkspace={(workspace) =>
+            setSelectedProjectId(workspace.id)
+          }
+        />
 
         {/* =================================================
             MAIN
@@ -4381,142 +3908,6 @@ export default function ArchivePage() {
         </section>
       </div>
     </main>
-  );
-}
-
-/* =========================================================
-   PROJECT SIDEBAR
-   ========================================================= */
-
-function ArchiveProjectSection({
-  title,
-  mode,
-  items,
-  selectedProjectId,
-  onSelect,
-}: {
-  title: string;
-  mode: "personal" | "team";
-  items: Project[];
-  selectedProjectId: string;
-  onSelect: (projectId: string) => void;
-}) {
-  const Icon =
-    mode === "team"
-      ? Users
-      : UserRound;
-
-  return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Icon size={14} />
-
-          <p className="text-xs font-black">
-            {title}
-          </p>
-        </div>
-
-        <span className="text-[10px] font-black text-slate-400">
-          {items.length}
-        </span>
-      </div>
-
-      {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[10px] font-semibold text-slate-400">
-          표시할 프로젝트가 없습니다.
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {items.map(
-            (project) => (
-              <ArchiveProjectItem
-                key={project.id}
-                project={project}
-                selected={
-                  selectedProjectId ===
-                  project.id
-                }
-                onSelect={
-                  onSelect
-                }
-              />
-            ),
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ArchiveProjectItem({
-  project,
-  selected,
-  onSelect,
-}: {
-  project: Project;
-  selected: boolean;
-  onSelect: (projectId: string) => void;
-}) {
-  const Icon =
-    project.type === "팀"
-      ? Users
-      : UserRound;
-
-  return (
-    <button
-      type="button"
-      onClick={() =>
-        onSelect(project.id)
-      }
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition",
-        selected
-          ? "bg-[#5873F9] text-white shadow-sm"
-          : "text-slate-700 hover:bg-slate-100",
-      )}
-    >
-      <span
-        className={cn(
-          "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-          selected
-            ? "bg-white/15 text-white"
-            : project.type === "팀"
-              ? "bg-emerald-50 text-emerald-600"
-              : "bg-[#EEF3FF] text-[#5873F9]",
-        )}
-      >
-        <Icon
-          size={15}
-          strokeWidth={2.1}
-        />
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span
-          className={cn(
-            "block truncate text-xs font-black",
-            selected
-              ? "text-white"
-              : "text-slate-800",
-          )}
-        >
-          {project.name}
-        </span>
-
-        <span
-          className={cn(
-            "mt-0.5 block truncate text-[10px] font-semibold",
-            selected
-              ? "text-white/70"
-              : "text-slate-400",
-          )}
-        >
-          {project.type} 프로젝트 ·{" "}
-          {project.role.toUpperCase()}
-        </span>
-      </span>
-    </button>
   );
 }
 

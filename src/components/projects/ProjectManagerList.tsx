@@ -2,14 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch } from "react-redux";
 import {
-  ArrowRight,
   ArrowUpRight,
   CalendarCheck,
   CheckCircle2,
-  ChevronRight,
   Clock3,
   Code2,
   ExternalLink,
@@ -19,14 +17,10 @@ import {
   FolderOpen,
   Info,
   MoreVertical,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Search,
   Settings,
   Trash2,
-  UserRound,
-  Users,
   UsersRound,
 } from "lucide-react";
 
@@ -52,10 +46,13 @@ import {
   getScheduleHref,
 } from "@/components/main-dashboard/dashboard.utils";
 
+import ProjectSidebar, {
+  type WorkspaceSidebarItem,
+} from "@/components/layout/ProjectSidebar";
+
 
 type SubProjectStatus = "todo" | "progress" | "done" | "hold";
 type SortType = "recent" | "name" | "progress";
-type ProjectFilter = "all" | "personal" | "team";
 
 type ProjectListResponse = ProjectSummaryResponse & {
   description?: string | null;
@@ -230,366 +227,6 @@ function StatusPill({ status }: { status: SubProjectStatus }) {
     >
       {getStatusLabel(status)}
     </span>
-  );
-}
-
-function ProjectSidebar({
-  allWorkspaces,
-  currentWorkspaceId,
-  currentMode,
-  projectSearch,
-  projectFilter,
-  sidebarExpanded,
-  isSidebarPinned,
-  isLoading,
-  errorMessage,
-  onSearchChange,
-  onFilterChange,
-  onToggleSidebar,
-  onMouseEnter,
-  onMouseLeave,
-}: {
-  allWorkspaces: WorkspaceListResponse[];
-  currentWorkspaceId?: string | null;
-  currentMode: WorkspaceMode;
-  projectSearch: string;
-  projectFilter: ProjectFilter;
-  sidebarExpanded: boolean;
-  isSidebarPinned: boolean;
-  isLoading: boolean;
-  errorMessage: string;
-  onSearchChange: (value: string) => void;
-  onFilterChange: (value: ProjectFilter) => void;
-  onToggleSidebar: () => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}) {
-  const pathname = usePathname();
-
-  const personalCount = allWorkspaces.filter(
-    (workspace) => workspace.mode === "personal",
-  ).length;
-
-  const teamCount = allWorkspaces.filter(
-    (workspace) => workspace.mode === "team",
-  ).length;
-
-  const filteredSidebarWorkspaces = useMemo(() => {
-    const keyword = projectSearch.trim().toLowerCase();
-
-    return allWorkspaces.filter((workspace) => {
-      const matchedFilter =
-        projectFilter === "all" || workspace.mode === projectFilter;
-
-      const title = getWorkspaceTitle(workspace).toLowerCase();
-      const workspaceName = workspace.name?.toLowerCase() ?? "";
-      const tech = getWorkspaceTechLabel(workspace).toLowerCase();
-
-      const matchedKeyword =
-        !keyword ||
-        title.includes(keyword) ||
-        workspaceName.includes(keyword) ||
-        tech.includes(keyword);
-
-      return matchedFilter && matchedKeyword;
-    });
-  }, [allWorkspaces, projectSearch, projectFilter]);
-
-  const personalSidebarWorkspaces = filteredSidebarWorkspaces.filter(
-    (workspace) => workspace.mode === "personal",
-  );
-
-  const teamSidebarWorkspaces = filteredSidebarWorkspaces.filter(
-    (workspace) => workspace.mode === "team",
-  );
-
-  const getWorkspaceHref = (workspace: WorkspaceListResponse) => {
-    const params = new URLSearchParams();
-    params.set("workspaceId", String(workspace.id));
-    params.set("mode", workspace.mode);
-
-    return `${pathname}?${params.toString()}`;
-  };
-
-  const renderWorkspaceItem = (workspace: WorkspaceListResponse) => {
-    const active = String(workspace.id) === String(currentWorkspaceId);
-    const workspaceTitle = getWorkspaceTitle(workspace);
-    const workspaceTech = getWorkspaceTechLabel(workspace);
-
-    return (
-      <Link
-        key={workspace.id}
-        href={getWorkspaceHref(workspace)}
-        title={!sidebarExpanded ? workspaceTitle : undefined}
-        onClick={() => {
-          if (typeof window === "undefined") return;
-
-          localStorage.setItem("currentWorkspaceId", String(workspace.id));
-          localStorage.setItem("currentWorkspaceMode", workspace.mode);
-        }}
-        className={cn(
-          "group flex items-center gap-2 rounded-xl px-2 py-2 text-sm transition",
-          active
-            ? "bg-[#5873F9] text-white shadow-sm"
-            : "text-gray-700 hover:bg-gray-100",
-        )}
-      >
-        <div
-          className={cn(
-            "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-            active
-              ? "bg-white/15 text-white"
-              : workspace.mode === "team"
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-blue-50 text-blue-700",
-          )}
-        >
-          {workspace.mode === "team" ? (
-            <Users size={16} strokeWidth={2.3} />
-          ) : (
-            <UserRound size={16} strokeWidth={2.3} />
-          )}
-        </div>
-
-        {sidebarExpanded ? (
-          <>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-bold">{workspaceTitle}</p>
-              <p
-                className={cn(
-                  "truncate text-[11px]",
-                  active ? "text-white/70" : "text-gray-400",
-                )}
-              >
-                {workspace.mode === "team" ? "팀" : "개인"} · {workspaceTech}
-              </p>
-            </div>
-
-            <ChevronRight
-              size={15}
-              strokeWidth={2.4}
-              className={cn(
-                "shrink-0 opacity-0 transition group-hover:opacity-100",
-                active ? "text-white/70" : "text-gray-400",
-              )}
-            />
-          </>
-        ) : null}
-      </Link>
-    );
-  };
-
-  return (
-    <aside
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className={cn(
-  "waivs-sidebar sticky top-5 hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden transition-all duration-300 md:flex",
-  sidebarExpanded ? "w-72" : "w-16",
-)}
-    >
-      <div className="flex min-h-0 w-full flex-col">
-        <div
-          className={cn(
-            "flex items-center border-b border-gray-200",
-            sidebarExpanded
-              ? "justify-between px-3 py-3"
-              : "justify-center py-3",
-          )}
-        >
-          {sidebarExpanded ? (
-            <div className="min-w-0">
-              <p className="text-xs font-black text-slate-800">프로젝트</p>
-              <p className="mt-0.5 text-[11px] text-gray-500">
-                전체 {allWorkspaces.length}개 · 개인 {personalCount}개 · 팀{" "}
-                {teamCount}개
-              </p>
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={onToggleSidebar}
-            className="grid h-8 w-8 place-items-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-            aria-label={isSidebarPinned ? "사이드바 접기" : "사이드바 고정"}
-            title={isSidebarPinned ? "사이드바 접기" : "사이드바 고정"}
-          >
-            {isSidebarPinned ? (
-              <PanelLeftClose size={17} strokeWidth={2.4} />
-            ) : (
-              <PanelLeftOpen size={17} strokeWidth={2.4} />
-            )}
-          </button>
-        </div>
-
-        {!sidebarExpanded ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 px-2 py-3">
-            <button
-              type="button"
-              className="grid h-9 w-9 place-items-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-              title="프로젝트 검색"
-              aria-label="프로젝트 검색"
-              onClick={onToggleSidebar}
-            >
-              <Search size={17} strokeWidth={2.3} />
-            </button>
-
-            <Link
-              href="/main"
-              className="grid h-9 w-9 place-items-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-              title="전체 프로젝트"
-              aria-label="전체 프로젝트"
-            >
-              <FolderOpen size={17} strokeWidth={2.3} />
-            </Link>
-
-            <div className="mt-2 h-px w-8 bg-gray-200" />
-
-            <div className="grid h-9 w-9 place-items-center rounded-xl text-gray-300">
-              {personalCount + teamCount}
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3 px-3 py-3">
-              <div className="relative">
-                <Search
-                  size={16}
-                  strokeWidth={2.2}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-
-                <input
-                  value={projectSearch}
-                  onChange={(event) => onSearchChange(event.target.value)}
-                  placeholder="프로젝트 검색"
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1">
-                {[
-                  { key: "all", label: "전체" },
-                  { key: "personal", label: "개인" },
-                  { key: "team", label: "팀" },
-                ].map((filter) => (
-                  <button
-                    key={filter.key}
-                    type="button"
-                    onClick={() => onFilterChange(filter.key as ProjectFilter)}
-                    className={cn(
-                      "rounded-lg px-2 py-1.5 text-xs font-bold transition",
-                      projectFilter === filter.key
-                        ? "bg-white text-gray-900 shadow-sm"
-                        : "text-gray-500 hover:text-gray-900",
-                    )}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-              {isLoading ? (
-                <div className="mx-1 rounded-xl border border-dashed border-gray-200 px-3 py-6 text-center text-sm text-gray-400">
-                  프로젝트를 불러오는 중입니다.
-                </div>
-              ) : errorMessage ? (
-                <div className="mx-1 rounded-xl border border-red-100 bg-red-50 px-3 py-4 text-xs leading-relaxed text-red-500">
-                  {errorMessage}
-                </div>
-              ) : filteredSidebarWorkspaces.length === 0 ? (
-                <div className="mx-1 rounded-xl border border-dashed border-gray-200 px-3 py-6 text-center text-sm text-gray-400">
-                  검색 결과가 없습니다.
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {projectFilter !== "team" ? (
-                    <section>
-                      <div className="mb-2 flex items-center justify-between px-2">
-                        <div className="flex items-center gap-1.5 text-xs font-black text-gray-500">
-                          <UserRound size={14} strokeWidth={2.3} />
-                          개인 프로젝트
-                        </div>
-
-                        <span className="text-[11px] font-bold text-gray-400">
-                          {personalSidebarWorkspaces.length}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1">
-                        {personalSidebarWorkspaces.length > 0 ? (
-                          personalSidebarWorkspaces.map(renderWorkspaceItem)
-                        ) : (
-                          <p className="px-2 py-2 text-xs text-gray-400">
-                            개인 프로젝트가 없습니다.
-                          </p>
-                        )}
-                      </div>
-                    </section>
-                  ) : null}
-
-                  {projectFilter !== "personal" ? (
-                    <section>
-                      <div className="mb-2 flex items-center justify-between px-2">
-                        <div className="flex items-center gap-1.5 text-xs font-black text-gray-500">
-                          <Users size={14} strokeWidth={2.3} />팀 프로젝트
-                        </div>
-
-                        <span className="text-[11px] font-bold text-gray-400">
-                          {teamSidebarWorkspaces.length}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1">
-                        {teamSidebarWorkspaces.length > 0 ? (
-                          teamSidebarWorkspaces.map(renderWorkspaceItem)
-                        ) : (
-                          <p className="px-2 py-2 text-xs text-gray-400">
-                            팀 프로젝트가 없습니다.
-                          </p>
-                        )}
-                      </div>
-                    </section>
-                  ) : null}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 p-3">
-              {currentWorkspaceId ? (
-                <Link
-                  href={getIdeHref(String(currentWorkspaceId), currentMode)}
-                  onClick={() => {
-                    if (typeof window === "undefined") return;
-
-                    localStorage.setItem(
-                      "currentWorkspaceId",
-                      String(currentWorkspaceId),
-                    );
-                    localStorage.setItem("currentWorkspaceMode", currentMode);
-                  }}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-sm font-bold text-[#5873F9] transition hover:bg-[#EEF3FF]"
-                >
-                  작업하러가기
-                  <ArrowRight size={16} strokeWidth={2.4} />
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-400"
-                >
-                  작업하러가기
-                  <ArrowRight size={16} strokeWidth={2.4} />
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </aside>
   );
 }
 
@@ -834,6 +471,8 @@ export function ProjectManagerList({
   mode = "personal",
 }: Props) {
   const dispatch = useDispatch();
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const workspaceIdFromUrl =
@@ -875,16 +514,6 @@ export function ProjectManagerList({
   const [sortType, setSortType] = useState<SortType>("recent");
   const [query, setQuery] = useState("");
 
-  const [projectSearch, setProjectSearch] = useState("");
-  const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
-
-  const [isSidebarPinned, setIsSidebarPinned] = useState(true);
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
-  const [canSidebarHoverExpand, setCanSidebarHoverExpand] = useState(true);
-
-  const sidebarExpanded =
-    isSidebarPinned || (canSidebarHoverExpand && isSidebarHovered);
-
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -899,6 +528,39 @@ export function ProjectManagerList({
       ) ?? null
     );
   }, [allWorkspaces, currentWorkspaceId]);
+
+  const sidebarWorkspaces = useMemo<WorkspaceSidebarItem[]>(
+    () =>
+      allWorkspaces.map((workspace) => ({
+        id: String(workspace.id),
+        name: getWorkspaceTitle(workspace),
+        mode: workspace.mode,
+        role: (workspace as WorkspaceListResponse & { role?: string }).role,
+        childCount: getWorkspaceSubProjectCount(workspace),
+      })),
+    [allWorkspaces],
+  );
+
+  function handleSelectWorkspace(workspace: WorkspaceSidebarItem) {
+    setRememberedWorkspaceId(workspace.id);
+    setRememberedMode(workspace.mode);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("currentWorkspaceId", workspace.id);
+      localStorage.setItem("currentWorkspaceMode", workspace.mode);
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.set("workspaceId", workspace.id);
+    params.set("mode", workspace.mode);
+
+    // 예전 호환용 파라미터가 남아 있으면 제거
+    params.delete("id");
+    params.delete("workspace");
+
+    router.push(`${pathname}?${params.toString()}`);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1060,19 +722,6 @@ export function ProjectManagerList({
         )
       : 0;
 
-  function handleToggleSidebar() {
-    if (isSidebarPinned) {
-      setIsSidebarPinned(false);
-      setIsSidebarHovered(false);
-      setCanSidebarHoverExpand(false);
-      return;
-    }
-
-    setIsSidebarPinned(true);
-    setIsSidebarHovered(false);
-    setCanSidebarHoverExpand(true);
-  }
-
   async function handleDeleteSubProject(projectId: string) {
     if (
       !window.confirm(
@@ -1138,27 +787,11 @@ export function ProjectManagerList({
      <main className="waivs-page flex min-h-0 flex-1 p-4 font-sans md:p-5">
         <div className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 gap-5">
           <ProjectSidebar
-            allWorkspaces={allWorkspaces}
-            currentWorkspaceId={currentWorkspaceId}
-            currentMode={currentMode}
-            projectSearch={projectSearch}
-            projectFilter={projectFilter}
-            sidebarExpanded={sidebarExpanded}
-            isSidebarPinned={isSidebarPinned}
-            isLoading={sidebarLoading}
+            workspaces={sidebarWorkspaces}
+            selectedWorkspaceId={currentWorkspaceId ?? ""}
+            loading={sidebarLoading}
             errorMessage={sidebarError}
-            onSearchChange={setProjectSearch}
-            onFilterChange={setProjectFilter}
-            onToggleSidebar={handleToggleSidebar}
-            onMouseEnter={() => {
-              if (!isSidebarPinned && canSidebarHoverExpand) {
-                setIsSidebarHovered(true);
-              }
-            }}
-            onMouseLeave={() => {
-              setIsSidebarHovered(false);
-              setCanSidebarHoverExpand(true);
-            }}
+            onSelectWorkspace={handleSelectWorkspace}
           />
 
           <div className="flex min-w-0 flex-1">
