@@ -431,7 +431,9 @@ function WorkspaceButton({
       className={cn(
         "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition",
         selected
-          ? "bg-[#5873F9] text-white shadow-sm"
+          ? workspace.mode === "team"
+            ? "bg-[#ECFDF5] text-[#007A55] shadow-sm"
+            : "bg-[#5873F9] text-white shadow-sm"
           : "text-slate-700 hover:bg-slate-100",
       )}
     >
@@ -439,7 +441,9 @@ function WorkspaceButton({
         className={cn(
           "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
           selected
-            ? "bg-white/15 text-white"
+            ? workspace.mode === "team"
+              ? "bg-white text-[#007A55]"
+              : "bg-white/15 text-white"
             : workspace.mode === "team"
               ? "bg-emerald-50 text-emerald-700"
               : "bg-blue-50 text-blue-700",
@@ -460,7 +464,11 @@ function WorkspaceButton({
         <p
           className={cn(
             "mt-0.5 truncate text-[10px] font-semibold",
-            selected ? "text-white/70" : "text-slate-400",
+            selected
+              ? workspace.mode === "team"
+                ? "text-[#4B8F76]"
+                : "text-white/70"
+              : "text-slate-400",
           )}
         >
           {workspace.mode === "team" ? "팀 프로젝트" : "개인 프로젝트"}
