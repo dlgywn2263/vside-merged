@@ -10,7 +10,7 @@
 // 모일 수 있다.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Loader2, PencilLine, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -33,7 +33,9 @@ import { DesignPrintCapture } from "../export/DesignPrintCapture";
 import { buildPrintDocument, type PrintImages } from "../export/buildPrintDocument";
 import { printHtmlDocument } from "../export/printDesign";
 import { isEmptyModel } from "../model/schema";
-import { WorkspaceSidebar, type WorkspaceSummary } from "./WorkspaceSidebar";
+import ProjectSidebar, {
+  type WorkspaceSidebarItem,
+} from "@/components/layout/ProjectSidebar";
 import { RequirementsTab } from "../tabs/requirements/RequirementsTab";
 import { ScreenFlowTab } from "../tabs/screens/ScreenFlowTab";
 import { ErdTab } from "../tabs/erd/ErdTab";
@@ -45,10 +47,12 @@ const PRESENCE_COLORS = [
 ];
 
 export function DesignWorkspace() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const workspaceId = searchParams.get("workspaceId");
 
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceSidebarItem[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
   const [workspaceError, setWorkspaceError] = useState("");
 
@@ -62,12 +66,18 @@ export function DesignWorkspace() {
 
         setWorkspaces(
           (list ?? []).map(
-            (item: { id: string; name: string; mode?: string; role?: string }) => ({
+            (item: {
+              id: string;
+              name: string;
+              mode?: string;
+              role?: string;
+              projects?: unknown[];
+            }) => ({
               id: item.id,
               name: item.name,
               mode: item.mode === "team" ? "team" : "personal",
-              // 사이드바가 "팀 프로젝트 · OWNER" 처럼 역할까지 보여 준다.
               role: item.role,
+              childCount: Array.isArray(item.projects) ? item.projects.length : 0,
             }),
           ),
         );
@@ -133,6 +143,20 @@ export function DesignWorkspace() {
 
   const currentWorkspace = workspaces.find((item) => item.id === workspaceId) ?? null;
 
+  const handleSelectWorkspace = useCallback(
+    (workspace: WorkspaceSidebarItem) => {
+      if (workspace.id === workspaceId) {
+        return;
+      }
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("workspaceId", workspace.id);
+
+      router.push(`${pathname}?${params.toString()}`);
+    },
+    [pathname, router, searchParams, workspaceId],
+  );
+
   // 캡처가 끝나면 그림을 끼워 넣어 인쇄 창을 띄운다. 인쇄 대화상자가 뜬
   // 뒤에는 화면 밖 캔버스를 더 둘 이유가 없으므로 곧바로 걷는다.
   const handlePrintReady = useCallback(
@@ -167,15 +191,16 @@ export function DesignWorkspace() {
         문서라 늘어나도 되지만, 여기 화면 흐름도와 ERD 는 주어진 높이를
         채워야 하는 캔버스라 min-h 로 두면 찌그러진다.
       */}
-      <div className="waivs-page flex h-[calc(100dvh-72px)] min-h-0 gap-5 p-5 text-[var(--waivs-text)]">
-        <WorkspaceSidebar
+      <div className="waivs-page flex min-h-0 flex-1 gap-5 p-5 text-[var(--waivs-text)]">
+        <ProjectSidebar
           workspaces={workspaces}
-          currentWorkspaceId={workspaceId}
+          selectedWorkspaceId={workspaceId ?? ""}
           loading={loadingWorkspaces}
           errorMessage={workspaceError}
+          onSelectWorkspace={handleSelectWorkspace}
         />
 
-        <main className="waivs-panel flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="waivs-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {!workspaceId ? (
             <NoWorkspace hasWorkspaces={workspaces.length > 0} />
           ) : (
