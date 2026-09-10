@@ -283,7 +283,7 @@ export default function AdminDashboardPage() {
       </section>
 
       {/* 테이블 영역 */}
-      <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[2fr_3fr]">
         {/* 최근 가입 회원 */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
@@ -307,18 +307,18 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px]">
+            <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     회원
                   </th>
 
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     가입일
                   </th>
 
-                  <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     상태
                   </th>
                 </tr>
@@ -348,11 +348,11 @@ export default function AdminDashboardPage() {
                       </div>
                     </td>
 
-                    <td className="px-4 py-4 text-sm text-gray-500">
+                    <td className="px-4 py-4 text-center text-sm text-gray-500">
                       {user.joinedAt}
                     </td>
 
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-center">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                           statusStyle[
@@ -398,19 +398,19 @@ export default function AdminDashboardPage() {
             <table className="w-full min-w-[620px]">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     신고 대상
                   </th>
 
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     사유
                   </th>
 
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     신고일
                   </th>
 
-                  <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     상태
                   </th>
                 </tr>
@@ -423,24 +423,24 @@ export default function AdminDashboardPage() {
                     className="transition hover:bg-gray-50/70"
                   >
                     <td className="px-6 py-4">
-                      <p className="text-sm font-semibold text-gray-800">
+                      <p className="text-center text-sm font-semibold text-gray-800">
                         {report.target}
                       </p>
 
-                      <p className="mt-0.5 text-xs text-gray-400">
+                      <p className="mt-0.5 text-center text-xs text-gray-400">
                         신고자 {report.reporter}
                       </p>
                     </td>
 
-                    <td className="px-4 py-4 text-sm text-gray-500">
+                    <td className="px-4 py-4 text-center text-sm text-gray-500">
                       {report.reason}
                     </td>
 
-                    <td className="px-4 py-4 text-sm text-gray-500">
+                    <td className="px-4 py-4 text-center text-sm text-gray-500">
                       {report.reportedAt}
                     </td>
 
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-center">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                           reportStatusStyle[
