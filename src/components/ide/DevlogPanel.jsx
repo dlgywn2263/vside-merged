@@ -212,224 +212,351 @@ function DevlogFormModal({
     "";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/40 px-4 backdrop-blur-sm">
-      <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-6">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-slate-950/35 px-4 py-5 backdrop-blur-[2px]">
+      <div className="flex max-h-[calc(100dvh-40px)] w-full max-w-[820px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+        <div className="flex shrink-0 items-start justify-between border-b border-slate-100 px-6 py-4">
           <div>
-            <h3 className="text-[18px] font-extrabold text-slate-950">
-              {mode === "edit" ? "개발일지 수정" : "새 개발일지 작성"}
+            <div className="mb-1 flex items-center gap-2">
+              <span className="text-[11px] font-black tracking-[0.16em] text-[#5873F9]">
+                DEVELOPMENT LOG
+              </span>
+
+              <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[10px] font-black text-[#5873F9]">
+                {mode === "edit" ? "EDIT" : "NEW"}
+              </span>
+            </div>
+
+            <h3 className="text-[20px] font-black tracking-[-0.02em] text-slate-950">
+              {mode === "edit" ? "개발일지 수정" : "개발일지 작성"}
             </h3>
-            <p className="mt-0.5 text-[12px] font-medium text-slate-400">
-              {isLinked
-                ? "선택한 일정과 연결된 개발일지입니다."
-                : "일정과 연결하지 않는 일반 개발일지입니다."}
+
+            <p className="mt-1 text-[12px] font-medium text-slate-400">
+              프로젝트 작업 과정과 결과를 간단하게 기록합니다.
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="닫기"
           >
-            <VscClose size={20} />
+            <VscClose size={19} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="space-y-5">
-            <div>
-              <label className="mb-2 block text-[13px] font-extrabold text-slate-800">
-                일지 유형
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChange({
-                      scheduleId: "",
-                      scheduleStatusAfterWrite: "none",
-                    })
-                  }
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    !form.scheduleId
-                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  <p className="text-[13px] font-extrabold">일반 일지</p>
-                  <p
-                    className={`mt-1 text-[11px] ${
-                      !form.scheduleId ? "text-blue-100" : "text-slate-400"
-                    }`}
-                  >
-                    일정 연결 없이 작성
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const firstSchedule = schedules[0];
-
-                    if (!firstSchedule) {
-                      alert("연결할 수 있는 일정이 없습니다.");
-                      return;
-                    }
-
-                    onChange({
-                      scheduleId: String(firstSchedule.id),
-                      title:
-                        form.title.trim() || `${firstSchedule.title} 개발일지`,
-                      workedDate: firstSchedule.startDate || getTodayDateKey(),
-                      scheduleStatusAfterWrite: "none",
-                    });
-                  }}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    form.scheduleId
-                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  <p className="text-[13px] font-extrabold">일정 연결 일지</p>
-                  <p
-                    className={`mt-1 text-[11px] ${
-                      form.scheduleId ? "text-blue-100" : "text-slate-400"
-                    }`}
-                  >
-                    선택한 일정에 기록 연결
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {form.scheduleId ? (
-              <div>
-                <label className="mb-2 block text-[13px] font-extrabold text-slate-800">
-                  연결 일정
-                </label>
-
-                <select
-                  value={form.scheduleId}
-                  onChange={(event) => {
-                    const schedule = schedules.find(
-                      (item) => String(item.id) === String(event.target.value),
-                    );
-
-                    onChange({
-                      scheduleId: event.target.value,
-                      title:
-                        form.title.trim() ||
-                        (schedule ? `${schedule.title} 개발일지` : ""),
-                      workedDate:
-                        schedule?.startDate ||
-                        form.workedDate ||
-                        getTodayDateKey(),
-                    });
-                  }}
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
-                >
-                  {schedules.map((schedule) => (
-                    <option key={schedule.id} value={schedule.id}>
-                      {schedule.title} · {schedule.startDate}
-                    </option>
-                  ))}
-                </select>
-
-                {selectedScheduleTitle ? (
-                  <p className="mt-2 text-[12px] font-medium text-blue-600">
-                    현재 연결된 일정: {selectedScheduleTitle}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div>
-              <label className="mb-2 block text-[13px] font-extrabold text-slate-800">
-                제목
-              </label>
+            <section>
+              <p className="mb-2 text-[11px] font-black tracking-[0.08em] text-slate-400">
+                TITLE
+              </p>
 
               <input
                 value={form.title}
                 onChange={(event) => onChange({ title: event.target.value })}
-                placeholder="예: 로그인 토큰 저장 로직 수정"
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                placeholder="오늘 작업한 내용을 한 줄로 정리해주세요."
+                className="h-12 w-full border-b border-slate-200 bg-transparent px-0 text-[18px] font-black text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#5873F9]"
               />
-            </div>
+            </section>
 
-            <div>
-              <label className="mb-2 block text-[13px] font-extrabold text-slate-800">
-                작업 날짜
-              </label>
+            <section className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="grid min-h-[58px] grid-cols-[120px_minmax(0,1fr)] items-center border-b border-slate-100">
+                <div className="px-4 text-[12px] font-black text-slate-500">
+                  일지 유형
+                </div>
 
-              <input
-                type="date"
-                value={form.workedDate}
-                onChange={(event) =>
-                  onChange({ workedDate: event.target.value })
-                }
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[14px] font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
-              />
-            </div>
+                <div className="flex flex-wrap gap-2 px-4 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange({
+                        scheduleId: "",
+                        scheduleStatusAfterWrite: "none",
+                      })
+                    }
+                    className={`h-9 rounded-lg border px-3 text-[11px] font-black transition ${
+                      !form.scheduleId
+                        ? "border-[#AAB8FF] bg-[#F4F6FF] text-[#4058D8]"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
+                    일반 일지
+                  </button>
 
-            <div>
-              <label className="mb-2 block text-[13px] font-extrabold text-slate-800">
-                내용
-              </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstSchedule = schedules[0];
+
+                      if (!firstSchedule) {
+                        alert("연결할 수 있는 일정이 없습니다.");
+                        return;
+                      }
+
+                      onChange({
+                        scheduleId: String(firstSchedule.id),
+                        title:
+                          form.title.trim() || `${firstSchedule.title} 개발일지`,
+                        workedDate: firstSchedule.startDate || getTodayDateKey(),
+                        scheduleStatusAfterWrite: "none",
+                      });
+                    }}
+                    className={`h-9 rounded-lg border px-3 text-[11px] font-black transition ${
+                      form.scheduleId
+                        ? "border-[#AAB8FF] bg-[#F4F6FF] text-[#4058D8]"
+                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    }`}
+                  >
+                    일정 연결
+                  </button>
+                </div>
+              </div>
+
+              {form.scheduleId ? (
+                <div className="grid min-h-[58px] grid-cols-[120px_minmax(0,1fr)] items-center border-b border-slate-100">
+                  <div className="px-4 text-[12px] font-black text-slate-500">
+                    연결 일정
+                  </div>
+
+                  <div className="px-4 py-2.5">
+                    <select
+                      value={form.scheduleId}
+                      onChange={(event) => {
+                        const schedule = schedules.find(
+                          (item) => String(item.id) === String(event.target.value),
+                        );
+
+                        onChange({
+                          scheduleId: event.target.value,
+                          title:
+                            form.title.trim() ||
+                            (schedule ? `${schedule.title} 개발일지` : ""),
+                          workedDate:
+                            schedule?.startDate ||
+                            form.workedDate ||
+                            getTodayDateKey(),
+                        });
+                      }}
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+                    >
+                      {schedules.map((schedule) => (
+                        <option key={schedule.id} value={schedule.id}>
+                          {schedule.title} · {schedule.startDate}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedScheduleTitle ? (
+                      <p className="mt-1.5 text-[11px] font-semibold text-[#5873F9]">
+                        현재 연결: {selectedScheduleTitle}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid min-h-[58px] grid-cols-[120px_minmax(0,1fr)] items-center border-b border-slate-100">
+                <div className="px-4 text-[12px] font-black text-slate-500">
+                  작업 날짜
+                </div>
+
+                <div className="px-4 py-2.5">
+                  <input
+                    type="date"
+                    value={form.workedDate}
+                    onChange={(event) =>
+                      onChange({ workedDate: event.target.value })
+                    }
+                    className="h-10 w-full max-w-[220px] rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+                  />
+                </div>
+              </div>
+
+              {form.scheduleId ? (
+                <div className="grid min-h-[58px] grid-cols-[120px_minmax(0,1fr)] items-center">
+                  <div className="px-4 text-[12px] font-black text-slate-500">
+                    일정 상태
+                  </div>
+
+                  <div className="px-4 py-2.5">
+                    <select
+                      value={form.scheduleStatusAfterWrite}
+                      onChange={(event) =>
+                        onChange({ scheduleStatusAfterWrite: event.target.value })
+                      }
+                      className="h-10 w-full max-w-[260px] rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700 outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+                    >
+                      <option value="none">변경하지 않음</option>
+                      <option value="todo">할 일</option>
+                      <option value="progress">진행 중</option>
+                      <option value="done">완료</option>
+                      <option value="delayed">지연</option>
+                    </select>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-black tracking-[0.08em] text-slate-400">
+                    WORK LOG
+                  </p>
+                  <p className="mt-1 text-[12px] font-black text-slate-700">
+                    작업 내용
+                  </p>
+                </div>
+
+                <span className="text-[10px] font-bold text-slate-300">
+                  {form.content.length}자
+                </span>
+              </div>
 
               <textarea
                 value={form.content}
                 onChange={(event) => onChange({ content: event.target.value })}
-                placeholder={`오늘 작업한 내용을 작성해주세요.
+                placeholder={`오늘 수행한 작업을 기록해주세요.
 
 예)
-- 개발일지 화면을 새 API 기준으로 분리
-- 일정 연결 일지와 일반 일지 작성 흐름 구성
-- 기존 개발일지 API 충돌 제거`}
-                className="min-h-[220px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-4 text-[14px] leading-7 text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+- 로그인 API 요청/응답 구현
+- JWT 토큰 검증 로직 추가
+- 로그인 실패 예외 처리 수정`}
+                className="min-h-[280px] w-full resize-none rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-4 text-[13px] leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#5873F9] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
               />
-            </div>
-
-            {form.scheduleId ? (
-              <div>
-                <label className="mb-2 block text-[13px] font-extrabold text-slate-800">
-                  작성 후 일정 상태 변경
-                </label>
-
-                <select
-                  value={form.scheduleStatusAfterWrite}
-                  onChange={(event) =>
-                    onChange({ scheduleStatusAfterWrite: event.target.value })
-                  }
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
-                >
-                  <option value="none">변경하지 않음</option>
-                  <option value="todo">할 일</option>
-                  <option value="progress">진행 중</option>
-                  <option value="done">완료</option>
-                  <option value="delayed">지연</option>
-                </select>
-              </div>
-            ) : null}
+            </section>
           </div>
         </div>
 
-        <div className="flex h-16 shrink-0 items-center justify-end gap-2 border-t border-slate-100 px-6">
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-6 py-3">
+          <p className="text-[11px] font-medium text-slate-400">
+            제목, 작업 날짜, 작업 내용은 필수입니다.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-10 rounded-xl border border-slate-200 px-4 text-[12px] font-black text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+            >
+              취소
+            </button>
+
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={isSubmitting}
+              className="h-10 rounded-xl bg-[#5873F9] px-5 text-[12px] font-black text-white shadow-sm transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? "저장 중..." : mode === "edit" ? "수정 완료" : "작성 완료"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DevlogDetailModal({
+  log,
+  onClose,
+  onEdit,
+  onDelete,
+}) {
+  if (!log) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9000] flex items-start justify-center overflow-y-auto bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]">
+      <div className="w-full max-w-[760px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <p className="text-[11px] font-black tracking-[0.15em] text-[#5873F9]">
+              DEVELOPMENT LOG
+            </p>
+
+            <h2 className="mt-1 text-[22px] font-black leading-8 tracking-[-0.02em] text-slate-950">
+              {log.title}
+            </h2>
+
+            <p className="mt-1 text-[11px] font-semibold text-slate-400">
+              {log.projectName || "프로젝트"} · {log.workedDate}
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="h-10 rounded-xl border border-slate-200 px-4 text-[13px] font-bold text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+            className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="닫기"
           >
-            취소
+            <VscClose size={19} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <DevlogTypeBadge type={log.type} />
+
+            {log.status ? (
+              <ScheduleStatusBadge status={log.status} />
+            ) : null}
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+              <p className="text-[10px] font-black tracking-[0.08em] text-slate-400">
+                WORKED DATE
+              </p>
+              <p className="mt-1 text-[12px] font-black text-slate-700">
+                {log.workedDate}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+              <p className="text-[10px] font-black tracking-[0.08em] text-slate-400">
+                LINKED SCHEDULE
+              </p>
+              <p className="mt-1 truncate text-[12px] font-black text-slate-700">
+                {log.scheduleTitle || "연결 일정 없음"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <p className="mb-2 text-[11px] font-black tracking-[0.08em] text-slate-400">
+              WORK LOG
+            </p>
+
+            <div className="min-h-[260px] whitespace-pre-wrap rounded-xl border border-slate-200 bg-white px-5 py-4 text-[13px] leading-7 text-slate-700">
+              {log.content || "작성된 내용이 없습니다."}
+            </div>
+          </div>
+
+          {log.updatedAt ? (
+            <p className="mt-3 text-[10px] font-medium text-slate-400">
+              마지막 수정 · {log.updatedAt}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
+          <button
+            type="button"
+            onClick={() => onDelete(log)}
+            className="flex h-10 items-center gap-2 rounded-xl border border-rose-200 px-4 text-[12px] font-black text-rose-600 transition hover:bg-rose-50"
+          >
+            <VscTrash size={15} />
+            삭제
           </button>
 
           <button
             type="button"
-            onClick={onSubmit}
-            disabled={isSubmitting}
-            className="h-10 rounded-xl bg-blue-600 px-5 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onEdit(log)}
+            className="flex h-10 items-center gap-2 rounded-xl bg-[#5873F9] px-4 text-[12px] font-black text-white transition hover:bg-[#4863E8]"
           >
-            {isSubmitting ? "저장 중..." : mode === "edit" ? "수정 완료" : "저장"}
+            <VscEdit size={15} />
+            수정
           </button>
         </div>
       </div>
@@ -453,6 +580,7 @@ export default function DevlogPanel() {
   const [workspaceDisplayName, setWorkspaceDisplayName] = useState("");
 
   const [selectedLog, setSelectedLog] = useState(null);
+  const [showMissingSchedules, setShowMissingSchedules] = useState(false);
   const [filter, setFilter] = useState("all");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [startDateFilter, setStartDateFilter] = useState("");
@@ -517,6 +645,21 @@ export default function DevlogPanel() {
     );
   }, [form.scheduleId, schedules]);
 
+  const missingDevlogSchedules = useMemo(
+    () => schedules.filter((schedule) => !schedule.hasDevlog),
+    [schedules],
+  );
+
+  const linkedLogCount = useMemo(
+    () => logs.filter((log) => Boolean(log.scheduleId)).length,
+    [logs],
+  );
+
+  const generalLogCount = useMemo(
+    () => logs.filter((log) => !log.scheduleId).length,
+    [logs],
+  );
+
   const loadWorkspaceName = useCallback(async () => {
     if (!workspaceId) return;
 
@@ -557,10 +700,10 @@ export default function DevlogPanel() {
       setLogs(normalized);
 
       setSelectedLog((current) => {
-        if (!current) return normalized[0] || null;
+        if (!current) return null;
+
         return (
           normalized.find((item) => String(item.id) === String(current.id)) ||
-          normalized[0] ||
           null
         );
       });
@@ -626,7 +769,7 @@ export default function DevlogPanel() {
     );
 
     if (!exists) {
-      setSelectedLog(filteredLogs[0] || null);
+      setSelectedLog(null);
     }
   }, [filteredLogs, selectedLog]);
 
@@ -778,426 +921,350 @@ export default function DevlogPanel() {
   }
 
   return (
-    <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-[#f5f7fb] font-sans">
-      <div className="flex-1 overflow-y-auto px-5 py-5 md:px-7 md:py-7 2xl:px-10">
-        <div className="mx-auto flex w-full max-w-[1870px] flex-col gap-5">
-          <section className="overflow-hidden rounded-[30px] border border-blue-100 bg-white shadow-sm">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50 via-white to-slate-50 px-6 py-5 md:px-7">
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-extrabold text-white">
-                      개발일지
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#F7F8FA] font-sans">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+        <section className="mx-auto flex min-h-full w-full max-w-[1870px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {/* =================================================
+              HEADER
+             ================================================= */}
+          <header className="shrink-0 border-b border-slate-100 px-5 py-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-black tracking-[0.16em] text-[#5873F9]">
+                    DEVLOG
+                  </span>
+
+                  {isIdePage ? (
+                    <span className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
+                      IDE
                     </span>
+                  ) : null}
+                </div>
 
-                    {isIdePage ? (
-                      <span className="rounded-full border border-blue-100 bg-white px-3 py-1 text-[11px] font-bold text-blue-600">
-                        IDE 내부 패널
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <h1 className="text-[25px] font-black tracking-[-0.03em] text-slate-950 md:text-[28px]">
-                    {displayWorkspaceName} 개발일지
+                <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                  <h1 className="truncate text-[20px] font-black tracking-[-0.02em] text-slate-950">
+                    {displayWorkspaceName}
                   </h1>
 
-                  <p className="mt-1.5 text-[13px] font-medium text-slate-500">
-                    일정과 연결된 작업 기록, 일반 개발 기록을 한 화면에서 관리합니다.
-                  </p>
+                  <span className="text-[12px] font-bold text-slate-400">
+                    개발일지 관리
+                  </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={reloadAll}
-                    className="flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-extrabold text-slate-600 transition hover:bg-slate-50"
-                  >
-                    <VscRefresh
-                      size={17}
-                      className={
-                        isLoadingLogs || isLoadingSchedules ? "animate-spin" : ""
-                      }
-                    />
-                    새로고침
-                  </button>
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] font-bold text-slate-400">
+                  <span>
+                    전체
+                    <strong className="ml-1 text-slate-800">
+                      {logs.length}
+                    </strong>
+                  </span>
 
-                  <button
-                    type="button"
-                    onClick={openCreateGeneral}
-                    className="flex h-11 items-center gap-2 rounded-2xl bg-blue-600 px-5 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-blue-700"
-                  >
-                    <VscAdd size={18} />새 개발일지
-                  </button>
+                  <span>
+                    일정 연결
+                    <strong className="ml-1 text-[#5873F9]">
+                      {linkedLogCount}
+                    </strong>
+                  </span>
+
+                  <span>
+                    일반
+                    <strong className="ml-1 text-slate-800">
+                      {generalLogCount}
+                    </strong>
+                  </span>
+
+                  <span>
+                    일지 미작성
+                    <strong className="ml-1 text-amber-600">
+                      {missingDevlogSchedules.length}
+                    </strong>
+                  </span>
                 </div>
               </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={reloadAll}
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                  title="새로고침"
+                >
+                  <VscRefresh
+                    size={17}
+                    className={
+                      isLoadingLogs || isLoadingSchedules ? "animate-spin" : ""
+                    }
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openCreateGeneral}
+                  className="flex h-10 items-center gap-2 rounded-xl bg-[#5873F9] px-4 text-[12px] font-black text-white shadow-sm transition hover:bg-[#4863E8]"
+                >
+                  <VscAdd size={17} />
+                  새 개발일지
+                </button>
+              </div>
             </div>
+          </header>
 
-          
-          </section>
+          {/* =================================================
+              TOOLBAR
+             ================================================= */}
+          <div className="shrink-0 border-b border-slate-100 px-5 py-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMissingSchedules((prev) => !prev)}
+                  className={`h-9 rounded-xl border px-3 text-[11px] font-black transition ${
+                    showMissingSchedules
+                      ? "border-amber-300 bg-amber-50 text-amber-700"
+                      : "border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+                  }`}
+                >
+                  일지 미작성 {missingDevlogSchedules.length}
+                </button>
 
-          <section className="grid min-h-[650px] grid-cols-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_430px]">
-            <aside className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-start justify-between gap-3">
+                {[
+                  ["all", "전체"],
+                  ["linked", "일정 연결"],
+                  ["general", "일반 일지"],
+                  ["progress", "진행 중"],
+                  ["done", "완료"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFilter(key)}
+                    className={`h-9 rounded-xl px-3 text-[11px] font-black transition ${
+                      filter === key
+                        ? "bg-[#5873F9] text-white shadow-sm"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200/70 hover:text-slate-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid w-full gap-2 xl:w-auto xl:grid-cols-[320px_138px_138px_auto]">
+                <div className="relative">
+                  <VscSearch
+                    size={16}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    value={searchKeyword}
+                    onChange={(event) => setSearchKeyword(event.target.value)}
+                    placeholder="제목, 내용, 연결 일정 검색"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[12px] font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                  />
+                </div>
+
+                <input
+                  type="date"
+                  value={startDateFilter}
+                  onChange={(event) => setStartDateFilter(event.target.value)}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                />
+
+                <input
+                  type="date"
+                  value={endDateFilter}
+                  onChange={(event) => setEndDateFilter(event.target.value)}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                />
+
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                >
+                  초기화
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* =================================================
+              일지 미작성 일정 - 필요할 때만 펼침
+             ================================================= */}
+          {showMissingSchedules ? (
+            <div className="shrink-0 border-b border-slate-100 bg-[#FFFDF7] px-5 py-4">
+              <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <h2 className="text-[18px] font-black text-slate-950">
-                    워크스페이스 일정
+                  <h2 className="text-[13px] font-black text-slate-800">
+                    일지 미작성 일정
                   </h2>
-                  <p className="mt-1 text-[12px] font-medium text-slate-400">
-                    일정별로 개발일지를 작성할 수 있습니다.
+                  <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                    아직 개발일지가 연결되지 않은 일정에서 바로 작성할 수 있습니다.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={loadSchedules}
-                  className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-white hover:text-slate-700"
+                  title="일정 새로고침"
                 >
                   <VscRefresh
-                    size={18}
+                    size={15}
                     className={isLoadingSchedules ? "animate-spin" : ""}
                   />
                 </button>
               </div>
 
-              <div className="mb-4 flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <VscCalendar className="text-blue-600" size={17} />
-                  <span className="text-[13px] font-extrabold text-slate-700">
-                    이번 달 일정
-                  </span>
+              {isLoadingSchedules ? (
+                <div className="rounded-xl border border-dashed border-amber-200 bg-white py-8 text-center text-[11px] font-bold text-slate-400">
+                  일정을 불러오는 중입니다.
                 </div>
-                <span className="text-[12px] font-black text-blue-600">
-                  {schedules.length}개
-                </span>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {isLoadingSchedules ? (
-                  <div className="rounded-3xl border border-dashed border-slate-200 py-16 text-center text-[13px] font-bold text-slate-400">
-                    일정을 불러오는 중입니다.
-                  </div>
-                ) : schedules.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-slate-300 px-5 py-10 text-center">
-                    <p className="text-[13px] font-extrabold text-slate-500">
-                      등록된 일정이 없습니다.
-                    </p>
-                    <p className="mt-1 text-[12px] font-medium text-slate-400">
-                      일정관리에서 일정을 먼저 등록해주세요.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {schedules.map((schedule) => (
-                      <article
-                        key={schedule.id}
-                        className="rounded-3xl border border-slate-100 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.03)] transition hover:border-blue-200 hover:shadow-md"
-                      >
-                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              ) : missingDevlogSchedules.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-emerald-200 bg-white py-8 text-center">
+                  <p className="text-[12px] font-black text-emerald-700">
+                    모든 일정에 개발일지가 작성되어 있습니다.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid max-h-[230px] gap-2 overflow-y-auto pr-1 md:grid-cols-2 2xl:grid-cols-3">
+                  {missingDevlogSchedules.map((schedule) => (
+                    <article
+                      key={schedule.id}
+                      className="flex items-center gap-3 rounded-xl border border-amber-100 bg-white px-3 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
                           <ScheduleStatusBadge status={schedule.status} />
 
-                          {schedule.hasDevlog ? (
-                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                              작성됨
-                            </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {schedule.startDate}
+                            {schedule.startDate !== schedule.endDate
+                              ? ` ~ ${schedule.endDate}`
+                              : ""}
+                          </span>
+                        </div>
+
+                        <h3 className="truncate text-[12px] font-black text-slate-800">
+                          {schedule.title}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openCreateFromSchedule(schedule)}
+                        className="shrink-0 rounded-lg bg-[#FFF7E6] px-3 py-2 text-[10px] font-black text-amber-700 transition hover:bg-[#FFF0CC]"
+                      >
+                        작성
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* =================================================
+              DEVLOG LIST
+             ================================================= */}
+          <div className="min-h-0 flex-1 px-5 py-4">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-[15px] font-black text-slate-900">
+                  개발일지 목록
+                </h2>
+                <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                  일지를 선택하면 중앙 팝업에서 상세 내용을 확인할 수 있습니다.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {(searchKeyword || startDateFilter || endDateFilter) ? (
+                  <span className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
+                    필터 적용 중
+                  </span>
+                ) : null}
+
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
+                  {filteredLogs.length}개
+                </span>
+              </div>
+            </div>
+
+            {isLoadingLogs ? (
+              <div className="rounded-xl border border-dashed border-slate-200 py-20 text-center text-[12px] font-bold text-slate-400">
+                개발일지를 불러오는 중입니다.
+              </div>
+            ) : filteredLogs.length === 0 ? (
+              <button
+                type="button"
+                onClick={openCreateGeneral}
+                className="w-full rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-20 text-center transition hover:bg-slate-50"
+              >
+                <p className="text-[13px] font-black text-slate-500">
+                  조건에 맞는 개발일지가 없습니다.
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-slate-400">
+                  검색 조건을 변경하거나 새 일지를 작성해주세요.
+                </p>
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {filteredLogs.map((log) => (
+                  <article
+                    key={log.id}
+                    onClick={() => setSelectedLog(log)}
+                    className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition hover:border-[#AAB8FF] hover:bg-[#FBFCFF] hover:shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-5">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-black text-slate-400">
+                            {log.workedDate}
+                          </span>
+
+                          <DevlogTypeBadge type={log.type} />
+
+                          {log.status ? (
+                            <ScheduleStatusBadge status={log.status} />
                           ) : null}
                         </div>
 
-                        <h3 className="line-clamp-2 text-[14px] font-black leading-snug text-slate-900">
-                          {schedule.title}
+                        <h3 className="truncate text-[14px] font-black text-slate-900">
+                          {log.title}
                         </h3>
 
-                        <p className="mt-2 text-[12px] font-bold text-slate-400">
-                          {schedule.startDate}
-                          {schedule.startDate !== schedule.endDate
-                            ? ` ~ ${schedule.endDate}`
-                            : ""}
+                        <p className="mt-1.5 line-clamp-2 text-[11px] leading-5 text-slate-500">
+                          {log.content || "내용이 없습니다."}
                         </p>
 
-                        {schedule.description ? (
-                          <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-slate-500">
-                            {schedule.description}
+                        {log.scheduleTitle ? (
+                          <p className="mt-2 inline-flex rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
+                            연결 일정: {log.scheduleTitle}
                           </p>
                         ) : null}
-
-                        <button
-                          type="button"
-                          onClick={() => openCreateFromSchedule(schedule)}
-                          className="mt-4 h-9 w-full rounded-xl bg-blue-600 text-[12px] font-extrabold text-white transition hover:bg-blue-700"
-                        >
-                          이 일정으로 일지 쓰기
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </aside>
-
-            <main className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex flex-col gap-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-[18px] font-black text-slate-950">
-                      작성된 일지
-                    </h2>
-                    <p className="mt-1 text-[12px] font-medium text-slate-400">
-                      검색하거나 날짜를 지정해 필요한 기록만 확인합니다.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={loadLogs}
-                    className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <VscRefresh
-                      size={18}
-                      className={isLoadingLogs ? "animate-spin" : ""}
-                    />
-                  </button>
-                </div>
-
-                <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_160px_auto]">
-                  <div className="relative">
-                    <VscSearch
-                      size={17}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      value={searchKeyword}
-                      onChange={(event) => setSearchKeyword(event.target.value)}
-                      placeholder="제목, 내용, 연결 일정 검색"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-[13px] font-bold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
-                    />
-                  </div>
-
-                  <input
-                    type="date"
-                    value={startDateFilter}
-                    onChange={(event) => setStartDateFilter(event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-600 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
-                  />
-
-                  <input
-                    type="date"
-                    value={endDateFilter}
-                    onChange={(event) => setEndDateFilter(event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-600 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-[12px] font-extrabold text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
-                  >
-                    초기화
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    ["all", "전체"],
-                    ["linked", "일정 연결"],
-                    ["general", "일반"],
-                    ["progress", "진행 중"],
-                    ["done", "완료"],
-                  ].map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setFilter(key)}
-                      className={`h-9 rounded-xl px-3 text-[12px] font-extrabold transition ${
-                        filter === key
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mb-3 flex items-center justify-between text-[12px]">
-                <span className="font-bold text-slate-400">
-                  총 {filteredLogs.length}개의 일지
-                </span>
-                {(searchKeyword || startDateFilter || endDateFilter) && (
-                  <span className="font-bold text-blue-600">필터 적용 중</span>
-                )}
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {isLoadingLogs ? (
-                  <div className="rounded-3xl border border-dashed border-slate-200 py-20 text-center text-[13px] font-bold text-slate-400">
-                    개발일지를 불러오는 중입니다.
-                  </div>
-                ) : filteredLogs.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={openCreateGeneral}
-                    className="w-full rounded-3xl border border-dashed border-slate-300 py-16 text-center transition hover:bg-slate-50"
-                  >
-                    <p className="text-[14px] font-extrabold text-slate-500">
-                      조건에 맞는 개발일지가 없습니다.
-                    </p>
-                    <p className="mt-1 text-[12px] font-medium text-slate-400">
-                      검색어나 날짜 필터를 조정하거나 새 일지를 작성해보세요.
-                    </p>
-                  </button>
-                ) : (
-                  <div className="grid gap-3 2xl:grid-cols-2">
-                    {filteredLogs.map((log) => {
-                      const active = String(selectedLog?.id) === String(log.id);
-
-                      return (
-                        <article
-                          key={log.id}
-                          onClick={() => setSelectedLog(log)}
-                          className={`cursor-pointer rounded-3xl border p-5 transition ${
-                            active
-                              ? "border-blue-500 bg-blue-50 shadow-md"
-                              : "border-slate-100 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.03)] hover:border-blue-200 hover:shadow-md"
-                          }`}
-                        >
-                          <div className="mb-3 flex flex-wrap items-center gap-2">
-                            <span className="text-[11px] font-black text-slate-400">
-                              {log.workedDate}
-                            </span>
-
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                                log.scheduleId
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {log.scheduleId ? "일정 연결" : "일반 일지"}
-                            </span>
-
-                            {log.status ? (
-                              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                                {scheduleStatusLabel[log.status] || log.status}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <h3 className="line-clamp-1 text-[16px] font-black text-slate-950">
-                            {log.title}
-                          </h3>
-
-                          {log.scheduleTitle ? (
-                            <p className="mt-2 line-clamp-1 text-[12px] font-bold text-blue-600">
-                              연결 일정: {log.scheduleTitle}
-                            </p>
-                          ) : null}
-
-                          <p className="mt-2 line-clamp-2 text-[13px] leading-6 text-slate-500">
-                            {log.content || "내용이 없습니다."}
-                          </p>
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </main>
-
-            <aside className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white shadow-sm xl:col-span-2 2xl:col-span-1">
-              {selectedLog ? (
-                <>
-                  <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-5">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedLog(null)}
-                      className="flex items-center gap-1 text-[13px] font-extrabold text-slate-500 transition hover:text-slate-900"
-                    >
-                      <VscChevronLeft size={17} />
-                      상세 닫기
-                    </button>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(selectedLog)}
-                        className="rounded-xl p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
-                      >
-                        <VscEdit size={17} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(selectedLog)}
-                        className="rounded-xl p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        <VscTrash size={17} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                    <div className="mb-4 flex flex-wrap items-center gap-2">
-                      <DevlogTypeBadge type={selectedLog.type} />
-
-                      {selectedLog.status ? (
-                        <ScheduleStatusBadge status={selectedLog.status} />
-                      ) : null}
-                    </div>
-
-                    <h2 className="text-[24px] font-black leading-tight tracking-[-0.03em] text-slate-950">
-                      {selectedLog.title}
-                    </h2>
-
-                    <p className="mt-3 text-[13px] font-bold text-slate-400">
-                      작업 날짜 {selectedLog.workedDate}
-                    </p>
-
-                    {selectedLog.scheduleTitle ? (
-                      <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                        <p className="text-[12px] font-extrabold text-blue-700">
-                          연결 일정
-                        </p>
-                        <p className="mt-1 text-[13px] font-bold text-blue-950">
-                          {selectedLog.scheduleTitle}
-                        </p>
                       </div>
-                    ) : null}
 
-                    <div className="mt-6">
-                      <h3 className="mb-3 text-[14px] font-black text-slate-950">
-                        작성 내용
-                      </h3>
-
-                      <div className="min-h-[260px] whitespace-pre-wrap rounded-3xl border border-slate-200 bg-slate-50 px-5 py-5 text-[14px] leading-7 text-slate-700">
-                        {selectedLog.content || "작성된 내용이 없습니다."}
-                      </div>
+                      <span className="mt-1 shrink-0 text-[10px] font-black text-slate-300">
+                        상세 보기
+                      </span>
                     </div>
-
-                    {selectedLog.updatedAt ? (
-                      <p className="mt-4 text-[11px] font-medium text-slate-400">
-                        마지막 수정: {selectedLog.updatedAt}
-                      </p>
-                    ) : null}
-                  </div>
-                </>
-              ) : (
-                <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-8 text-center">
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-500">
-                    <VscCalendar size={26} />
-                  </div>
-
-                  <p className="text-[15px] font-black text-slate-700">
-                    선택된 일지가 없습니다.
-                  </p>
-                  <p className="mt-2 text-[13px] leading-6 text-slate-400">
-                    작성된 일지를 선택하면 상세 내용이 이 영역에 표시됩니다.
-                  </p>
-                </div>
-              )}
-            </aside>
-          </section>
-        </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
+
+      <DevlogDetailModal
+        log={selectedLog}
+        onClose={() => setSelectedLog(null)}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+      />
 
       <DevlogFormModal
         open={formOpen}
@@ -1212,4 +1279,5 @@ export default function DevlogPanel() {
       />
     </div>
   );
+  
 }
