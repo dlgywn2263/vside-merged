@@ -310,19 +310,19 @@ export default function AdminUsersPage() {
           <table className="w-full min-w-[1050px]">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-6 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   회원
                 </th>
 
-                <th className="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   권한
                 </th>
 
-                <th className="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   가입일
                 </th>
 
-                <th className="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   최근 로그인
                 </th>
 
@@ -338,7 +338,7 @@ export default function AdminUsersPage() {
                   상태
                 </th>
 
-                <th className="px-6 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-6 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   관리
                 </th>
               </tr>
@@ -354,7 +354,7 @@ export default function AdminUsersPage() {
                     {/* 회원 */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-gray-600">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100text-sm font-bold text-gray-600">
                           {user.name.charAt(0)}
                         </div>
 
@@ -380,7 +380,7 @@ export default function AdminUsersPage() {
                     </td>
 
                     {/* 권한 */}
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 text-center">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                           user.role === "ADMIN"
@@ -393,12 +393,12 @@ export default function AdminUsersPage() {
                     </td>
 
                     {/* 가입일 */}
-                    <td className="px-4 py-4 text-sm text-gray-500">
+                    <td className="px-4 py-4 text-sm text-gray-500 text-center">
                       {user.joinedAt}
                     </td>
 
                     {/* 최근 로그인 */}
-                    <td className="px-4 py-4 text-sm text-gray-500">
+                    <td className="px-4 py-4 text-sm text-gray-500 text-center">
                       {user.lastLoginAt}
                     </td>
 
@@ -438,7 +438,7 @@ export default function AdminUsersPage() {
                     </td>
 
                     {/* 상세보기 */}
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-center">
                       <Link
                         href={`/admin/users/${user.id}`}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"

@@ -12,10 +12,20 @@ import {
   ChevronRight,
   Filter,
   CircleAlert,
+  Plus,
+  Pin,
 } from "lucide-react";
 
+/* 타입 */
+
 type PostStatus = "ACTIVE" | "HIDDEN";
-type PostCategory = "QUESTION" | "FREE" | "INFO" | "RECRUIT";
+
+type PostCategory =
+  | "NOTICE"
+  | "QUESTION"
+  | "FREE"
+  | "INFO"
+  | "RECRUIT";
 
 interface PostItem {
   id: number;
@@ -29,9 +39,29 @@ interface PostItem {
   views: number;
   commentCount: number;
   reportCount: number;
+  isPinned?: boolean;
 }
 
+/* =========================
+   더미 데이터
+========================= */
+
 const initialPosts: PostItem[] = [
+  {
+    id: 35,
+    title: "WAIVS 서비스 이용 안내",
+    content:
+      "안녕하세요. WAIVS 관리자입니다. 원활한 서비스 이용을 위해 게시판 이용수칙을 확인해주세요.",
+    author: "관리자",
+    authorEmail: "admin@waivs.com",
+    category: "NOTICE",
+    status: "ACTIVE",
+    createdAt: "2026.09.10 20:00",
+    views: 326,
+    commentCount: 0,
+    reportCount: 0,
+    isPinned: true,
+  },
   {
     id: 34,
     title: "Spring Boot 로그인 API 질문 있습니다",
@@ -149,6 +179,7 @@ type CategoryFilter = "ALL" | PostCategory;
 type StatusFilter = "ALL" | PostStatus;
 
 const categoryLabel: Record<PostCategory, string> = {
+  NOTICE: "공지",
   QUESTION: "질문",
   FREE: "자유",
   INFO: "정보",
@@ -156,6 +187,7 @@ const categoryLabel: Record<PostCategory, string> = {
 };
 
 const categoryStyle: Record<PostCategory, string> = {
+  NOTICE: "border-red-100 bg-red-50 text-red-600",
   QUESTION: "border-blue-100 bg-blue-50 text-blue-700",
   FREE: "border-gray-200 bg-gray-50 text-gray-600",
   INFO: "border-emerald-100 bg-emerald-50 text-emerald-700",
@@ -174,7 +206,7 @@ export default function AdminPostsPage() {
   const filteredPosts = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
 
-    return posts.filter((post) => {
+    const filtered = posts.filter((post) => {
       const matchesKeyword =
         keyword === "" ||
         post.title.toLowerCase().includes(keyword) ||
@@ -190,6 +222,16 @@ export default function AdminPostsPage() {
         post.status === statusFilter;
 
       return matchesKeyword && matchesCategory && matchesStatus;
+    });
+
+    /*
+     * 고정 공지는 항상 위쪽으로 정렬
+     */
+    return [...filtered].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+
+      return b.id - a.id;
     });
   }, [
     posts,
@@ -213,6 +255,7 @@ export default function AdminPostsPage() {
     (sum, post) => sum + post.views,
     0,
   );
+
 
   const handleDelete = (post: PostItem) => {
     const confirmed = window.confirm(
@@ -248,6 +291,7 @@ export default function AdminPostsPage() {
       {/* =========================
           페이지 제목
       ========================= */}
+
       <section className="mb-8">
         <p className="mb-2 text-sm font-medium text-gray-400">
           Board Management
@@ -258,14 +302,15 @@ export default function AdminPostsPage() {
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-gray-500">
-          WAIVS 게시판의 게시글을 조회하고 부적절한 콘텐츠를
-          관리할 수 있습니다.
+          WAIVS 게시판의 게시글을 조회하고 공지사항 및 부적절한
+          콘텐츠를 관리할 수 있습니다.
         </p>
       </section>
 
       {/* =========================
           요약 카드
       ========================= */}
+
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           title="전체 게시글"
@@ -301,24 +346,40 @@ export default function AdminPostsPage() {
       {/* =========================
           게시글 목록
       ========================= */}
+
       <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {/* 상단 */}
+
         <div className="border-b border-gray-200 px-6 py-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            {/* 제목 */}
+
             <div>
               <h2 className="text-base font-bold text-gray-900">
                 게시글 목록
               </h2>
 
               <p className="mt-1 text-xs text-gray-400">
-                등록된 게시글을 검색하거나 관리자 권한으로 삭제할 수
+                등록된 게시글을 검색하거나 관리자 권한으로 관리할 수
                 있습니다.
               </p>
             </div>
 
-            {/* 검색 및 필터 */}
+            {/* 공지 작성 + 검색 + 필터 */}
+
             <div className="flex flex-col gap-3 lg:flex-row">
+              {/* 공지 작성 */}
+
+              <Link
+                href="/admin/posts/notice"
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition hover:bg-gray-800"
+              >
+                <Plus size={16} />
+                공지 작성
+              </Link>
+
               {/* 검색 */}
+
               <div className="relative">
                 <Search
                   size={17}
@@ -337,6 +398,7 @@ export default function AdminPostsPage() {
               </div>
 
               {/* 게시판 유형 */}
+
               <div className="relative">
                 <Filter
                   size={16}
@@ -355,15 +417,23 @@ export default function AdminPostsPage() {
                   <option value="ALL">
                     전체 유형
                   </option>
+
+                  <option value="NOTICE">
+                    공지
+                  </option>
+
                   <option value="QUESTION">
                     질문
                   </option>
+
                   <option value="FREE">
                     자유
                   </option>
+
                   <option value="INFO">
                     정보
                   </option>
+
                   <option value="RECRUIT">
                     팀원 모집
                   </option>
@@ -375,6 +445,7 @@ export default function AdminPostsPage() {
               </div>
 
               {/* 상태 */}
+
               <div className="relative">
                 <select
                   value={statusFilter}
@@ -388,9 +459,11 @@ export default function AdminPostsPage() {
                   <option value="ALL">
                     전체 상태
                   </option>
+
                   <option value="ACTIVE">
                     게시 중
                   </option>
+
                   <option value="HIDDEN">
                     숨김
                   </option>
@@ -404,7 +477,6 @@ export default function AdminPostsPage() {
           </div>
         </div>
 
-        {/* 결과 영역 */}
         <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-6 py-3">
           <p className="text-xs text-gray-500">
             검색 결과
@@ -425,7 +497,6 @@ export default function AdminPostsPage() {
           )}
         </div>
 
-        {/* 테이블 */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1150px]">
             <thead className="bg-gray-50">
@@ -434,15 +505,15 @@ export default function AdminPostsPage() {
                   번호
                 </th>
 
-                <th className="px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   게시글
                 </th>
 
-                <th className="w-[120px] px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="w-[120px] px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   유형
                 </th>
 
-                <th className="w-[150px] px-4 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="w-[150px] px-4 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   작성일
                 </th>
 
@@ -462,7 +533,7 @@ export default function AdminPostsPage() {
                   상태
                 </th>
 
-                <th className="w-[175px] px-6 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="w-[175px] px-6 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   관리
                 </th>
               </tr>
@@ -473,20 +544,43 @@ export default function AdminPostsPage() {
                 filteredPosts.map((post) => (
                   <tr
                     key={post.id}
-                    className="transition hover:bg-gray-50/70"
+                    className={`transition hover:bg-gray-50/70 ${
+                      post.isPinned
+                        ? "bg-red-50/20"
+                        : ""
+                    }`}
                   >
                     {/* 번호 */}
+
                     <td className="px-5 py-4 text-center text-sm text-gray-400">
                       {post.id}
                     </td>
 
                     {/* 게시글 */}
+
                     <td className="px-4 py-4">
-                      <div className="max-w-[420px]">
+                      <div className="mx-auto max-w-[400px]">
                         <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-gray-800">
+                          {/* 고정 공지 아이콘 */}
+
+                          {post.isPinned && (
+                            <Pin
+                              size={14}
+                              className="shrink-0 fill-red-500 text-red-500"
+                            />
+                          )}
+
+                          <p
+                            className={`truncate text-sm font-semibold ${
+                              post.category === "NOTICE"
+                                ? "text-gray-900"
+                                : "text-gray-800"
+                            }`}
+                          >
                             {post.title}
                           </p>
+
+                          {/* 신고 아이콘 */}
 
                           {post.reportCount > 0 && (
                             <Flag
@@ -497,7 +591,13 @@ export default function AdminPostsPage() {
                         </div>
 
                         <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-400">
-                          <span className="font-medium text-gray-500">
+                          <span
+                            className={`font-medium ${
+                              post.category === "NOTICE"
+                                ? "text-red-500"
+                                : "text-gray-500"
+                            }`}
+                          >
                             {post.author}
                           </span>
 
@@ -513,7 +613,8 @@ export default function AdminPostsPage() {
                     </td>
 
                     {/* 유형 */}
-                    <td className="px-4 py-4">
+
+                    <td className="px-4 py-4 text-center">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                           categoryStyle[post.category]
@@ -524,11 +625,13 @@ export default function AdminPostsPage() {
                     </td>
 
                     {/* 작성일 */}
-                    <td className="px-4 py-4 text-xs text-gray-500">
+
+                    <td className="px-4 py-4 text-center text-xs text-gray-500">
                       {post.createdAt}
                     </td>
 
                     {/* 조회 */}
+
                     <td className="px-4 py-4 text-center">
                       <div className="inline-flex items-center gap-1.5 text-sm text-gray-500">
                         <Eye size={14} />
@@ -537,6 +640,7 @@ export default function AdminPostsPage() {
                     </td>
 
                     {/* 댓글 */}
+
                     <td className="px-4 py-4 text-center">
                       <div className="inline-flex items-center gap-1.5 text-sm text-gray-500">
                         <MessageSquare size={14} />
@@ -545,6 +649,7 @@ export default function AdminPostsPage() {
                     </td>
 
                     {/* 신고 */}
+
                     <td className="px-4 py-4 text-center">
                       <span
                         className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${
@@ -558,6 +663,7 @@ export default function AdminPostsPage() {
                     </td>
 
                     {/* 상태 */}
+
                     <td className="px-4 py-4 text-center">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
@@ -573,13 +679,14 @@ export default function AdminPostsPage() {
                     </td>
 
                     {/* 관리 */}
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+
+                    <td className="w-[240px] px-2 py-4">
+                      <div className="flex items-center justify-center gap-2">
                         <Link
                           href={`/admin/posts/${post.id}`}
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
                         >
-                          상세
+                          상세보기
                           <ChevronRight size={14} />
                         </Link>
 
@@ -588,7 +695,7 @@ export default function AdminPostsPage() {
                           onClick={() =>
                             handleDelete(post)
                           }
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-100 bg-red-50 px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 hover:text-red-900"
                         >
                           <Trash2 size={14} />
                           삭제
@@ -621,7 +728,6 @@ export default function AdminPostsPage() {
           </table>
         </div>
 
-        {/* 하단 */}
         <div className="flex flex-col gap-3 border-t border-gray-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-gray-400">
             전체 게시글 {totalCount}개 중{" "}
@@ -658,10 +764,7 @@ export default function AdminPostsPage() {
   );
 }
 
-/* =========================
-   요약 카드
-========================= */
-
+{/* 요약 카드 */}
 function SummaryCard({
   title,
   value,
