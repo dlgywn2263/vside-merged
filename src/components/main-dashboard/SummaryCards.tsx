@@ -7,38 +7,41 @@ type Props = {
 
 export default function SummaryCards({ stats }: Props) {
   return (
-    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+    <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       {stats.map((stat) => {
         const Icon = SummaryIcons[stat.icon];
 
         return (
           <div
             key={stat.id}
-            className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow border border-gray-200 px-4 py-3.5 min-h-[106px]"
+            className="min-h-[88px] rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md"
           >
-            <div className="flex items-start justify-between mb-2.5">
-              <h3 className="text-[13px] font-semibold text-gray-600 leading-none">
-                {stat.title}
-              </h3>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[12px] font-bold text-gray-600">
+                  {stat.title}
+                </p>
 
-              <div className="text-gray-400 mt-0.5">
-                <Icon size={17} strokeWidth={2.2} />
-              </div>
-            </div>
-
-            <div className="flex flex-col">
-              <span className="text-[30px] leading-none font-black text-gray-900">
-                {stat.count ?? 0}
-                {stat.suffix ? (
-                  <span className="ml-0.5 text-[20px] font-black">
-                    {stat.suffix}
+                <div className="mt-2 flex items-end gap-1">
+                  <span className="text-[26px] font-black leading-none text-gray-900">
+                    {stat.count ?? 0}
                   </span>
-                ) : null}
-              </span>
 
-              <span className="text-[11px] text-gray-400 font-medium mt-1.5">
-                {stat.label}
-              </span>
+                  {stat.suffix ? (
+                    <span className="pb-0.5 text-sm font-black text-gray-900">
+                      {stat.suffix}
+                    </span>
+                  ) : null}
+                </div>
+
+                <p className="mt-1.5 truncate text-[10px] font-medium text-gray-400">
+                  {stat.label}
+                </p>
+              </div>
+
+              <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gray-50 text-gray-400">
+                <Icon size={15} strokeWidth={2.2} />
+              </div>
             </div>
           </div>
         );

@@ -351,7 +351,7 @@ export default function MainDashboard({
 
   return (
     <main className="waivs-page p-4 font-sans md:p-5">
-      <div className="mx-auto flex max-w-[1680px] gap-5">
+      <div className="mx-auto flex max-w-[1680px] gap-4">
         <ProjectSidebar
           workspaces={sidebarWorkspaces}
           selectedWorkspaceId={currentWorkspaceId ?? ""}
@@ -360,10 +360,11 @@ export default function MainDashboard({
           onSelectWorkspace={handleSelectSidebarWorkspace}
         />
 
-        <div className="min-w-0 flex-1 space-y-5">
-          <section className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm md:flex-row md:items-center">
+        <div className="min-w-0 flex-1 space-y-4">
+          {/* 상단 프로젝트 헤더 */}
+          <section className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm md:flex-row md:items-center">
             <div className="min-w-0">
-              <h1 className="text-xl font-black leading-none tracking-tight text-[#5873F9] md:text-xl">
+              <h1 className="truncate text-[18px] font-black leading-tight tracking-tight text-[#5873F9]">
                 {safeWorkspaceId
                   ? isLoading
                     ? "프로젝트 불러오는 중"
@@ -371,28 +372,28 @@ export default function MainDashboard({
                   : "Devw"}
               </h1>
 
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-0.5 truncate text-xs font-medium text-gray-400">
                 {safeWorkspaceId
                   ? `${selectedProjectName} 프로젝트 메인`
                   : "프로젝트 구조 중심 협업을 위한 웹 IDE 플랫폼"}
               </p>
             </div>
 
-            <div className="flex w-full flex-col gap-2.5 sm:flex-row md:w-auto">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <Link
                 href="/main"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-4 py-2.5 text-sm font-semibold text-[#5873F9] transition-colors hover:bg-[#EEF3FF]"
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3.5 text-xs font-bold text-[#5873F9] transition-colors hover:bg-[#EEF3FF] sm:flex-none"
               >
                 전체 프로젝트
-                <ArrowRight size={17} strokeWidth={2.3} />
+                <ArrowRight size={15} strokeWidth={2.3} />
               </Link>
 
               <Link
                 href={getIdeHref(currentWorkspaceId, currentMode)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#4863E8]"
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#4863E8] sm:flex-none"
               >
                 작업하러 가기
-                <FolderOpen size={18} strokeWidth={2.4} />
+                <FolderOpen size={16} strokeWidth={2.3} />
               </Link>
             </div>
           </section>
@@ -415,31 +416,31 @@ export default function MainDashboard({
               workFlowItems={workFlowItems}
             />
           ) : (
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
-              <div className="mb-5">
-                <h2 className="text-lg font-bold text-gray-900">
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="mb-3">
+                <h2 className="text-base font-black text-gray-900">
                   최근 프로젝트
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-0.5 text-xs text-gray-400">
                   최근에 수정한 최상위 프로젝트만 빠르게 확인하세요.
                 </p>
               </div>
 
               {isLoading ? (
-                <div className="flex h-[220px] items-center justify-center rounded-2xl border border-dashed border-gray-200 text-sm text-gray-400">
+                <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
                   프로젝트를 불러오는 중입니다.
                 </div>
               ) : errorMessage ? (
-                <div className="flex h-[220px] items-center justify-center rounded-2xl border border-dashed border-red-200 bg-red-50 text-sm text-red-500">
+                <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50 text-xs text-red-500">
                   {errorMessage}
                 </div>
               ) : recentProjects.length === 0 ? (
-                <div className="flex h-[220px] items-center justify-center rounded-2xl border border-dashed border-gray-200 text-sm text-gray-400">
+                <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
                   표시할 프로젝트가 없습니다.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {recentProjects.map((project) => (
                     <ProjectCard key={project.id} project={project} />
                   ))}
@@ -501,226 +502,176 @@ function ProjectWorkStatusSection({
   const updatedAt = workspace?.updatedAt || "최근 수정일 없음";
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+      {/* 섹션 헤더 */}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-base font-black text-gray-900">
             프로젝트 작업 현황
           </h2>
 
-          <p className="mt-1 text-sm text-gray-500">
-            이 프로젝트에서 이어서 작업할 항목과 이동 경로를 확인하세요.
+          <p className="mt-0.5 text-xs font-medium text-gray-400">
+            최근 작업을 확인하고 필요한 화면으로 바로 이동하세요.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500">
             {projectTech}
           </span>
 
           <span
-            className={`rounded-full px-3 py-1 text-xs font-bold ${
+            className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
               mode === "team"
-                ? "bg-blue-50 text-blue-600"
-                : "bg-purple-50 text-purple-600"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-blue-50 text-blue-700"
             }`}
           >
             {projectMode}
           </span>
 
-          <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-xs font-bold text-[#5873F9]">
+          <span className="rounded-full bg-[#EEF2FF] px-2.5 py-1 text-[10px] font-bold text-[#5873F9]">
             {projectRole}
           </span>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="flex h-[260px] items-center justify-center rounded-2xl border border-dashed border-gray-200 text-sm text-gray-400">
+        <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
           프로젝트 작업 현황을 불러오는 중입니다.
         </div>
       ) : errorMessage ? (
-        <div className="flex h-[260px] items-center justify-center rounded-2xl border border-dashed border-red-200 bg-red-50 text-sm text-red-500">
+        <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50 text-xs text-red-500">
           {errorMessage}
         </div>
       ) : !workspace ? (
-        <div className="flex h-[260px] items-center justify-center rounded-2xl border border-dashed border-gray-200 text-sm text-gray-400">
+        <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
           선택한 프로젝트 정보를 찾을 수 없습니다.
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-2xl border border-gray-200 bg-[#FBFCFF] p-5">
-            <div className="mb-5">
-              <p className="text-xs font-bold text-[#5873F9]">
-                오늘 이어서 할 작업
-              </p>
+        <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
+          {/* 이어서 작업 */}
+          <div className="rounded-xl border border-gray-200 bg-[#FBFCFF] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-[#5873F9]">
+                  이어서 작업
+                </p>
+                <h3 className="mt-0.5 truncate text-[17px] font-black text-gray-900">
+                  {projectName}
+                </h3>
+              </div>
 
-              <h3 className="mt-1 text-xl font-black text-gray-900">
-                {projectName}
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                최근 일정과 개발일지를 기준으로 작업을 이어갈 수 있습니다.
-              </p>
+              <span className="shrink-0 text-lg font-black text-[#5873F9]">
+                {safeProgress}%
+              </span>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-2.5 md:grid-cols-2">
               <Link
                 href={getScheduleHref(workspaceId, mode)}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-4 transition hover:border-[#5873F9] hover:bg-[#F7F9FF]"
+                className="rounded-xl border border-gray-200 bg-white px-3.5 py-3 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF]"
               >
-                <p className="text-[11px] font-bold text-gray-400">최근 일정</p>
-
-                <p className="mt-1 truncate text-base font-black text-gray-900">
-                  {latestSchedule?.title ?? "이번 달 등록된 일정이 없습니다."}
+                <p className="text-[10px] font-bold text-gray-400">최근 일정</p>
+                <p className="mt-1 truncate text-sm font-black text-gray-900">
+                  {latestSchedule?.title ?? "등록된 일정이 없습니다."}
                 </p>
-
-                <p className="mt-2 text-xs leading-relaxed text-gray-500">
-                  일정 관리에서 상태를 확인하고 완료 처리할 수 있습니다.
+                <p className="mt-1.5 text-[11px] font-medium text-gray-400">
+                  일정 관리에서 상태 확인
                 </p>
               </Link>
 
               <Link
                 href={getDevlogHref(workspaceId)}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-4 transition hover:border-[#5873F9] hover:bg-[#F7F9FF]"
+                className="rounded-xl border border-gray-200 bg-white px-3.5 py-3 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF]"
               >
-                <p className="text-[11px] font-bold text-gray-400">
+                <p className="text-[10px] font-bold text-gray-400">
                   최근 개발일지
                 </p>
-
-                <p className="mt-1 truncate text-base font-black text-gray-900">
-                  {latestDevlog?.title ?? "이번 달 작성된 개발일지가 없습니다."}
+                <p className="mt-1 truncate text-sm font-black text-gray-900">
+                  {latestDevlog?.title ?? "작성된 개발일지가 없습니다."}
                 </p>
-
-                <p className="mt-2 text-xs leading-relaxed text-gray-500">
-                  마지막 작업 기록을 기준으로 이어서 작성할 수 있습니다.
+                <p className="mt-1.5 text-[11px] font-medium text-gray-400">
+                  마지막 기록에서 이어서 작성
                 </p>
               </Link>
             </div>
 
-            <div className="mt-4 rounded-xl border border-[#DDE4FF] bg-[#F7F9FF] px-4 py-4">
-              <p className="text-[11px] font-bold text-[#5873F9]">
-                다음 작업 안내
-              </p>
+            <div className="mt-3 rounded-xl border border-[#DDE4FF] bg-[#F7F9FF] px-3.5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-gray-500">
+                  <span>
+                    남은 일정 <strong className="text-gray-900">{remainingScheduleCount}</strong>개
+                  </span>
+                  <span className="text-gray-300">·</span>
+                  <span className="truncate">
+                    최근 수정 <strong className="text-gray-900">{updatedAt}</strong>
+                  </span>
+                </div>
 
-              <p className="mt-1 text-sm leading-relaxed text-gray-700">
-                남은 일정{" "}
-                <span className="font-black text-[#5873F9]">
-                  {remainingScheduleCount}
+                <span className="shrink-0 text-[11px] font-black text-[#5873F9]">
+                  {doneScheduleCount}/{totalScheduleCount} 완료
                 </span>
-                개가 있습니다. 일정 상태를 완료로 변경하면 프로젝트 진행률에
-                반영됩니다.
-              </p>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-4">
-              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-bold text-gray-400">
-                    프로젝트 진행률
-                  </p>
-
-                  <p className="mt-1 text-sm font-medium text-gray-500">
-                    완료 처리된 일정만 진행률에 반영됩니다.
-                  </p>
-                </div>
-
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#5873F9]">
-                    {safeProgress}%
-                  </span>
-
-                  <span className="text-xs font-bold text-gray-400">
-                    {doneScheduleCount} / {totalScheduleCount} 완료
-                  </span>
-                </div>
               </div>
 
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
                 <div
                   className="h-full rounded-full bg-[#5873F9] transition-all duration-500"
                   style={{ width: `${safeProgress}%` }}
                 />
               </div>
-
-              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-gray-500">
-                  남은 일정{" "}
-                  <span className="font-black text-gray-800">
-                    {remainingScheduleCount}
-                  </span>
-                  개 · 최근 수정일{" "}
-                  <span className="font-black text-gray-800">{updatedAt}</span>
-                </p>
-
-                <Link
-                  href={getIdeHref(workspaceId, mode)}
-                  className="flex items-center justify-between rounded-xl bg-[#5873F9] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#4863E8]"
-                >
-                  <span>AIVS에서 작업하기</span>
-                  <ArrowRight size={17} strokeWidth={2.4} />
-                </Link>
-              </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="mb-4">
-              <p className="text-xs font-bold text-[#5873F9]">빠른 작업</p>
-
-              <h3 className="mt-1 text-lg font-black text-gray-900">
+          {/* 빠른 이동 */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="mb-3">
+              <p className="text-[10px] font-black text-[#5873F9]">빠른 작업</p>
+              <h3 className="mt-0.5 text-base font-black text-gray-900">
                 바로 이동
               </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                프로젝트 작업에 필요한 화면으로 바로 이동합니다.
+              <p className="mt-0.5 text-[11px] font-medium text-gray-400">
+                필요한 기능으로 바로 이동합니다.
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
               <Link
                 href={getAivsHref(workspaceId, mode)}
-                className="flex items-center justify-between rounded-xl bg-[#5873F9] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#4863E8]"
+                className="col-span-2 flex h-10 items-center justify-between rounded-xl bg-[#5873F9] px-3.5 text-xs font-bold text-white transition hover:bg-[#4863E8]"
               >
                 <span>AIVS에서 작업하기</span>
-                <ArrowRight size={17} strokeWidth={2.4} />
+                <ArrowRight size={15} strokeWidth={2.4} />
               </Link>
 
               <Link
                 href={getScheduleHref(workspaceId, mode)}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 transition hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+                className="flex h-10 items-center justify-between rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
               >
                 <span>일정 관리</span>
-                <ArrowRight size={17} strokeWidth={2.4} />
+                <ArrowRight size={14} strokeWidth={2.3} />
               </Link>
 
               <Link
                 href={getDevlogHref(workspaceId)}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 transition hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+                className="flex h-10 items-center justify-between rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
               >
-                <span>개발일지 작성</span>
-                <ArrowRight size={17} strokeWidth={2.4} />
+                <span>개발일지</span>
+                <ArrowRight size={14} strokeWidth={2.3} />
               </Link>
 
               <Link
                 href={getArchiveHref(workspaceId)}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 transition hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+                className="col-span-2 flex h-10 items-center justify-between rounded-xl border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
               >
-                <span>AI 최종 보고서 작성</span>
-                <ArrowRight size={17} strokeWidth={2.4} />
+                <span>AI 최종 보고서</span>
+                <ArrowRight size={14} strokeWidth={2.3} />
               </Link>
             </div>
 
-            <div className="mt-5 rounded-xl bg-gray-50 px-4 py-4">
-              <p className="text-xs font-bold text-gray-500">이번 달 기록</p>
-
-              <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                개발일지{" "}
-                <span className="font-black text-[#5873F9]">
-                  {devlogCount}개
-                </span>
-                가 작성되었습니다.
-              </p>
-            </div>
+            <p className="mt-2.5 text-[10px] font-semibold text-gray-400">
+              이번 달 개발일지 <span className="font-black text-[#5873F9]">{devlogCount}개</span>
+            </p>
           </div>
         </div>
       )}

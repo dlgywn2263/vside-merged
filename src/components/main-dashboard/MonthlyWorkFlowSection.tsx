@@ -41,6 +41,7 @@ export default function MonthlyWorkFlowSection({
       acc[day.key] = items
         .filter((item) => item.dateKey === day.key)
         .sort((a, b) => b.sortTime - a.sortTime);
+
       return acc;
     }, {});
   }, [items, monthDays]);
@@ -67,51 +68,75 @@ export default function MonthlyWorkFlowSection({
     Math.max(devlogs.length - visibleDevlogs.length, 0);
 
   return (
-    <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">이번 달 작업 흐름</h2>
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
-          <p className="text-sm text-gray-500 mt-1">
+      <div className="mb-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="text-base font-black text-gray-900">
+              이번 달 작업 흐름
+            </h2>
+
+            {isProjectMode ? (
+              <span className="truncate text-[11px] font-semibold text-gray-400">
+                {projectName}
+              </span>
+            ) : null}
+          </div>
+
+          <p className="mt-0.5 text-xs font-medium text-gray-400">
             {isProjectMode
-              ? `${projectName} 프로젝트의 이번 달 일정과 개발일지만 표시합니다.`
-              : "이번 달 전체 워크스페이스의 일정과 개발일지를 최신순으로 확인하세요."}
+              ? "이번 달 일정과 개발일지를 날짜별로 확인하세요."
+              : "이번 달 전체 워크스페이스의 일정과 개발일지를 확인하세요."}
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Link
             href={
               workspaceId ? getScheduleHref(workspaceId, mode) : "/schedule"
             }
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:text-[#5873F9] transition-colors"
+            className="inline-flex h-8 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition-colors hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
           >
             일정관리
           </Link>
 
           <Link
             href={workspaceId ? getDevlogHref(workspaceId) : "/devlog"}
-            className="rounded-xl bg-[#5873F9] px-3 py-2 text-xs font-semibold text-white hover:bg-[#4863E8] transition-colors"
+            className="inline-flex h-8 items-center justify-center rounded-lg bg-[#5873F9] px-3 text-[11px] font-bold text-white transition-colors hover:bg-[#4863E8]"
           >
             개발일지
           </Link>
         </div>
       </div>
 
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
+
       {isLoading ? (
-        <div className="h-[420px] rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-sm text-gray-400">
+        <div className="flex h-[320px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs font-medium text-gray-400">
           이번 달 작업 흐름을 불러오는 중입니다.
         </div>
       ) : (
-        <div className="grid items-start gap-4 lg:grid-cols-[1.35fr_1fr]">
-          <div>
-            <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-bold text-gray-400">
+        <div className="grid items-stretch gap-3 lg:grid-cols-[1.45fr_0.85fr]">
+          {/* =================================================
+              CALENDAR
+          ================================================= */}
+
+          <div className="min-w-0">
+            <div className="mb-1.5 grid grid-cols-7 text-center text-[10px] font-bold text-gray-400">
               {["월", "화", "수", "목", "금", "토", "일"].map((dayName) => (
-                <div key={dayName}>{dayName}</div>
+                <div key={dayName} className="py-1">
+                  {dayName}
+                </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1.5">
               {monthDays.map((day) => {
                 const dayItems = itemsByDate[day.key] ?? [];
 
@@ -131,95 +156,111 @@ export default function MonthlyWorkFlowSection({
                     key={day.key}
                     type="button"
                     onClick={() => onSelectDate(day.key)}
-                    className={`min-h-[82px] rounded-xl border p-2 text-left transition-all ${
+                    className={`group min-h-[68px] rounded-xl border px-2 py-1.5 text-left transition-all ${
                       active
                         ? "border-[#5873F9] bg-[#F7F9FF] shadow-sm"
-                        : "border-gray-200 bg-white hover:border-[#5873F9]/50 hover:bg-gray-50"
-                    } ${day.isCurrentMonth ? "" : "opacity-40"}`}
+                        : "border-gray-200 bg-white hover:border-[#BFCBFF] hover:bg-[#FBFCFF]"
+                    } ${day.isCurrentMonth ? "" : "opacity-35"}`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <span
-                        className={`text-sm font-black ${
-                          day.isToday ? "text-[#5873F9]" : "text-gray-900"
+                        className={`text-[13px] font-black ${
+                          day.isToday || active
+                            ? "text-[#5873F9]"
+                            : "text-gray-900"
                         }`}
                       >
                         {day.dayNumber}
                       </span>
 
                       {day.isToday ? (
-                        <span className="rounded-full bg-[#5873F9] px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        <span className="rounded-full bg-[#5873F9] px-1.5 py-0.5 text-[8px] font-black leading-none text-white">
                           오늘
                         </span>
                       ) : null}
                     </div>
 
-                    {hasItems ? (
-                      <div className="mt-2 space-y-1">
-                        {scheduleCount > 0 ? (
-                          <div className="flex items-center justify-between rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] font-bold text-[#5873F9]">
-                            <span>일정</span>
-                            <span>{scheduleCount}</span>
-                          </div>
-                        ) : null}
+                    <div className="mt-2 min-h-[18px]">
+                      {hasItems ? (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {scheduleCount > 0 ? (
+                            <span className="inline-flex h-4 items-center rounded-full bg-[#EEF2FF] px-1.5 text-[8px] font-black text-[#5873F9]">
+                              일정 {scheduleCount}
+                            </span>
+                          ) : null}
 
-                        {devlogCount > 0 ? (
-                          <div className="flex items-center justify-between rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
-                            <span>일지</span>
-                            <span>{devlogCount}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="mt-5 h-1.5 w-1.5 rounded-full bg-gray-200" />
-                    )}
+                          {devlogCount > 0 ? (
+                            <span className="inline-flex h-4 items-center rounded-full bg-gray-100 px-1.5 text-[8px] font-black text-gray-500">
+                              일지 {devlogCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="block h-1.5 w-1.5 rounded-full bg-gray-200 transition-colors group-hover:bg-gray-300" />
+                      )}
+                    </div>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <aside className="rounded-2xl border border-gray-200 bg-[#FBFCFF] p-4 mt-6">
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-[#5873F9]">
-                선택한 날짜
-              </p>
+          {/* =================================================
+              SELECTED DATE
+          ================================================= */}
 
-              <h3 className="mt-1 text-lg font-black text-gray-900">
-                {selectedDay
-                  ? `${selectedDay.month}월 ${selectedDay.dayNumber}일 ${selectedDay.dayName}요일`
-                  : selectedDateKey}
-              </h3>
+          <aside className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-[#FBFCFF] p-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-gray-100 pb-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-[#5873F9]">
+                  선택한 날짜
+                </p>
 
-              <p className="mt-1 text-xs text-gray-400">
-                일정 {schedules.length}개 · 개발일지 {devlogs.length}개
-              </p>
+                <h3 className="mt-0.5 truncate text-base font-black text-gray-900">
+                  {selectedDay
+                    ? `${selectedDay.month}월 ${selectedDay.dayNumber}일 ${selectedDay.dayName}요일`
+                    : selectedDateKey}
+                </h3>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="rounded-full bg-[#EEF2FF] px-2 py-1 text-[9px] font-black text-[#5873F9]">
+                  일정 {schedules.length}
+                </span>
+
+                <span className="rounded-full bg-gray-100 px-2 py-1 text-[9px] font-black text-gray-500">
+                  일지 {devlogs.length}
+                </span>
+              </div>
             </div>
 
-            {selectedItems.length === 0 ? (
-              <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white text-sm text-gray-400">
-                이 날짜에는 표시할 작업이 없습니다.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <WorkFlowList
-                  title="일정"
-                  emptyText="등록된 일정이 없습니다."
-                  items={visibleSchedules}
-                />
+            <div className="mt-3 min-h-0 flex-1">
+              {selectedItems.length === 0 ? (
+                <div className="flex min-h-[150px] h-full items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white px-4 text-center text-xs font-medium text-gray-400">
+                  이 날짜에는 표시할 작업이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <WorkFlowList
+                    title="일정"
+                    emptyText="등록된 일정이 없습니다."
+                    items={visibleSchedules}
+                  />
 
-                <WorkFlowList
-                  title="개발일지"
-                  emptyText="작성된 개발일지가 없습니다."
-                  items={visibleDevlogs}
-                />
+                  <WorkFlowList
+                    title="개발일지"
+                    emptyText="작성된 개발일지가 없습니다."
+                    items={visibleDevlogs}
+                  />
 
-                {hiddenCount > 0 ? (
-                  <div className="rounded-xl bg-white px-3 py-2 text-center text-xs font-semibold text-gray-500">
-                    외 {hiddenCount}개 더 있음
-                  </div>
-                ) : null}
-              </div>
-            )}
+                  {hiddenCount > 0 ? (
+                    <div className="rounded-lg bg-white px-3 py-1.5 text-center text-[10px] font-bold text-gray-500">
+                      외 {hiddenCount}개 더 있음
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </aside>
         </div>
       )}
