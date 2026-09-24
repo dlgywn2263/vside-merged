@@ -158,7 +158,7 @@ function getDashboardHref(project: DashboardCardItem) {
 }
 
 function getAiReportHref(project: DashboardCardItem) {
-  return `/ai-report?workspaceId=${encodeURIComponent(
+  return `/archive?workspaceId=${encodeURIComponent(
     project.id,
   )}&mode=${project.type}`;
 }
@@ -340,21 +340,6 @@ function getTypeStyle(
     : "bg-blue-50 text-blue-700";
 }
 
-function getProgressTextStyle(
-  type: ProjectType,
-) {
-  return type === "team"
-    ? "text-emerald-600"
-    : "text-blue-600";
-}
-
-function getProgressBarStyle(
-  type: ProjectType,
-) {
-  return type === "team"
-    ? "bg-emerald-500"
-    : "bg-blue-600";
-}
 
 /* =========================================================
    API 오류 처리
@@ -740,45 +725,57 @@ export default function DashboardProjectSelectPage() {
 
   return (
     <>
-      <main className="min-h-screen bg-[#f5f6fa] p-4 text-slate-900 md:p-5">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
+      <main className="min-h-screen bg-[#F6F8FC] px-4 py-4 text-slate-900 md:px-5 md:py-5">
+        <div className="mx-auto flex max-w-[1520px] flex-col gap-3.5">
 
           {/* =============================================
               프로젝트 선택 헤더
           ============================================= */}
 
-          <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
-            <div className="flex flex-col gap-4">
+          <section className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] md:px-6">
+            <div className="flex flex-col gap-3.5">
 
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <h1 className="text-xl font-black tracking-tight text-slate-950">
+                      프로젝트
+                    </h1>
 
-                <div>
-                  <h1 className="text-2xl font-black tracking-tight text-slate-950">
-                    프로젝트 선택
-                  </h1>
+                    <span className="hidden h-4 w-px bg-slate-200 sm:block" />
 
-                  <p className="mt-1.5 text-sm font-medium text-slate-500">
-                    작업할 최상위 프로젝트를
-                    선택하세요. 선택 후 해당
-                    프로젝트의 메인, AIVS,
-                    일정관리, 개발일지, AI
-                    보고서로 이동할 수 있습니다.
-                  </p>
+                    <p className="text-xs font-semibold text-slate-400 sm:text-[13px]">
+                      작업할 프로젝트를 선택하거나 새 프로젝트를 생성하세요.
+                    </p>
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-slate-400">
+                    <SummaryChip label="전체" value={`${totalCount}`} />
+                    <span className="text-slate-200">·</span>
+                    <SummaryChip label="팀" value={`${teamCount}`} />
+                    <span className="text-slate-200">·</span>
+                    <SummaryChip label="개인" value={`${personalCount}`} />
+                    <span className="text-slate-200">·</span>
+                    <SummaryChip label="평균 진행률" value={`${averageProgress}%`} />
+
+                    {(filteredProjects.length !== totalCount || search.trim()) && (
+                      <>
+                        <span className="text-slate-200">·</span>
+                        <span className="font-black text-[#5873F9]">
+                          {filteredProjects.length}개 표시
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex shrink-0 flex-wrap gap-2">
-
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={
-                      loadDashboardProjects
-                    }
-                    className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    onClick={loadDashboardProjects}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-black text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                   >
-                    <RefreshCw
-                      size={16}
-                    />
-
+                    <RefreshCw size={14} />
                     새로고침
                   </button>
 
@@ -790,154 +787,86 @@ export default function DashboardProjectSelectPage() {
                         "dashboard",
                       );
                     }}
-                    className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#4863E8]"
                   >
-                    <Plus size={17} />
-
+                    <Plus size={15} />
                     새 프로젝트 생성
                   </Link>
                 </div>
               </div>
 
               {/* =========================================
-                  요약
+                  검색 + 정렬 + 필터
               ========================================= */}
 
-              <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
+              <div className="flex flex-col gap-2.5 border-t border-slate-100 pt-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <div className="relative min-w-0 flex-1 lg:max-w-[560px]">
+                    <Search
+                      size={15}
+                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
 
-                <SummaryChip
-                  label="전체"
-                  value={`${totalCount}개`}
-                />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="프로젝트 검색"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-3.5 text-xs font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+                    />
+                  </div>
 
-                <span className="text-slate-300">
-                  ·
-                </span>
-
-                <SummaryChip
-                  label="팀"
-                  value={`${teamCount}개`}
-                />
-
-                <span className="text-slate-300">
-                  ·
-                </span>
-
-                <SummaryChip
-                  label="개인"
-                  value={`${personalCount}개`}
-                />
-
-                <span className="text-slate-300">
-                  ·
-                </span>
-
-                <SummaryChip
-                  label="평균 진행률"
-                  value={`${averageProgress}%`}
-                />
-
-                <span className="text-slate-300">
-                  ·
-                </span>
-
-                <span className="rounded-full bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-500">
-                  표시{" "}
-                  {
-                    filteredProjects.length
-                  }
-                  개 / 전체{" "}
-                  {totalCount}개
-                </span>
-              </div>
-
-              {/* =========================================
-                  검색 + 필터
-              ========================================= */}
-
-              <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex w-full flex-row items-center gap-2 lg:w-[820px]">
-                <div className="relative w-full lg:max-w-[620px]">
-
-                  <Search
-                    size={18}
-                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) =>
-                      setSearch(
-                        e.target
-                          .value,
-                      )
-                    }
-                    placeholder="최상위 프로젝트 검색"
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                  />
-                </div>
-
-                <div className="relative shrink-0">
+                  <div className="relative shrink-0">
                     <Filter
-                      size={13}
+                      size={12}
                       className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
+
                     <select
-                      value={
-                        projectListSortType
-                      }
-                      onChange={(
-                        event,
-                      ) =>
+                      value={projectListSortType}
+                      onChange={(event) =>
                         setProjectListSortType(
-                          event
-                            .target
-                            .value as ProjectListSortType,
+                          event.target.value as ProjectListSortType,
                         )
                       }
-                      className="h-9 w-[140px] rounded-xl border border-slate-200 bg-white pl-8 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF]"
+                      className="h-10 w-[142px] appearance-none rounded-xl border border-slate-200 bg-white pl-8 pr-7 text-[11px] font-bold text-slate-600 outline-none transition hover:border-slate-300 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
                     >
-                      <option value="recent">
-                        최근 수정순
-                      </option>
-
-                      <option value="name">
-                        이름순
-                      </option>
-
-                      <option value="progress">
-                        진행률 높은순
-                      </option>
+                      <option value="recent">최근 수정순</option>
+                      <option value="name">이름순</option>
+                      <option value="progress">진행률 높은순</option>
                     </select>
+
+                    <svg
+                      className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path
+                        d="m6 8 4 4 4-4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </div>
-                  </div>
-                <div className="flex w-full items-center rounded-2xl bg-slate-100 p-1 lg:w-auto">
-                  {FILTERS.map(
-                    (item) => (
-                      <button
-                        key={
-                          item.key
-                        }
-                        type="button"
-                        onClick={() =>
-                          setFilter(
-                            item.key,
-                          )
-                        }
-                        className={`h-9 flex-1 rounded-xl px-5 text-sm font-black transition lg:flex-none ${
-                          filter ===
-                          item.key
-                            ? "bg-slate-950 text-white shadow-sm"
-                            : "text-slate-500 hover:bg-white hover:text-slate-900"
-                        }`}
-                      >
-                        {
-                          item.label
-                        }
-                      </button>
-                    ),
-                  )}
+                </div>
+
+                <div className="grid w-full grid-cols-3 rounded-xl bg-slate-100 p-1 lg:w-[220px]">
+                  {FILTERS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setFilter(item.key)}
+                      className={`h-8 rounded-lg px-3 text-[11px] font-black transition ${
+                        filter === item.key
+                          ? "bg-white text-[#5873F9] shadow-[0_1px_4px_rgba(15,23,42,0.08)]"
+                          : "text-slate-400 hover:text-slate-700"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -948,7 +877,7 @@ export default function DashboardProjectSelectPage() {
           ============================================= */}
 
           {error && (
-            <section className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 text-sm font-semibold text-rose-700">
+            <section className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
               {error}
             </section>
           )}
@@ -958,16 +887,10 @@ export default function DashboardProjectSelectPage() {
           ============================================= */}
 
           {loading && (
-            <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {Array.from({
-                length: 6,
-              }).map(
-                (_, index) => (
-                  <ProjectCardSkeleton
-                    key={index}
-                  />
-                ),
-              )}
+            <section className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <ProjectCardSkeleton key={index} />
+              ))}
             </section>
           )}
 
@@ -975,60 +898,38 @@ export default function DashboardProjectSelectPage() {
               결과 없음
           ============================================= */}
 
-          {!loading &&
-            !error &&
-            filteredProjects.length ===
-              0 && (
-              <section className="rounded-[28px] border border-dashed border-slate-200 bg-white p-12 text-center shadow-sm">
+          {!loading && !error && filteredProjects.length === 0 && (
+            <section className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+              <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-slate-400">
+                <Search size={20} />
+              </div>
 
-                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-100 text-slate-400">
-                  <Search
-                    size={24}
-                  />
-                </div>
+              <h2 className="mt-4 text-base font-black text-slate-900">
+                검색 결과가 없습니다
+              </h2>
 
-                <h2 className="mt-5 text-xl font-black">
-                  검색 결과가
-                  없습니다
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  다른 키워드로
-                  검색하거나 필터를
-                  전체로 변경해보세요.
-                </p>
-              </section>
-            )}
+              <p className="mt-1.5 text-xs font-medium text-slate-500">
+                다른 키워드로 검색하거나 필터를 전체로 변경해보세요.
+              </p>
+            </section>
+          )}
 
           {/* =============================================
               카드 목록
           ============================================= */}
 
-          {!loading &&
-            !error &&
-            filteredProjects.length >
-              0 && (
-              <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {filteredProjects.map(
-                  (project) => (
-                    <ProjectDashboardCard
-                      key={
-                        project.id
-                      }
-                      project={
-                        project
-                      }
-                      onChanged={
-                        loadDashboardProjects
-                      }
-                      onNotify={
-                        showToast
-                      }
-                    />
-                  ),
-                )}
-              </section>
-            )}
+          {!loading && !error && filteredProjects.length > 0 && (
+            <section className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+              {filteredProjects.map((project) => (
+                <ProjectDashboardCard
+                  key={project.id}
+                  project={project}
+                  onChanged={loadDashboardProjects}
+                  onNotify={showToast}
+                />
+              ))}
+            </section>
+          )}
         </div>
       </main>
 
@@ -1564,179 +1465,113 @@ function ProjectDashboardCard({
   return (
     <>
       <article
-        className={`group relative flex min-h-[350px] flex-col rounded-[26px] border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+        className={`group relative flex min-h-[320px] flex-col overflow-visible rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] ${
           isCompleted
-            ? "border-purple-200 hover:border-purple-300"
-            : "border-slate-200 hover:border-blue-200"
+            ? "border-violet-200 hover:border-violet-300"
+            : project.type === "team"
+              ? "border-emerald-100 hover:border-[#BFCBFF]"
+              : "border-slate-200 hover:border-[#BFCBFF]"
         }`}
       >
-
         {/* ===============================================
             카드 상단
         =============================================== */}
 
-        <div className="flex items-start justify-between gap-4">
-
-          <div className="flex flex-wrap items-center gap-2">
-
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-black ${getTypeStyle(
+              className={`inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-black ${getTypeStyle(
                 project.type,
               )}`}
             >
-              {getTypeLabel(
-                project.type,
+              {project.type === "team" ? (
+                <Users size={12} strokeWidth={2.4} />
+              ) : (
+                <UserRound size={12} strokeWidth={2.4} />
               )}
+              {getTypeLabel(project.type)}
             </span>
 
-            {isCompleted && (
-              <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-black text-purple-700">
-                완료
+            <span className="inline-flex h-6 items-center rounded-full bg-slate-100 px-2.5 text-[10px] font-bold text-slate-500">
+              {project.tech}
+            </span>
+
+            {project.type === "team" && (
+              <span className="inline-flex h-6 items-center rounded-full border border-slate-200 bg-white px-2.5 text-[9px] font-black text-slate-500">
+                {isOwner ? "OWNER" : "MEMBER"}
               </span>
             )}
 
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-              {project.tech}
-            </span>
+            {isCompleted && (
+              <span className="inline-flex h-6 items-center rounded-full bg-violet-50 px-2.5 text-[10px] font-black text-violet-600">
+                완료
+              </span>
+            )}
           </div>
 
-          {/* =============================================
-              진행률 + 메뉴
-          ============================================= */}
-
-          <div className="flex shrink-0 items-start gap-2">
-
-            <div className="rounded-2xl bg-slate-50 px-3.5 py-2.5 text-right">
-
-              <p className="text-[11px] font-bold text-slate-400">
-                진행률
-              </p>
-
-              <p
-                className={`mt-0.5 text-xl font-black ${
-                  isCompleted
-                    ? "text-purple-600"
-                    : getProgressTextStyle(
-                        project.type,
-                      )
-                }`}
-              >
-                {project.progress}%
-              </p>
-            </div>
-
-            <div
-              ref={menuRef}
-              className="relative"
+          <div ref={menuRef} className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((prev) => !prev)}
+              aria-label="프로젝트 메뉴"
+              className={`grid h-8 w-8 place-items-center rounded-lg border transition ${
+                menuOpen
+                  ? "border-[#C8D2FF] bg-[#F2F5FF] text-[#5873F9]"
+                  : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+              }`}
             >
+              <MoreHorizontal size={17} />
+            </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setMenuOpen(
-                    (prev) =>
-                      !prev,
-                  )
-                }
-                aria-label="프로젝트 메뉴"
-                className={`grid h-9 w-9 place-items-center rounded-xl border transition ${
-                  menuOpen
-                    ? "border-blue-200 bg-blue-50 text-blue-700"
-                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                }`}
-              >
-                <MoreHorizontal
-                  size={19}
-                />
-              </button>
+            {/* =========================================
+                OWNER / MEMBER 메뉴
+            ========================================= */}
 
-              {/* =========================================
-                  OWNER / MEMBER 메뉴
-              ========================================= */}
+            {menuOpen && (
+              <div className="absolute right-0 top-9 z-40 w-[190px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/70">
+                {isOwner ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openModal("edit")}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                    >
+                      <Pencil size={15} className="text-slate-400" />
+                      프로젝트 수정
+                    </button>
 
-              {menuOpen && (
-                <div className="absolute right-0 top-11 z-40 w-[190px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/70">
+                    <button
+                      type="button"
+                      onClick={() => openModal("duplicate")}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                    >
+                      <Copy size={15} className="text-slate-400" />
+                      프로젝트 복제
+                    </button>
 
-                  {isOwner ? (
-                    <>
-                      {/* 수정 */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openModal(
-                            "edit",
-                          )
-                        }
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
-                      >
-                        <Pencil
-                          size={16}
-                          className="text-slate-400"
-                        />
+                    <div className="my-1 h-px bg-slate-100" />
 
-                        프로젝트 수정
-                      </button>
-
-                      {/* 복제 */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openModal(
-                            "duplicate",
-                          )
-                        }
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
-                      >
-                        <Copy
-                          size={16}
-                          className="text-slate-400"
-                        />
-
-                        프로젝트 복제
-                      </button>
-
-                      <div className="my-1 h-px bg-slate-100" />
-
-                      {/* 삭제 */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openModal(
-                            "delete",
-                          )
-                        }
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-600 transition hover:bg-rose-50"
-                      >
-                        <Trash2
-                          size={16}
-                        />
-
-                        프로젝트 삭제
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {/* MEMBER 나가기 */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openModal(
-                            "leave",
-                          )
-                        }
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-600 transition hover:bg-rose-50"
-                      >
-                        <LogOut
-                          size={16}
-                        />
-
-                        프로젝트 나가기
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => openModal("delete")}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+                    >
+                      <Trash2 size={15} />
+                      프로젝트 삭제
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openModal("leave")}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+                  >
+                    <LogOut size={15} />
+                    프로젝트 나가기
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1744,101 +1579,46 @@ function ProjectDashboardCard({
             프로젝트 정보
         =============================================== */}
 
-        <div className="flex-1">
+        <div className="mt-4 min-w-0">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <h3
+              className={`min-w-0 flex-1 truncate text-[17px] font-black leading-6 tracking-tight transition ${
+                isCompleted
+                  ? "text-violet-700"
+                  : "text-slate-950 group-hover:text-[#4F68E8]"
+              }`}
+            >
+              {project.title}
+            </h3>
 
-          <h3
-            className={`mt-3 line-clamp-2 text-2xl font-black leading-tight transition ${
-              isCompleted
-                ? "text-purple-700"
-                : "text-slate-950"
-            }`}
-          >
-            {project.title}
-          </h3>
+            <span className="shrink-0 text-[15px] font-black text-[#5873F9]">
+              {project.progress}%
+            </span>
+          </div>
 
-          <p className="mt-3 line-clamp-2 min-h-[44px] text-sm leading-6 text-slate-500">
+          <p className="mt-1.5 line-clamp-1 min-h-[18px] text-[11px] font-medium leading-[18px] text-slate-400">
             {project.description}
           </p>
         </div>
 
         {/* ===============================================
-            진행률
+            진행률 / 최근 수정
         =============================================== */}
 
-        <div className="mt-5">
-
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
-
-            <span>
-              최근 수정일
-            </span>
-
-            <span>
-              {formatDate(
-                project.lastModified,
-              )}
-            </span>
-          </div>
-
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
+        <div className="mt-4">
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div
-              className={`h-full rounded-full transition-all ${
-                isCompleted
-                  ? "bg-purple-500"
-                  : getProgressBarStyle(
-                      project.type,
-                    )
-              }`}
-              style={{
-                width: `${project.progress}%`,
-              }}
+              className="h-full rounded-full bg-[#5873F9] transition-all duration-500"
+              style={{ width: `${project.progress}%` }}
             />
           </div>
-        </div>
 
-        {/* ===============================================
-            프로젝트 유형
-        =============================================== */}
-
-        <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-500">
-
-          {project.type ===
-          "team" ? (
-            <Users size={16} />
-          ) : (
-            <UserRound
-              size={16}
-            />
-          )}
-
-          <span>
-            {project.type ===
-            "team"
-              ? "팀 작업"
-              : "개인 작업"}
-          </span>
-
-          {project.type ===
-            "team" && (
-            <>
-              <span className="text-slate-300">
-                ·
-              </span>
-
-              <span
-                className={
-                  isOwner
-                    ? "font-bold text-emerald-600"
-                    : "font-bold text-slate-500"
-                }
-              >
-                {isOwner
-                  ? "OWNER"
-                  : "MEMBER"}
-              </span>
-            </>
-          )}
+          <div className="mt-2.5 flex items-center justify-between gap-3 text-[10px] font-semibold text-slate-400">
+            <span>최근 수정</span>
+            <span className="font-bold text-slate-500">
+              {formatDate(project.lastModified)}
+            </span>
+          </div>
         </div>
 
         {/* ===============================================
@@ -1846,70 +1626,36 @@ function ProjectDashboardCard({
         =============================================== */}
 
         <div className="mt-5 border-t border-slate-100 pt-4">
-
           <div className="grid grid-cols-2 gap-2">
-
             <CardActionLink
-              href={getDashboardHref(
-                project,
-              )}
-              icon={
-                <LayoutDashboard
-                  size={16}
-                />
-              }
+              href={getDashboardHref(project)}
+              icon={<LayoutDashboard size={14} />}
               label="프로젝트 열기"
               primary
               className="col-span-2"
             />
 
             <CardActionLink
-              href={getScheduleHref(
-                project.id,
-                project.type,
-              )}
-              icon={
-                <CalendarDays
-                  size={15}
-                />
-              }
+              href={getScheduleHref(project.id, project.type)}
+              icon={<CalendarDays size={13} />}
               label="일정관리"
             />
 
             <CardActionLink
-              href={getDevlogHref(
-                project.id,
-              )}
-              icon={
-                <BookOpenText
-                  size={15}
-                />
-              }
+              href={getDevlogHref(project.id)}
+              icon={<BookOpenText size={13} />}
               label="개발일지"
             />
 
             <CardActionLink
-              href={getAivsHref(
-                project.id,
-                project.type,
-              )}
-              icon={
-                <Code2
-                  size={15}
-                />
-              }
+              href={getAivsHref(project.id, project.type)}
+              icon={<Code2 size={13} />}
               label="AIVS"
             />
 
             <CardActionLink
-              href={getAiReportHref(
-                project,
-              )}
-              icon={
-                <FileText
-                  size={15}
-                />
-              }
+              href={getAiReportHref(project)}
+              icon={<FileText size={13} />}
               label="AI 보고서"
             />
           </div>
@@ -2603,10 +2349,10 @@ function CardActionLink({
   return (
     <Link
       href={href}
-      className={`flex items-center justify-center gap-1.5 rounded-2xl text-xs font-black transition ${className} ${
+      className={`flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition ${className} ${
         primary
-          ? "h-10 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
-          : "h-10 border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          ? "h-10 bg-[#5873F9] text-white shadow-sm hover:bg-[#4863E8]"
+          : "h-10 border border-slate-200 bg-white text-slate-600 hover:border-[#C8D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
       }`}
     >
       {icon}
@@ -2630,39 +2376,34 @@ function CardActionLink({
 
 function ProjectCardSkeleton() {
   return (
-    <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
-
+    <div className="min-h-[320px] rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-
-        <div className="h-7 w-28 animate-pulse rounded-full bg-slate-100" />
-
-        <div className="flex gap-2">
-
-          <div className="h-14 w-16 animate-pulse rounded-2xl bg-slate-100" />
-
-          <div className="h-9 w-9 animate-pulse rounded-xl bg-slate-100" />
+        <div className="flex gap-1.5">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-slate-100" />
         </div>
+
+        <div className="h-8 w-8 animate-pulse rounded-lg bg-slate-100" />
       </div>
 
-      <div className="mt-6 h-6 w-2/3 animate-pulse rounded-lg bg-slate-100" />
+      <div className="mt-5 flex items-center justify-between gap-4">
+        <div className="h-5 w-1/2 animate-pulse rounded-md bg-slate-100" />
+        <div className="h-5 w-10 animate-pulse rounded-md bg-slate-100" />
+      </div>
 
-      <div className="mt-4 h-4 w-full animate-pulse rounded-lg bg-slate-100" />
+      <div className="mt-2.5 h-3.5 w-3/4 animate-pulse rounded-md bg-slate-100" />
+      <div className="mt-5 h-1.5 w-full animate-pulse rounded-full bg-slate-100" />
+      <div className="mt-2.5 ml-auto h-3 w-20 animate-pulse rounded-md bg-slate-100" />
 
-      <div className="mt-2 h-4 w-3/4 animate-pulse rounded-lg bg-slate-100" />
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
 
-      <div className="mt-6 h-2 w-full animate-pulse rounded-full bg-slate-100" />
-
-      <div className="mt-6 grid grid-cols-2 gap-2">
-
-        <div className="col-span-2 h-12 animate-pulse rounded-2xl bg-slate-100" />
-
-        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
-
-        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
-
-        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
-
-        <div className="h-10 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+        </div>
       </div>
     </div>
   );
