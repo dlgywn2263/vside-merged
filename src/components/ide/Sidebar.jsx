@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { usePathname } from "next/navigation";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import {
   VscCollapseAll,
   VscEdit,
@@ -56,6 +57,19 @@ import {
   renameFileApi,
 } from "@/lib/ide/api";
 import { getWsBase } from "@/lib/ide/wsBase";
+import { setSafeRunStatus } from "@/store/slices/safeRunSlice";
+import {
+  deleteSandboxFileApi,
+  fetchSandboxFileApi,
+  fetchSandboxStateApi,
+  saveSandboxFileApi,
+} from "@/lib/ide/sandbox/sandboxApi";
+import { overlaySandboxTree } from "@/lib/ide/sandbox/sandboxTree";
+import {
+  isSandboxFile,
+  sandboxScopeKey,
+  setSandbox,
+} from "@/store/slices/sandboxSlice";
 
 /** 워크스페이스 이벤트 소켓이 끊겼을 때 첫 재시도까지 기다리는 시간. */
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -317,6 +331,16 @@ const FileTreeItem = ({
           )}
         </div>
 
+        {/* 내 샌드박스에서 고쳤거나 새로 만든 파일. 팀원에게는 아직 보이지 않는다. */}
+        {node.sandboxKind && (
+          <span
+            className="shrink-0 ml-2 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white"
+            title="내 샌드박스에만 있는 변경입니다. 반영하기 전까지 팀원에게 보이지 않아요."
+          >
+            {node.sandboxKind === "NEW" ? "새 파일" : "수정"}
+          </span>
+        )}
+
         {isStartupProject && (
           <span className="shrink-0 ml-2 text-[9px] font-black text-blue-500 bg-blue-100/50 px-1.5 py-0.5 rounded border border-blue-100">
             현재 작업 폴더
@@ -459,6 +483,50 @@ export default function Sidebar() {
     [activeProject, activeBranch],
   );
 
+  /*
+   * 샌드박스(개인 레이어). 팀 모드의 시작 프로젝트에만 해당한다.
+   *
+   * 샌드박스가 켜져 있으면 탐색기는 팀 폴더 위에 내 샌드박스를 덧씌워 보여 준다.
+   * 내가 새로 만든 파일은 보이고, 지운 파일은 안 보이고, 고친 파일에는 표시가 붙는다.
+   * 파일을 열 때도 내가 고친 파일이면 팀 것이 아니라 내 것을 읽는다.
+   */
+  const isTeamMode = usePathname()?.includes("/team");
+  const store = useStore();
+
+  /**
+   * 지금 브랜치의 샌드박스 상태. 아직 받아 오지 못했으면 서버에 물어본다.
+   *
+   * 물어보지 않고 "꺼져 있다"고 넘겨짚으면 안 된다. 켜져 있던 샌드박스의 파일을 팀
+   * 내용으로 열게 되고, 그 내용이 내 개인 방의 첫 문서가 돼서 샌드박스 파일을 덮는다.
+   */
+  const getSandbox = useCallback(
+    async (projectName) => {
+      if (!isTeamMode || !workspaceId || projectName !== activeProject) {
+        return null;
+      }
+
+      const scope = {
+        workspaceId,
+        projectName,
+        branchName: activeBranch || "master",
+      };
+      const scopeKey = sandboxScopeKey(scope);
+      const current = store.getState().sandbox;
+
+      if (current.scopeKey === scopeKey) {
+        return current.enabled ? { scope, state: current } : null;
+      }
+
+      const fetched = await fetchSandboxStateApi(scope);
+      dispatch(setSandbox({ scopeKey, enabled: fetched.enabled, files: fetched.files }));
+
+      return fetched.enabled
+        ? { scope, state: store.getState().sandbox }
+        : null;
+    },
+    [isTeamMode, workspaceId, activeProject, activeBranch, store, dispatch],
+  );
+
   const handleExpandProject = useCallback(
     async (projectName) => {
       if (isVirtualMode) return;
@@ -476,12 +544,29 @@ export default function Sidebar() {
           branchToFetch,
         );
 
+        // 샌드박스가 켜져 있으면 받은 트리에 내 샌드박스의 차이를 얹는다.
+        // 상태를 못 받아 왔으면 팀 트리 그대로 보여 준다(트리가 안 뜨는 것보다 낫다).
+        const sandbox = await getSandbox(projectName).catch(() => null);
+
+        if (sandbox && files && Array.isArray(files.children)) {
+          dispatch(
+            mergeProjectFiles({
+              projectName,
+              files: {
+                ...files,
+                children: overlaySandboxTree(files.children, sandbox.state.files),
+              },
+            }),
+          );
+          return;
+        }
+
         dispatch(mergeProjectFiles({ projectName, files }));
       } catch (e) {
         console.error("파일 로드 실패:", e);
       }
     },
-    [workspaceId, activeProject, activeBranch, isVirtualMode, dispatch],
+    [workspaceId, activeProject, activeBranch, isVirtualMode, dispatch, getSandbox],
   );
 
   useEffect(() => {
@@ -489,6 +574,24 @@ export default function Sidebar() {
       handleExpandProject(activeProject);
     }
   }, [activeBranch, workspaceId, activeProject, isVirtualMode, handleExpandProject]);
+
+  // 샌드박스를 켜고 끄거나, 그 안의 파일 목록이 바뀌면(사본을 떴다, 반영했다, 버렸다)
+  // 탐색기를 다시 그린다. 목록이 같으면 다시 받지 않는다.
+  const sandboxTreeSignature = useSelector((state) =>
+    state.sandbox.enabled
+      ? state.sandbox.files.map((file) => `${file.kind}:${file.filePath}`).join("|")
+      : "off",
+  );
+  const lastSandboxTreeSignatureRef = useRef(sandboxTreeSignature);
+
+  useEffect(() => {
+    if (lastSandboxTreeSignatureRef.current === sandboxTreeSignature) return;
+    lastSandboxTreeSignatureRef.current = sandboxTreeSignature;
+
+    if (workspaceId && activeProject && !isVirtualMode) {
+      handleExpandProject(activeProject);
+    }
+  }, [sandboxTreeSignature, workspaceId, activeProject, isVirtualMode, handleExpandProject]);
 
   const handleFileClick = async (node, realProjectName) => {
     let targetProject = realProjectName || activeProject;
@@ -514,12 +617,21 @@ export default function Sidebar() {
           ? activeBranch
           : "master";
 
-      const content = await fetchFileContentApi(
-        workspaceId,
-        targetProject,
-        branchToFetch,
-        targetFilePath,
-      );
+      // 샌드박스에서 내가 고친 파일이면 팀 파일이 아니라 내 것을 읽는다.
+      // 에디터는 이 내용으로 내 개인 방의 첫 문서를 만든다. 여기서 팀 내용을 주면
+      // 그것이 샌드박스 파일을 덮는다. 그래서 상태를 못 받아 오면 열지 않는다
+      // (아래 catch 로 간다).
+      const sandbox = isVirtualMode ? null : await getSandbox(targetProject);
+
+      const content =
+        sandbox && isSandboxFile(sandbox.state, targetFilePath)
+          ? await fetchSandboxFileApi(sandbox.scope, targetFilePath)
+          : await fetchFileContentApi(
+              workspaceId,
+              targetProject,
+              branchToFetch,
+              targetFilePath,
+            );
 
       dispatch(
         updateFileContent({
@@ -598,8 +710,15 @@ export default function Sidebar() {
 
     if (filesToRefresh.length === 0) return;
 
+    // 샌드박스에서 고치는 파일은 팀 파일로 최신화하지 않는다.
+    // 그 탭의 내용은 내 샌드박스 것이다. 팀 내용으로 바꿔 넣으면 다음에 그 탭을 열 때
+    // 팀 내용이 내 개인 방의 첫 문서가 될 수 있다.
+    const sandboxState = store.getState().sandbox;
+
     await Promise.allSettled(
-      filesToRefresh.map(async (filePath) => {
+      filesToRefresh
+        .filter((filePath) => !isSandboxFile(sandboxState, filePath))
+        .map(async (filePath) => {
         const latestContent = await fetchFileContentApi(
           workspaceId,
           activeProject,
@@ -630,6 +749,7 @@ export default function Sidebar() {
     openFiles,
     isVirtualMode,
     dispatch,
+    store,
   ],
 );
 
@@ -703,6 +823,78 @@ export default function Sidebar() {
               },
             }),
           );
+
+          return;
+        }
+
+        // 안전 실행의 작성자 상태·정상 버전 알림. 같은 방으로 온다.
+        //
+        // 두 알림 모두 "전체 상태"를 싣고 오므로 통째로 갈아 끼우면 된다.
+        // 그리는 것은 SafeRunStatusBar 가 한다.
+        if (
+          message.type === "AUTHOR_STATUS_CHANGED" ||
+          message.type === "GREEN_UPDATED"
+        ) {
+          if (String(message.workspaceId) !== String(workspaceId)) return;
+          if (message.projectName !== activeProject) return;
+          if ((message.branchName || "master") !== branchName) return;
+
+          dispatch(
+            setSafeRunStatus({
+              workspaceId: message.workspaceId,
+              projectName: message.projectName,
+              branchName: message.branchName || "master",
+              greenUpdatedAt: message.greenUpdatedAt ?? null,
+              authors: Array.isArray(message.authors) ? message.authors : [],
+            }),
+          );
+
+          return;
+        }
+
+        // 팀 파일이 바뀌었는데, 누군가 그 파일을 자기 샌드박스에서 고치고 있다.
+        //
+        // 샌드박스에서 고치는 파일은 팀원의 편집이 화면에 보이지 않는다. 내 목록에 있는
+        // 파일이면 상태를 다시 받아 "팀이 이 파일을 고쳤어요"를 띄운다. 남의 샌드박스
+        // 파일이면 나와 무관하므로 넘긴다(서버는 누구 것인지 싣지 않는다).
+        if (message.type === "SANDBOX_TEAM_FILE_CHANGED") {
+          if (String(message.workspaceId) !== String(workspaceId)) return;
+          if (message.projectName !== activeProject) return;
+          if ((message.branchName || "master") !== branchName) return;
+
+          const changedPath = String(message.filePath || "");
+          const mySandbox = store.getState().sandbox;
+
+          // 폴더가 지워지거나 이름이 바뀌면 그 아래 파일들이 해당된다.
+          const isMine =
+            mySandbox.enabled &&
+            mySandbox.files.some(
+              (file) =>
+                file.filePath === changedPath ||
+                file.filePath.startsWith(changedPath + "/"),
+            );
+
+          if (!isMine) return;
+
+          const scope = {
+            workspaceId,
+            projectName: activeProject,
+            branchName,
+          };
+
+          fetchSandboxStateApi(scope)
+            .then((fresh) =>
+              dispatch(
+                setSandbox({
+                  scopeKey: sandboxScopeKey(scope),
+                  enabled: fresh.enabled,
+                  files: fresh.files,
+                }),
+              ),
+            )
+            .catch((error) => {
+              console.error("샌드박스 상태 갱신 실패:", error);
+            });
 
           return;
         }
@@ -830,9 +1022,9 @@ export default function Sidebar() {
       // 빠져나가지만, 서버 쪽 로그에도 비정상 종료로 남지 않게 한다.
       if (socket) socket.close(1000, "leaving room");
     };
-  }, [workspaceId, activeProject, activeBranch, isVirtualMode, dispatch]);
+  }, [workspaceId, activeProject, activeBranch, isVirtualMode, dispatch, store]);
 
-  
+
 
   useEffect(() => {
     if (
@@ -871,6 +1063,41 @@ export default function Sidebar() {
 
       if (parentId !== "root-folder" && parentId !== "") {
         path = parentId + "/" + finalName;
+      }
+
+      // 샌드박스가 켜져 있으면 새 파일은 팀 폴더가 아니라 내 샌드박스에 만든다.
+      // 팀 폴더에 만들면 샌드박스 안이라고 생각하고 만든 파일이 팀원에게 바로 보인다.
+      // (워크스페이스 최상위에 폴더를 만드는 것은 새 프로젝트를 만드는 일이라 샌드박스와 무관하다.)
+      const sandbox =
+        parentId === "root-folder" ? null : await getSandbox(activeProject);
+
+      if (sandbox) {
+        if (apiType !== "file") {
+          alert(
+            "샌드박스에서는 폴더를 만들 수 없어요.\n샌드박스를 끄고 만들어 주세요.",
+          );
+          dispatch(endCreation());
+          return;
+        }
+
+        await saveSandboxFileApi(sandbox.scope, path, skeletonCode || "");
+
+        // 목록을 먼저 갱신한 뒤에 연다. 순서가 바뀌면 에디터가 이 파일을 "아직 안 고친
+        // 파일"로 보고 팀 방으로 열어 버린다.
+        const fresh = await fetchSandboxStateApi(sandbox.scope);
+        dispatch(
+          setSandbox({
+            scopeKey: sandboxScopeKey(sandbox.scope),
+            enabled: fresh.enabled,
+            files: fresh.files,
+          }),
+        );
+
+        dispatch(updateFileContent({ filePath: path, content: skeletonCode || "" }));
+        dispatch(openFile({ id: path, name: finalName, type: "file" }));
+
+        dispatch(endCreation());
+        return;
       }
 
       await createFileApi(
@@ -1015,6 +1242,34 @@ export default function Sidebar() {
       const targetProject = contextMenu.projectName || activeProject;
       const targetBranch = getBranchForProject(targetProject);
 
+      // 샌드박스가 켜져 있으면 내 샌드박스에서만 지운다. 팀 파일은 반영할 때 지워진다.
+      const sandbox = await getSandbox(targetProject);
+
+      if (sandbox) {
+        if (contextMenu.type !== "file") {
+          alert(
+            "샌드박스에서는 폴더를 지울 수 없어요.\n파일을 하나씩 지우거나, 샌드박스를 끄고 지워 주세요.",
+          );
+          setContextMenu(null);
+          return;
+        }
+
+        await deleteSandboxFileApi(sandbox.scope, contextMenu.path);
+        dispatch(closeFilesByPath(contextMenu.path));
+
+        const fresh = await fetchSandboxStateApi(sandbox.scope);
+        dispatch(
+          setSandbox({
+            scopeKey: sandboxScopeKey(sandbox.scope),
+            enabled: fresh.enabled,
+            files: fresh.files,
+          }),
+        );
+
+        setContextMenu(null);
+        return;
+      }
+
       await deleteFileApi(
         workspaceId,
         targetProject,
@@ -1036,6 +1291,20 @@ export default function Sidebar() {
     if (contextMenu.isRoot) {
       alert(
         "프로젝트 이름 변경은 별도 프로젝트 rename API 연결이 필요합니다. 현재는 파일/폴더 이름 변경만 지원합니다.",
+      );
+      setContextMenu(null);
+      return;
+    }
+
+    // 샌드박스는 파일을 만들고 고치고 지우는 것만 따로 보관한다. 이름 변경은 팀 폴더에
+    // 바로 적용되는 작업이라, 샌드박스 안이라고 생각하고 한 일이 팀 전체에 퍼진다.
+    const sandboxState = store.getState().sandbox;
+    const isActiveProjectTarget =
+      (contextMenu.projectName || activeProject) === activeProject;
+
+    if (isTeamMode && sandboxState.enabled && isActiveProjectTarget) {
+      alert(
+        "샌드박스에서는 이름을 바꿀 수 없어요.\n샌드박스를 끄고 바꿔 주세요.",
       );
       setContextMenu(null);
       return;

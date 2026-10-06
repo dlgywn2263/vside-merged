@@ -18,7 +18,26 @@ import { CodeDocSession } from "@/lib/ide/collab/codeDocSession";
 import {
   registerActiveEditorReader,
   unregisterActiveEditorReader,
+  registerActiveEditorFlusher,
+  unregisterActiveEditorFlusher,
 } from "@/lib/ide/activeEditorContent";
+import { normalizeCollabKeyPart, sandboxRoomName } from "@/lib/ide/collab/roomName";
+import {
+  forkSandboxFileApi,
+  pullSandboxFileApi,
+  resolveSandboxFileApi,
+  saveSandboxFileApi,
+} from "@/lib/ide/sandbox/sandboxApi";
+import { applyMergedText, readTeamLiveContent } from "@/lib/ide/sandbox/sandboxApply";
+import {
+  addSandboxFile,
+  clearSandboxConflict,
+  isSandboxFile,
+  markSandboxTeamSynced,
+  sandboxScopeKey,
+  setSandboxConflict,
+} from "@/store/slices/sandboxSlice";
+import { getCurrentUserId } from "@/lib/auth/tokenStore";
 import { VscCheck, VscClose, VscSparkle, VscLoading, VscLock, VscWarning, VscArrowRight } from "react-icons/vsc";
 
 import {
@@ -200,14 +219,6 @@ const configureTypeScriptMonaco = (monacoInstance) => {
     reactAndNextTypes,
     "file:///node_modules/@types/wevais-react-next/index.d.ts",
   );
-};
-
-const normalizeCollabKeyPart = (value, fallback = "") => {
-  return String(value ?? fallback)
-    .replace(/\\/g, "/")
-    .replace(/\/+/g, "/")
-    .replace(/^\/+/, "")
-    .trim();
 };
 
 
@@ -556,6 +567,85 @@ export default function CodeEditor() {
     isTeamModeRef.current = isTeamMode;
   }, [isTeamMode]);
 
+  /*
+   * 샌드박스(개인 레이어). 팀 모드에서만 쓴다.
+   *
+   * 샌드박스를 켜도 브랜치는 그대로다. 파일마다 둘 중 하나가 된다.
+   *
+   *   · 내가 이미 고친 파일  → 내 개인 방(sbx:…)에서 연다. 팀원에게 보이지 않는다.
+   *   · 아직 안 고친 파일    → 팀 방에 붙은 채 읽기 전용으로 본다. 팀원 편집이 계속 보인다.
+   *                            고치려는 순간 사본을 뜨고 개인 방으로 옮긴다.
+   *
+   * 안 고친 파일을 팀 방에서 그대로 고치게 두면, 샌드박스를 켰는데도 그 입력이
+   * 팀원에게 보인다. 그래서 옮기기 전에는 읽기 전용이어야 한다.
+   */
+  const sandbox = useSelector((state) => state.sandbox);
+
+  const isFileTab = Boolean(activeFileId) && !String(activeFileId).startsWith("virtual:");
+
+  /** 서버에서 받은 샌드박스 상태가 지금 보고 있는 브랜치의 것인지. */
+  const isSandboxKnown =
+    Boolean(workspaceId && activeProject) &&
+    sandbox.scopeKey ===
+      sandboxScopeKey({
+        workspaceId,
+        projectName: activeProject,
+        branchName: activeBranch || "master",
+      });
+
+  const isSandboxOn = isTeamMode && isSandboxKnown && sandbox.enabled;
+
+  /** 이 파일을 내 개인 방에서 고치는 중인지. */
+  const isSandboxEditing = isSandboxOn && isFileTab && isSandboxFile(sandbox, activeFileId);
+
+  /** 샌드박스는 켜져 있는데 이 파일은 아직 안 고쳤다. 팀 방에서 읽기 전용으로 본다. */
+  const isSandboxViewOnly = isSandboxOn && isFileTab && !isSandboxEditing;
+
+  /**
+   * 샌드박스가 켜져 있는지 아직 모른다(상태를 받아 오는 중).
+   * 이때 입력을 받으면, 켜져 있었을 경우 그 입력이 팀 방으로 들어간다. 알 때까지 막는다.
+   */
+  const isSandboxUnknown = isTeamMode && isFileTab && !isSandboxKnown;
+
+  /** 팀 방에서 개인 방으로 옮기는 중. 사본 요청부터 개인 방 문서가 붙을 때까지 입력을 막는다. */
+  const [isSandboxSwitching, setIsSandboxSwitching] = useState(false);
+  const sandboxSwitchingRef = useRef(false);
+
+  /** 잠깐 떴다 사라지는 안내. 확인 버튼이 필요 없는 것에 쓴다. */
+  const [sandboxToast, setSandboxToast] = useState("");
+
+  useEffect(() => {
+    if (!sandboxToast) return undefined;
+
+    const timerId = window.setTimeout(() => setSandboxToast(""), 3500);
+    return () => window.clearTimeout(timerId);
+  }, [sandboxToast]);
+
+  // 소켓 콜백과 에디터 이벤트는 처음 만들어질 때의 값을 붙잡고 있다. 최신 값은 ref 로 읽는다.
+  const sandboxModeRef = useRef({ isSandboxEditing, isSandboxViewOnly });
+  useEffect(() => {
+    sandboxModeRef.current = { isSandboxEditing, isSandboxViewOnly };
+  }, [isSandboxEditing, isSandboxViewOnly]);
+
+  /** 이 파일이 충돌을 해결하는 중이면, 그 충돌을 계산할 때 팀 파일로 삼았던 내용. */
+  const sandboxConflictLive = isSandboxEditing ? sandbox.conflicts[activeFileId] : undefined;
+  const isSandboxConflict = sandboxConflictLive !== undefined;
+
+  /**
+   * 내가 이 파일을 샌드박스에서 고치는 동안 팀이 같은 파일을 고쳤다.
+   *
+   * 개인 방에서는 팀원의 편집이 보이지 않는다. 이것을 알려 주지 않으면 모르는 채 오래
+   * 작업하다 반영할 때 충돌을 한꺼번에 만난다.
+   */
+  const hasTeamChanges =
+    isSandboxEditing &&
+    !isSandboxConflict &&
+    sandbox.files.some((file) => file.filePath === activeFileId && file.teamChanged);
+
+  /** 팀 변경을 가져오는 중. 그동안 입력을 막는다(가져온 내용과 방금 친 글자가 엇갈리지 않게). */
+  const [isSandboxPulling, setIsSandboxPulling] = useState(false);
+  const sandboxPullingRef = useRef(false);
+
   useEffect(() => {
     const parsedConflicts = parseMergeConflicts(activeContent);
     setMergeConflicts(parsedConflicts);
@@ -643,6 +733,22 @@ export default function CodeEditor() {
     registerActiveEditorReader(reader);
 
     return () => unregisterActiveEditorReader(reader);
+  }, []);
+
+  /**
+   * 지금 붙어 있는 동시편집 세션의 저장을 밖에서 끝까지 기다릴 수 있게 한다.
+   *
+   * 샌드박스를 반영하거나 버리기 직전에 쓴다. 탭을 닫을 때 나가는 마지막 저장은
+   * 기다려 주지 않아서, 그 늦은 저장이 방금 반영한 파일을 샌드박스에 다시 만든다.
+   */
+  useEffect(() => {
+    const flusher = async () => {
+      await sessionRef.current?.flush();
+    };
+
+    registerActiveEditorFlusher(flusher);
+
+    return () => unregisterActiveEditorFlusher(flusher);
   }, []);
 
   // 💡 [핵심 개선 포인트: Yjs Bridge 패턴 적용]
@@ -934,12 +1040,37 @@ export default function CodeEditor() {
       initialModel.setEOL(monacoRef.current.editor.EndOfLineSequence.LF);
     }
 
-    const roomName = [
+    // 샌드박스에서 이미 고친 파일은 팀 방이 아니라 내 개인 방으로 연다.
+    // 방이 다르므로 여기서 치는 글자는 팀원에게 가지 않는다.
+    const openInSandbox = sandboxModeRef.current.isSandboxEditing;
+    const sandboxOwnerId = openInSandbox ? getCurrentUserId() : null;
+
+    if (openInSandbox && !sandboxOwnerId) {
+      // 누구의 방인지 모르면 개인 방을 열 수 없다. 팀 방으로 대신 열면 안 된다 —
+      // 샌드박스 내용이 팀 문서에 그대로 퍼진다.
+      setEditorNotice({
+        title: "샌드박스 파일을 열지 못했습니다",
+        message: "로그인 정보를 확인하지 못했습니다. 새로고침한 뒤 다시 시도해 주세요.",
+        variant: "danger",
+      });
+      return;
+    }
+
+    const teamRoomName = [
       normalizeCollabKeyPart(workspaceId, "workspace"),
       normalizeCollabKeyPart(activeProject, "project"),
       normalizeCollabKeyPart(activeBranch, "master"),
       normalizeCollabKeyPart(activeFileId),
     ].join(":");
+
+    const roomName = openInSandbox
+      ? sandboxRoomName(sandboxOwnerId, {
+          workspaceId,
+          projectName: activeProject,
+          branchName: activeBranch,
+          filePath: activeFileId,
+        })
+      : teamRoomName;
 
     // 서버에 저장본이 없을 때 이것으로 문서를 만든다.
     //
@@ -978,14 +1109,24 @@ export default function CodeEditor() {
       room: roomName,
       diskContent: localContent,
       saveFile: async (content) => {
-        await saveFileApi(
-          workspaceId,
-          savedProject,
-          savedBranch,
-          savedFileId,
-          content,
-          { allowEmpty: false },
-        );
+        if (openInSandbox) {
+          // 개인 방의 저장은 내 샌드박스로 간다. 여기서 팀 파일 저장을 부르면
+          // 팀 파일이 내 샌드박스 내용으로 덮인다.
+          await saveSandboxFileApi(
+            { workspaceId, projectName: savedProject, branchName: savedBranch },
+            savedFileId,
+            content,
+          );
+        } else {
+          await saveFileApi(
+            workspaceId,
+            savedProject,
+            savedBranch,
+            savedFileId,
+            content,
+            { allowEmpty: false },
+          );
+        }
 
         // 파일 트리와 미저장 표시가 어긋나지 않게 맞춰 준다.
         latestContentRef.current[savedFileId] = content;
@@ -1395,6 +1536,12 @@ useEffect(() => {
       cleanupCollaboration();
     }
 
+    // 개인 방으로 옮기는 중이었다면 여기서 끝난다. 방금 만든 세션이 문서를 불러오는
+    // 동안에는 "불러오는 중" 상태가 입력을 막아 주므로, 막는 손을 넘겨준다.
+    // (같은 묶음에서 바뀌므로 그 사이에 입력이 열리는 틈이 없다.)
+    sandboxSwitchingRef.current = false;
+    setIsSandboxSwitching(false);
+
     return () => {
       cleanupCollaboration();
     };
@@ -1408,6 +1555,9 @@ useEffect(() => {
     collabFileKey,
     isContentLoaded,
     isTeamMode,
+    // 이 파일이 샌드박스에 들어오거나 나가면 방이 바뀐다(팀 방 ↔ 개인 방).
+    // 세션을 새로 만들어야 한다.
+    isSandboxEditing,
     setupCollaboration,
     cleanupCollaboration,
   ]);
@@ -1882,13 +2032,26 @@ useEffect(() => {
     latestContentRef.current[activeFileId] = currentContent;
 
     try {
-      await saveFileApi(
-        workspaceId,
-        activeProject,
-        activeBranch || "master",
-        activeFileId,
-        currentContent,
-      );
+      if (sandboxModeRef.current.isSandboxEditing) {
+        // 샌드박스에서 고치는 파일은 내 샌드박스에 저장한다. 팀 파일에 쓰면 안 된다.
+        await saveSandboxFileApi(
+          {
+            workspaceId,
+            projectName: activeProject,
+            branchName: activeBranch || "master",
+          },
+          activeFileId,
+          currentContent,
+        );
+      } else {
+        await saveFileApi(
+          workspaceId,
+          activeProject,
+          activeBranch || "master",
+          activeFileId,
+          currentContent,
+        );
+      }
 
       dispatch(writeToTerminal(`[System] Saved: ${activeFileId}\n`));
     } catch (error) {
@@ -1906,6 +2069,204 @@ useEffect(() => {
       throw error;
     }
   }, [activeBranch, activeFileId, activeProject, dispatch, workspaceId]);
+
+  /**
+   * 이 파일을 샌드박스에서 고치기 시작한다 — 팀 방에서 내 개인 방으로 옮긴다.
+   *
+   *   1) 팀 문서의 지금 내용을 읽는다
+   *   2) 서버에 그 내용으로 사본을 뜨게 한다(POST /files/fork)
+   *   3) 목록에 넣는다 → 위의 협업 effect 가 개인 방으로 세션을 새로 만든다
+   *
+   * 1번에서 디스크가 아니라 문서를 읽는 것이 중요하다. 디스크는 최대 30초 늦다.
+   * 디스크로 사본을 뜨면 팀원이 방금 친 내용이 내 샌드박스에서 빠지고, 나중에 반영할
+   * 때 그것을 "내가 지운 것"으로 착각한다.
+   *
+   * 옮기는 동안, 그리고 실패했을 때는 읽기 전용이 유지된다.
+   *
+   * @param announce 버튼이 아니라 바로 입력하려다 옮겨진 경우. 눌렀던 글자는 다시
+   *                 넣지 않으므로(한글 조합·붙여넣기·자동완성까지 되살리기는 깨지기
+   *                 쉽다) 이어서 입력하라고 알려 준다
+   */
+  const enterSandboxEdit = useCallback(
+    async ({ announce = false } = {}) => {
+      if (!sandboxModeRef.current.isSandboxViewOnly) return;
+      if (sandboxSwitchingRef.current) return;
+
+      const { activeFileId: fileId, workspaceId: ws, activeProject: project, activeBranch: branch } =
+        stateRef.current;
+
+      if (!fileId || !ws || !project) return;
+
+      sandboxSwitchingRef.current = true;
+      setIsSandboxSwitching(true);
+
+      try {
+        const session = sessionRef.current;
+
+        if (!session || session.getStatus() !== "ready") {
+          throw new Error("팀 문서를 아직 불러오는 중입니다. 잠시 뒤 다시 시도해 주세요.");
+        }
+
+        const liveContent = session.yText.toString();
+
+        const content = await forkSandboxFileApi(
+          { workspaceId: ws, projectName: project, branchName: branch || "master" },
+          fileId,
+          liveContent,
+        );
+
+        // 개인 방의 첫 문서는 이 내용으로 만들어진다. 협업 세션은 Redux 를 먼저 보므로
+        // 세션이 새로 만들어지기 전에 넣어 둔다.
+        fileContentsRef.current = { ...fileContentsRef.current, [fileId]: content };
+        latestContentRef.current[fileId] = content;
+        dispatch(updateFileContent({ filePath: fileId, content }));
+
+        // 이 한 줄이 방을 바꾼다. 막아 둔 입력은 새 세션이 만들어질 때 풀린다.
+        dispatch(addSandboxFile({ filePath: fileId, kind: "MODIFIED" }));
+
+        if (announce) setSandboxToast("샌드박스로 전환했어요. 이어서 입력하세요");
+      } catch (error) {
+        // 실패하면 팀 방 읽기 전용 그대로 둔다.
+        sandboxSwitchingRef.current = false;
+        setIsSandboxSwitching(false);
+
+        setEditorNotice({
+          title: "샌드박스로 전환하지 못했습니다",
+          message: `${fileId} — ${error.message || "사본을 만들지 못했습니다."} 이 파일은 계속 팀 실시간 보기 상태입니다.`,
+          variant: "danger",
+        });
+      }
+    },
+    [dispatch],
+  );
+
+  // 에디터 이벤트는 마운트될 때의 함수를 붙잡고 있다. 최신 것을 ref 로 읽게 한다.
+  const enterSandboxEditRef = useRef(enterSandboxEdit);
+  useEffect(() => {
+    enterSandboxEditRef.current = enterSandboxEdit;
+  }, [enterSandboxEdit]);
+
+  /**
+   * 팀 변경을 내 샌드박스 파일로 가져온다(반영의 반대 방향). 팀 파일은 바뀌지 않는다.
+   *
+   *   1) 내 개인 방의 저장을 끝까지 기다린다
+   *   2) 팀 파일의 지금 내용을 읽는다(팀원이 열어 두었으면 팀 문서에서)
+   *   3) 서버가 "기준 / 내 것 / 팀 것"으로 합친다
+   *   4) 합친 결과에서 바뀐 부분만 내 문서에 넣는다 — 통째로 갈아 끼우면 내 커서가 튄다
+   *
+   * 같은 곳을 서로 다르게 고쳤으면 충돌 본문을 내 문서에 넣고, 반영 때와 같은 화면에서
+   * 고르게 한다.
+   *
+   * 여기서 내 문서에 넣는 편집은 내가 친 것이 아니라서 Ctrl+Z 로 되돌려지지 않는다
+   * (되돌리기는 y-monaco 바인딩이 넣은 편집만 추적한다).
+   */
+  const handlePullTeamChanges = useCallback(async () => {
+    if (!sandboxModeRef.current.isSandboxEditing) return;
+    if (sandboxPullingRef.current) return;
+
+    const { activeFileId: fileId, workspaceId: ws, activeProject: project, activeBranch: branch } =
+      stateRef.current;
+    const session = sessionRef.current;
+
+    if (!fileId || !ws || !project || !session || session.getStatus() !== "ready") return;
+
+    const scope = { workspaceId: ws, projectName: project, branchName: branch || "master" };
+
+    // 그 사이 파일이나 방을 바꿨으면 늦게 온 결과를 새 세션에 쓰면 안 된다.
+    const isSameSession = () =>
+      sessionRef.current === session && stateRef.current.activeFileId === fileId;
+
+    sandboxPullingRef.current = true;
+    setIsSandboxPulling(true);
+
+    try {
+      await session.flush();
+
+      const liveContent = await readTeamLiveContent(scope, fileId);
+
+      if (!isSameSession()) return;
+
+      const mine = session.yText.toString();
+      const view = await pullSandboxFileApi(scope, fileId, mine, liveContent);
+
+      if (!isSameSession()) return;
+
+      // 가져오는 동안은 읽기 전용이라 내 문서가 바뀌었을 리 없지만, 바뀌었다면 서버가
+      // 합친 결과는 낡았다. 넣지 않고 다시 누르게 한다.
+      if (session.yText.toString() !== mine) {
+        throw new Error("가져오는 사이에 문서가 바뀌었습니다. 다시 눌러 주세요.");
+      }
+
+      if (view.status === "CONFLICT") {
+        applyMergedText(session.doc, session.yText, mine, view.content ?? "");
+        dispatch(setSandboxConflict({ filePath: fileId, liveContent: liveContent ?? "" }));
+        dispatch(markSandboxTeamSynced(fileId));
+        setSandboxToast("팀도 같은 곳을 고쳤어요. 아래에서 골라 주세요");
+        return;
+      }
+
+      if (view.status === "CLEAN") {
+        applyMergedText(session.doc, session.yText, mine, view.content ?? mine);
+        setSandboxToast("팀 변경을 가져왔어요");
+      } else {
+        setSandboxToast("가져올 팀 변경이 없어요");
+      }
+
+      dispatch(markSandboxTeamSynced(fileId));
+    } catch (error) {
+      setEditorNotice({
+        title: "팀 변경을 가져오지 못했습니다",
+        message: `${fileId} — ${error.message || "다시 시도해 주세요."} 내 샌드박스 파일은 그대로입니다.`,
+        variant: "danger",
+      });
+    } finally {
+      sandboxPullingRef.current = false;
+      setIsSandboxPulling(false);
+    }
+  }, [dispatch]);
+
+  /**
+   * 샌드박스 충돌을 다 골랐다. 고른 결과를 저장하고 비교 기준을 옮긴다.
+   *
+   * 그냥 저장으로는 안 된다. 서버는 "고치기 시작한 순간의 팀 파일"을 기준으로 비교하므로,
+   * 기준이 그대로면 다시 반영할 때 같은 자리에서 또 충돌한다.
+   */
+  const handleResolveSandboxConflict = useCallback(async () => {
+    const editor = editorRef.current;
+
+    if (!editor || !activeFileId || sandboxConflictLive === undefined) return;
+
+    const resolved = editor.getValue();
+
+    if (parseMergeConflicts(resolved).length > 0) {
+      setEditorNotice({
+        title: "아직 고르지 않은 충돌이 있습니다",
+        message: "충돌 표시(<<<<<<< / ======= / >>>>>>>)가 남아 있습니다. 모두 고른 뒤 다시 눌러 주세요.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    try {
+      await resolveSandboxFileApi(
+        { workspaceId, projectName: activeProject, branchName: activeBranch || "master" },
+        activeFileId,
+        resolved,
+        sandboxConflictLive,
+      );
+
+      dispatch(clearSandboxConflict(activeFileId));
+      setConflictSessionFileId(null);
+      setLastConflictCount(0);
+      setSandboxToast("충돌을 해결했어요. 위의 '반영'을 다시 눌러 주세요");
+    } catch (error) {
+      setEditorNotice({
+        title: "충돌 해결을 저장하지 못했습니다",
+        message: `${activeFileId} — ${error.message || "서버에 저장하지 못했습니다."}`,
+        variant: "danger",
+      });
+    }
+  }, [activeBranch, activeFileId, activeProject, dispatch, sandboxConflictLive, workspaceId]);
 
   const handleSaveAndReturnToFileStatus = useCallback(async () => {
     await handleSaveCurrentFile();
@@ -1976,6 +2337,17 @@ useEffect(() => {
       if (editorRef.current === editor) {
         editorRef.current = null;
         setIsEditorReady(false);
+      }
+    });
+
+    // 샌드박스가 켜져 있고 아직 안 고친 파일(팀 실시간 보기)에 바로 입력하려 했다.
+    // 버튼을 누른 것과 똑같이 개인 방으로 옮긴다. 눌렀던 글자는 다시 넣지 않는다.
+    //
+    // 읽기 전용인 이유가 다른 경우(팀원이 잡은 줄, 문서 불러오는 중)에도 이 이벤트가
+    // 오므로, 샌드박스 보기 상태일 때만 반응한다.
+    editor.onDidAttemptReadOnlyEdit(() => {
+      if (sandboxModeRef.current.isSandboxViewOnly) {
+        void enterSandboxEditRef.current({ announce: true });
       }
     });
 
@@ -2357,6 +2729,75 @@ useEffect(() => {
         }
       `}} />
 
+      {/* 샌드박스가 켜져 있을 때, 이 파일이 지금 어느 쪽에 붙어 있는지 크게 보여 준다. */}
+      {isSandboxViewOnly && (
+        <div className="shrink-0 flex items-center justify-between gap-3 border-b-2 border-sky-300 bg-sky-100 px-4 py-2.5">
+          <span className="text-[13px] font-black text-sky-900">
+            👥 팀 실시간 보기 중
+            <span className="ml-2 font-bold text-sky-700">
+              이 파일은 아직 팀과 같이 보고 있어요. 지금은 읽기 전용입니다.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => enterSandboxEdit()}
+            disabled={isSandboxSwitching || isDocumentLoading}
+            className="shrink-0 h-9 rounded-lg bg-indigo-600 px-4 text-[13px] font-black text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSandboxSwitching ? "전환하는 중…" : "📝 샌드박스에서 고치기"}
+          </button>
+        </div>
+      )}
+
+      {/* 내가 샌드박스에서 고치는 동안 팀이 이 파일을 고쳤다. 개인 방에서는 그 편집이
+          보이지 않으므로 크게 알리고, 반영 전에 미리 합쳐 둘 수 있게 한다. */}
+      {hasTeamChanges && (
+        <div className="shrink-0 flex items-center justify-between gap-3 border-b-2 border-orange-700 bg-orange-500 px-4 py-2.5">
+          <span className="text-[13px] font-black text-white">
+            👥 팀이 이 파일을 고쳤어요
+            <span className="ml-2 font-bold text-orange-50">
+              샌드박스에서는 팀원의 수정이 보이지 않아요. 반영 전에 미리 합쳐 둘 수 있습니다.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={handlePullTeamChanges}
+            disabled={isSandboxPulling || isDocumentLoading}
+            className="shrink-0 h-9 rounded-lg border-2 border-white bg-white px-4 text-[13px] font-black text-orange-700 shadow-sm transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSandboxPulling ? "가져오는 중…" : "⬇ 팀 변경 가져오기"}
+          </button>
+        </div>
+      )}
+
+      {isSandboxEditing && !isSandboxConflict && !hasTeamChanges && (
+        <div className="shrink-0 flex items-center gap-3 border-b-2 border-indigo-800 bg-indigo-600 px-4 py-2.5">
+          <span className="text-[13px] font-black text-white">
+            📝 샌드박스에서 수정 중
+            <span className="ml-2 font-bold text-indigo-100">
+              여기서 고친 내용은 반영하기 전까지 팀원에게 보이지 않아요.
+            </span>
+          </span>
+        </div>
+      )}
+
+      {isSandboxConflict && (
+        <div className="shrink-0 flex items-center gap-3 border-b-2 border-amber-500 bg-amber-300 px-4 py-2.5">
+          <span className="text-[13px] font-black text-amber-950">
+            ⚠️ 샌드박스 충돌 해결 중
+            <span className="ml-2 font-bold text-amber-900">
+              팀도 같은 곳을 고쳤어요. 아래에서 고른 뒤 &lsquo;샌드박스 충돌 해결 완료&rsquo;를 눌러 주세요. (위쪽이 내 것, 아래쪽이 팀 것)
+            </span>
+          </span>
+        </div>
+      )}
+
+      {sandboxToast && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[99999] rounded-full border-2 border-indigo-700 bg-indigo-600 px-5 py-2 text-[13px] font-black text-white shadow-lg">
+          {sandboxToast}
+        </div>
+      )}
+
       {isDocumentLoading && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/95 px-4 py-2 text-[12px] font-bold text-blue-700 shadow-sm backdrop-blur-sm">
           <VscLoading size={14} className="animate-spin" />
@@ -2624,7 +3065,19 @@ useEffect(() => {
                 선택 전으로 되돌리기
               </button>
 
-              {isConflictSelectionComplete && (
+              {/* 샌드박스 충돌은 Git 화면으로 가지 않는다. 그 자리에서 해결을 마친다. */}
+              {isConflictSelectionComplete && isSandboxConflict && (
+                <button
+                  type="button"
+                  onClick={handleResolveSandboxConflict}
+                  className="h-9 px-4 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-black flex items-center gap-1.5 shadow-sm"
+                >
+                  <VscCheck size={14} />
+                  샌드박스 충돌 해결 완료
+                </button>
+              )}
+
+              {isConflictSelectionComplete && !isSandboxConflict && (
                 <button
                   type="button"
                   onClick={handleSaveAndReturnToFileStatus}
@@ -2717,7 +3170,20 @@ useEffect(() => {
               // 팀원이 잡고 있는 줄에 있거나, 문서를 아직 불러오는 중이면
               // 입력을 받지 않는다. 불러오는 중에 친 글자는 곧 도착할 문서
               // 내용에 덮여 사라지기 때문이다.
-              readOnly: Boolean(peerLockName) || isDocumentLoading,
+              //
+              // 샌드박스가 켜져 있는데 아직 안 고친 파일도 읽기 전용이다. 이 파일은
+              // 팀 방에 붙어 있어서, 여기서 입력을 받으면 팀원에게 그대로 보인다.
+              // 개인 방으로 옮기는 중이거나 샌드박스 상태를 아직 모를 때도 막는다.
+              readOnly:
+                Boolean(peerLockName) ||
+                isDocumentLoading ||
+                isSandboxViewOnly ||
+                isSandboxSwitching ||
+                isSandboxPulling ||
+                isSandboxUnknown,
+              ...(isSandboxViewOnly || isSandboxSwitching
+                ? { readOnlyMessage: { value: "샌드박스로 전환하는 중입니다…" } }
+                : {}),
               fontSize,
               fontFamily: "'D2Coding', 'Consolas', monospace",
               minimap: { enabled: editorSettings.minimap },

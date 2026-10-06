@@ -20,6 +20,7 @@ import CodeMap from "@/components/ide/CodeMap";
 import DevlogPanel from "@/components/ide/DevlogPanel";
 import CreateProjectModal from "@/components/ide/CreateProjectModal";
 import WebPreview from "@/components/ide/WebPreview";
+import SafeRunStatusBar from "@/components/ide/SafeRunStatusBar";
 
 import {
   fetchChatHistoryApi,
@@ -361,8 +362,15 @@ export default function TeamIdeMain() {
   const editorLayoutRef = useRef(null);
   const previousBranchRef = useRef(activeBranch || "master");
 
-  const isSandboxMode =
-    activeBranch?.startsWith("focus-") || activeBranch?.startsWith("focus/");
+  // 샌드박스(개인 레이어)가 켜져 있으면 화면을 어둡게 해서 "지금 고치는 것은 팀원에게
+  // 안 보인다"는 것을 한눈에 알게 한다. 예전에는 브랜치 이름(focus-…)으로 가렸지만,
+  // 샌드박스는 이제 브랜치가 아니라서 서버가 알려 준 켜짐 여부를 본다.
+  const isSandboxMode = useSelector(
+    (state) =>
+      state.sandbox.enabled &&
+      state.sandbox.scopeKey ===
+        `${workspaceId}:${activeProject}:${activeBranch || "master"}`,
+  );
 
   const startLeftSidebarResize = (event) => {
     event.preventDefault();
@@ -698,6 +706,12 @@ export default function TeamIdeMain() {
         <ActivityBar />
         {renderMainContent()}
       </div>
+
+      {/* 안전 실행 상태바. 알림을 받아 주는 소켓이 탐색기(Sidebar)에 있어서,
+          탐색기가 떠 있는 편집 화면에서만 보여 준다. 다른 화면에서는 값이 멈춘다. */}
+      {!["docs", "api-test", "mypage", "git"].includes(activeActivity) && (
+        <SafeRunStatusBar />
+      )}
 
       <CreateProjectModal />
       <WebPreview />

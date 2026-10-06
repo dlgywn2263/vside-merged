@@ -80,6 +80,8 @@ export class CodeDocSession {
 
   private dirty = false;
   private saving = false;
+  /** 지금 나가 있는 저장. 없으면 null. */
+  private inFlightSave: Promise<void> | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private forceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -293,6 +295,13 @@ export class CodeDocSession {
 
   /** 지금 바로 저장한다. 담당이 아니거나 바뀐 것이 없으면 아무것도 하지 않는다. */
   async flush(): Promise<void> {
+    // 이미 나가 있는 저장이 있으면 그것이 끝나기를 기다린다.
+    //
+    // 예전에는 그냥 돌아갔다. 자동 저장만 부를 때는 그래도 됐지만, 지금은 "저장을
+    // 끝낸 뒤에 다음 일을 하려고" 기다리는 호출이 있다(샌드박스 반영·버리기 직전).
+    // 저장이 나가 있는 도중에 불렸다고 바로 돌아오면 끝난 줄 알고 다음으로 넘어간다.
+    if (this.inFlightSave) await this.inFlightSave;
+
     if (this.destroyed || this.saving || !this.dirty) return;
     if (!this.isWriter()) return;
 
@@ -310,6 +319,11 @@ export class CodeDocSession {
 
     const encoded = encodeDocState(this.doc);
 
+    this.inFlightSave = this.write(content, encoded);
+    await this.inFlightSave;
+  }
+
+  private async write(content: string, encoded: string): Promise<void> {
     try {
       // 서버 보관본을 먼저 갱신한다. 뒤늦게 들어온 사람이 받을 것이다.
       await saveRoomDocApi(this.room, encoded);
@@ -322,6 +336,7 @@ export class CodeDocSession {
       this.onSaveError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {
       this.saving = false;
+      this.inFlightSave = null;
     }
   }
 

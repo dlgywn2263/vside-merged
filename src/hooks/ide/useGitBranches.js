@@ -11,14 +11,11 @@ import {
 } from "@/store/slices/fileSystemSlice";
 import { writeToTerminal } from "@/store/slices/uiSlice";
 import {
-  applySandboxApi,
   createBranchApi,
-  createSandboxApi,
   deleteBranchApi,
   fetchBranchListApi,
   fetchProjectFilesApi,
   mergeBranchesApi,
-  saveFileApi,
 } from "@/lib/ide/api";
 
 export const DEFAULT_BRANCH = "master";
@@ -55,42 +52,6 @@ const normalizeBranchValue = (branch) => {
   return "";
 };
 
-const extractSandboxBranchName = (payload) => {
-  const branchName = normalizeBranchValue(payload);
-
-  if (!branchName) {
-    throw new Error(
-      "서버가 샌드박스 브랜치명을 올바르게 반환하지 않았습니다.",
-    );
-  }
-
-  if (!isSandboxBranch(branchName)) {
-    throw new Error(`샌드박스 브랜치명이 올바르지 않습니다: ${branchName}`);
-  }
-
-  return branchName;
-};
-
-const getSandboxResultMessage = (payload, fallbackMessage) => {
-  if (!payload) return fallbackMessage;
-
-  if (typeof payload === "string") {
-    return payload || fallbackMessage;
-  }
-
-  if (typeof payload === "object") {
-    return (
-      payload.message ||
-      payload.resultMessage ||
-      payload.result ||
-      payload.status ||
-      fallbackMessage
-    );
-  }
-
-  return fallbackMessage;
-};
-
 const getMergeResultMessage = (payload, fallbackMessage) => {
   if (!payload) return fallbackMessage;
 
@@ -114,19 +75,6 @@ const getMergeResultMessage = (payload, fallbackMessage) => {
 export const isProtectedBranch = (branchName) => {
   const normalized = normalizeBranchValue(branchName).toLowerCase();
   return PROTECTED_BRANCHES.includes(normalized);
-};
-
-export const isSandboxBranch = (branchName) => {
-  const normalized = normalizeBranchValue(branchName);
-  return normalized.startsWith("focus-") || normalized.startsWith("focus/");
-};
-
-// 샌드박스 주인은 닉네임이 아니라 회원번호로 가린다.
-// 서버가 닉네임의 한글을 지워 전부 "dev" 로 만들던 탓에 본인 것도 숨겨졌었다.
-// 끝의 "-" 까지 비교해야 u1 이 u12 와 섞이지 않는다.
-export const isOwnSandboxBranch = (branchName, userId) => {
-  if (userId === undefined || userId === null || userId === "") return false;
-  return normalizeBranchValue(branchName).startsWith(`focus-u${userId}-`);
 };
 
 const normalizeBranchList = (branches) => {
@@ -256,15 +204,6 @@ const validateExistingBranchName = (rawBranchName, branches = []) => {
   return "";
 };
 
-const sanitizeSandboxTaskName = (taskName) => {
-  return String(taskName || "")
-    .trim()
-    .replace(/[\s/\\]+/g, "-")
-    .replace(/[~^:?*\[\]@{}]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-};
-
 const resolveDefaultMergeTarget = (branches) => {
   const normalizedBranches = normalizeBranchList(branches);
 
@@ -283,9 +222,6 @@ export function useGitBranches({
   workspaceId,
   activeProject,
   activeBranch,
-  currentNickname = "dev",
-  currentUserId,
-  mode = "personal",
 }) {
   const dispatch = useDispatch();
 
@@ -294,8 +230,6 @@ export function useGitBranches({
   const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [isDeletingBranchName, setIsDeletingBranchName] = useState("");
-  const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
-  const [isApplyingSandbox, setIsApplyingSandbox] = useState(false);
   const [isMergingBranches, setIsMergingBranches] = useState(false);
 
   const activeBranchName = normalizeBranchValue(activeBranch);
@@ -304,26 +238,9 @@ export function useGitBranches({
     ? activeBranchName || DEFAULT_BRANCH
     : "No Project";
 
-  const isTeamMode = mode === "team";
-
-  const isSandboxMode =
-    isTeamMode && Boolean(activeProject) && isSandboxBranch(currentBranch);
-
-  const visibleBranches = useMemo(() => {
-    const normalizedBranches = normalizeBranchList(branches);
-
-    return normalizedBranches.filter((branch) => {
-      if (!isSandboxBranch(branch)) {
-        return true;
-      }
-
-      if (!isTeamMode) {
-        return false;
-      }
-
-      return isOwnSandboxBranch(branch, currentUserId);
-    });
-  }, [branches, currentUserId, isTeamMode]);
+  // 옛 샌드박스(focus-u… 브랜치)를 숨기던 거름을 없앴다. 샌드박스는 이제 브랜치가
+  // 아니라서, 남아 있는 focus- 브랜치는 평범한 브랜치로 보이고 일반 병합으로 합친다.
+  const visibleBranches = useMemo(() => normalizeBranchList(branches), [branches]);
 
   const defaultMergeTarget = useMemo(
     () => resolveDefaultMergeTarget(branches),
@@ -701,219 +618,6 @@ export function useGitBranches({
     ],
   );
 
-  const createSandbox = useCallback(
-    async (input) => {
-      if (!isTeamMode) {
-        throw new Error("샌드박스는 팀 모드에서만 사용할 수 있습니다.");
-      }
-
-      const rawTaskName =
-        typeof input === "object" && input !== null ? input.taskName : input;
-
-      const baseBranch =
-        normalizeBranchValue(
-          typeof input === "object" && input !== null
-            ? input.baseBranch
-            : currentBranch,
-        ) || DEFAULT_BRANCH;
-
-      if (!baseBranch) {
-        throw new Error("샌드박스 기준 브랜치를 선택해주세요.");
-      }
-
-      if (isSandboxBranch(baseBranch)) {
-        throw new Error("샌드박스 브랜치를 기준으로 새 샌드박스를 만들 수 없습니다.");
-      }
-
-      const baseBranchValidationMessage = validateExistingBranchName(
-        baseBranch,
-        branches,
-      );
-
-      if (baseBranchValidationMessage) {
-        throw new Error(baseBranchValidationMessage);
-      }
-
-      const taskName = sanitizeSandboxTaskName(rawTaskName);
-
-      if (!taskName) {
-        throw new Error("작업명을 입력해주세요.");
-      }
-
-      if (!workspaceId || !activeProject) {
-        throw new Error("프로젝트를 먼저 선택해주세요.");
-      }
-
-      setIsCreatingSandbox(true);
-
-      try {
-        const sandboxResponse = await createSandboxApi(
-          workspaceId,
-          activeProject,
-          currentNickname || "dev",
-          taskName,
-          {
-            baseBranch,
-          },
-        );
-
-        const sandboxBranchName = extractSandboxBranchName(sandboxResponse);
-
-        setBranches((prev) => normalizeBranchList([...prev, sandboxBranchName]));
-
-        await switchBranch(sandboxBranchName);
-
-        dispatch(
-          writeToTerminal(
-            `[Git] 샌드박스 생성 완료: ${sandboxBranchName} (base: ${baseBranch})\n`,
-          ),
-        );
-
-        return sandboxBranchName;
-      } finally {
-        setIsCreatingSandbox(false);
-      }
-    },
-    [
-      isTeamMode,
-      currentBranch,
-      branches,
-      workspaceId,
-      activeProject,
-      currentNickname,
-      switchBranch,
-      dispatch,
-    ],
-  );
-
-  const applySandbox = useCallback(
-    async ({ fileContents = {}, commitMessage, targetBranch }) => {
-      if (!isTeamMode) {
-        throw new Error("샌드박스 병합은 팀 모드에서만 사용할 수 있습니다.");
-      }
-
-      const sandboxBranch = normalizeBranchValue(activeBranch);
-
-      if (!isSandboxBranch(sandboxBranch)) {
-        throw new Error("샌드박스 브랜치에서만 병합을 실행할 수 있습니다.");
-      }
-
-      const message = String(commitMessage || "").trim();
-
-      if (!message) {
-        throw new Error("병합 전 남길 커밋 메시지를 입력해주세요.");
-      }
-
-      if (!workspaceId || !activeProject) {
-        throw new Error("프로젝트를 먼저 선택해주세요.");
-      }
-
-      const resolvedTargetBranch =
-        normalizeBranchValue(targetBranch) || defaultMergeTarget;
-
-      if (sandboxBranch === resolvedTargetBranch) {
-        throw new Error("샌드박스 브랜치와 병합 대상 브랜치가 같습니다.");
-      }
-
-      setIsApplyingSandbox(true);
-
-      try {
-        const entries = Object.entries(fileContents || {}).filter(
-  ([path]) => path && !String(path).startsWith("virtual:"),
-);
-
-const isTransientCodeMapError = (error) => {
-  const message = String(error?.message || "").toLowerCase();
-
-  return (
-    message.includes("codemapcache") ||
-    message.includes("row was updated or deleted") ||
-    message.includes("optimistic") ||
-    message.includes("another transaction")
-  );
-};
-
-const wait = (ms) =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-
-for (const [path, content] of entries) {
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      await saveFileApi(
-        workspaceId,
-        activeProject,
-        sandboxBranch,
-        path,
-        content || "",
-      );
-
-      lastError = null;
-      break;
-    } catch (error) {
-      lastError = error;
-
-      if (!isTransientCodeMapError(error) || attempt === 3) {
-        throw error;
-      }
-
-      await wait(150 * attempt);
-    }
-  }
-
-  if (lastError) {
-    throw lastError;
-  }
-}
-
-        const resultPayload = await applySandboxApi(
-          workspaceId,
-          activeProject,
-          sandboxBranch,
-          resolvedTargetBranch,
-          message,
-          currentNickname || "dev",
-        );
-
-        const resultMessage = getSandboxResultMessage(
-          resultPayload,
-          `성공적으로 ${resolvedTargetBranch} 브랜치에 반영되었습니다.`,
-        );
-
-        dispatch(closeAllFiles());
-        dispatch(clearVirtualTree());
-        dispatch(setActiveBranch(resolvedTargetBranch));
-
-        await refreshProjectTree(resolvedTargetBranch);
-        await loadBranches();
-
-        dispatch(
-          writeToTerminal(
-            `[Git] 샌드박스 병합 완료. ${resolvedTargetBranch} 브랜치로 이동했습니다.\n`,
-          ),
-        );
-
-        return resultMessage;
-      } finally {
-        setIsApplyingSandbox(false);
-      }
-    },
-    [
-      isTeamMode,
-      workspaceId,
-      activeProject,
-      activeBranch,
-      currentNickname,
-      defaultMergeTarget,
-      dispatch,
-      refreshProjectTree,
-      loadBranches,
-    ],
-  );
-
   useEffect(() => {
     loadBranches().catch((error) => {
       console.error("브랜치 목록 로드 실패:", error);
@@ -925,14 +629,11 @@ for (const [path, content] of entries) {
     visibleBranches,
     currentBranch,
     defaultMergeTarget,
-    isSandboxMode,
 
     isLoadingBranches,
     isSwitchingBranch,
     isCreatingBranch,
     isDeletingBranchName,
-    isCreatingSandbox,
-    isApplyingSandbox,
     isMergingBranches,
 
     loadBranches,
@@ -941,7 +642,5 @@ for (const [path, content] of entries) {
     createBranch,
     deleteBranch,
     mergeBranches,
-    createSandbox,
-    applySandbox,
   };
 }

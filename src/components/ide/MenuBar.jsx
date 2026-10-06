@@ -36,12 +36,17 @@ import {
   saveFileApi,
   getWorkspaceMembersApi,
   inviteWorkspaceMemberApi,
-  getUserProfileApi,
   fetchProjectFilesApi,
 } from "@/lib/ide/api";
 import { useAuth } from "@/contexts/AuthContext";
 import VoiceChatManager from "@/components/ide/voice/VoiceChatManager";
 import { readActiveEditorContent } from "@/lib/ide/activeEditorContent";
+import { getAccessToken } from "@/lib/auth/tokenStore";
+import { isWaitingForRunSlot, parseSafeRunInfo } from "@/lib/ide/safeRun";
+import { setLastSafeRun, setWaitingForRunSlot } from "@/store/slices/safeRunSlice";
+import { saveSandboxFileApi } from "@/lib/ide/sandbox/sandboxApi";
+import { isSandboxFile, sandboxScopeKey } from "@/store/slices/sandboxSlice";
+import SandboxControls from "@/components/ide/sandbox/SandboxControls";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import GitBranchControls from "@/components/ide/git/GitBranchControls";
 import { useGitRemoteActions } from "@/hooks/ide/useGitRemoteActions";
@@ -78,8 +83,6 @@ export default function MenuBar({ mode = "personal" }) {
   const dispatch = useDispatch();
   const { user } = useAuth();
 
-  const [myProfile, setMyProfile] = useState(null);
-
   const {
     workspaceId,
     activeProject,
@@ -98,6 +101,21 @@ export default function MenuBar({ mode = "personal" }) {
     isDebugMode,
   } = useSelector((state) => state.ui);
 
+  const isWaitingForSlot = useSelector((state) => state.safeRun.isWaitingForSlot);
+
+  // 샌드박스(팀 모드 전용). 켜져 있으면 실행과 실행 전 저장이 내 샌드박스 쪽을 본다.
+  const sandbox = useSelector((state) => state.sandbox);
+  const sandboxScope = {
+    workspaceId,
+    projectName: activeProject,
+    branchName: activeBranch || "master",
+  };
+  const isSandboxOn =
+    mode === "team" &&
+    Boolean(workspaceId && activeProject) &&
+    sandbox.enabled &&
+    sandbox.scopeKey === sandboxScopeKey(sandboxScope);
+
   const [activeMenu, setActiveMenu] = useState(null);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isVoiceChatModalOpen, setIsVoiceChatModalOpen] = useState(false);
@@ -112,16 +130,8 @@ export default function MenuBar({ mode = "personal" }) {
   const folderInputRef = useRef(null);
 
   const isRelocationPage = pathname?.includes("/relocation") || pathname?.includes("/rearrange");
-  const currentNickname = myProfile?.nickname || user?.nickname || "dev";
   const { pullFromRemote, pushToRemote } = useGitRemoteActions();
 
-  useEffect(() => {
-    if (user && user.id) {
-      getUserProfileApi(user.id)
-        .then(setMyProfile)
-        .catch((err) => console.error("프로필 정보 로드 실패", err));
-    }
-  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -177,11 +187,38 @@ export default function MenuBar({ mode = "personal" }) {
 
   const handleQuickStop = () => {
     dispatch(setRunning(false));
+    dispatch(setWaitingForRunSlot(false));
     dispatch(setDebugMode(false));
     if (DebugSocket && typeof DebugSocket.stopDebug === "function") DebugSocket.stopDebug();
     if (RunSocket && typeof RunSocket.stop === "function") RunSocket.stop();
     if (!isTerminalVisible) dispatch(toggleTerminal());
     dispatch(writeToTerminal("\r\n[System] 🛑 서버 및 실행을 강제 중지했습니다.\r\n"));
+  };
+
+  /**
+   * 실행·디버그 직전에 지금 보고 있는 파일을 저장한다.
+   *
+   * 다른 탭은 저장하지 않는다. 팀 모드에서 다른 탭의 내용(Redux 사본)은 그 탭을 떠난
+   * 뒤로 갱신되지 않아서, 그것을 저장하면 그 사이 팀원이 고친 내용을 옛 사본으로 덮는다.
+   * 그 탭들은 떠날 때 이미 저장됐거나, 그 파일을 열어 둔 사람이 저장한다.
+   */
+  const saveActiveFileBeforeRun = async () => {
+    // 화면의 지금 내용을 직접 읽는다.
+    //
+    // Redux 스냅샷은 타이핑이 멈추고 0.4초 뒤에야 갱신된다. 그래서 고치자마자
+    // 실행을 누르면 마지막 몇 글자가 빠진 코드가 저장되고 그게 실행됐다.
+    // 에디터가 이 파일을 보고 있지 않을 때만 스냅샷으로 넘어간다.
+    const content =
+      readActiveEditorContent(activeFileId) ?? fileContents[activeFileId] ?? "";
+
+    // 샌드박스에서 고치는 파일은 내 샌드박스에 저장한다. 팀 파일 저장을 부르면
+    // 팀 파일이 내 샌드박스 내용으로 덮인다.
+    if (isSandboxOn && isSandboxFile(sandbox, activeFileId)) {
+      await saveSandboxFileApi(sandboxScope, activeFileId, content);
+      return;
+    }
+
+    await saveFileApi(workspaceId, activeProject, activeBranch || "master", activeFileId, content);
   };
 
   const handleQuickRun = async () => {
@@ -190,14 +227,7 @@ export default function MenuBar({ mode = "personal" }) {
     dispatch(setActiveBottomTab("output"));
 
     try {
-      // 화면의 지금 내용을 직접 읽는다.
-      //
-      // Redux 스냅샷은 타이핑이 멈추고 0.4초 뒤에야 갱신된다. 그래서 고치자마자
-      // 실행을 누르면 마지막 몇 글자가 빠진 코드가 저장되고 그게 실행됐다.
-      // 에디터가 이 파일을 보고 있지 않을 때만 스냅샷으로 넘어간다.
-      const content =
-        readActiveEditorContent(activeFileId) ?? fileContents[activeFileId] ?? "";
-      await saveFileApi(workspaceId, activeProject, activeBranch || "master", activeFileId, content);
+      await saveActiveFileBeforeRun();
       dispatch(writeToTerminal(`\r\n[System] 코드를 자동 저장했습니다: ${activeFileId}\r\n`));
     } catch (error) {
       return dispatch(writeToTerminal(`\r\n[Error] 실행 전 자동 저장에 실패했습니다: ${error.message}\r\n`));
@@ -247,17 +277,56 @@ if (tree && tree.children) {
       templateType,
     };
 
+    // 안전 실행은 팀 모드에서만 켠다.
+    //
+    // 토큰을 실어 보내면 서버가 "돌아가는 조합"을 찾아 실행한다(팀원이 쓰다 만
+    // 코드를 빼고). 서버는 누가 무엇을 고쳤는지를 동시편집 소켓으로만 아는데,
+    // 개인 모드는 그 소켓을 쓰지 않는다. 개인 모드에서 켜면 내 수정이 "누가
+    // 고쳤는지 모르는 변경"으로 취급돼, 컴파일이 깨졌을 때 내 수정이 빠진 옛
+    // 버전이 실행된다.
+    //
+    // 토큰은 위의 저장이 끝난 뒤에 읽는다. 저장 요청이 만료된 토큰을 갱신해 준다.
+    if (mode === "team") {
+      const token = getAccessToken();
+
+      if (token) {
+        runPayload.token = token;
+        // 누가 빠졌는지를 기계가 읽는 줄로도 받는다. 아래에서 가로채 쓴다.
+        runPayload.safeRunInfo = true;
+
+        // 샌드박스를 켠 채 실행하면 서버가 같은 조합 위에 내 샌드박스 파일을 덮는다.
+        if (isSandboxOn) runPayload.sandbox = true;
+      }
+    }
+
+    dispatch(setLastSafeRun(null));
+    dispatch(setWaitingForRunSlot(false));
+
     RunSocket.connectAndRun(
       `${WS_BASE}/ws/run`,
       runPayload,
-      (msg) => dispatch(writeToTerminal(msg)),
+      (msg) => {
+        // 기계용 줄은 출력 창에 찍지 않는다. 상태바가 꺼내 보여 준다.
+        const info = parseSafeRunInfo(msg);
+
+        if (info) {
+          dispatch(setLastSafeRun(info));
+          return;
+        }
+
+        // 기다리는 동안에는 한동안 아무 출력도 없다. 멈춘 것처럼 보이지 않게 버튼에 표시한다.
+        dispatch(setWaitingForRunSlot(isWaitingForRunSlot(msg)));
+        dispatch(writeToTerminal(msg));
+      },
       () => {
         dispatch(writeToTerminal("\r\n[Error] 실행 중 웹소켓 에러가 발생했습니다.\r\n"));
         dispatch(setRunning(false));
+        dispatch(setWaitingForRunSlot(false));
       },
       () => {
         dispatch(writeToTerminal("\r\n[System] 실행이 완전히 종료되었습니다.\r\n"));
         dispatch(setRunning(false));
+        dispatch(setWaitingForRunSlot(false));
       }
     );
   };
@@ -268,18 +337,17 @@ if (tree && tree.children) {
     dispatch(setDebugMode(true));
     dispatch(setActiveBottomTab("output"));
     try {
-      // 화면의 지금 내용을 직접 읽는다.
-      //
-      // Redux 스냅샷은 타이핑이 멈추고 0.4초 뒤에야 갱신된다. 그래서 고치자마자
-      // 실행을 누르면 마지막 몇 글자가 빠진 코드가 저장되고 그게 실행됐다.
-      // 에디터가 이 파일을 보고 있지 않을 때만 스냅샷으로 넘어간다.
-      const content =
-        readActiveEditorContent(activeFileId) ?? fileContents[activeFileId] ?? "";
-      await saveFileApi(workspaceId, activeProject, activeBranch || "master", activeFileId, content);
+      await saveActiveFileBeforeRun();
       dispatch(writeToTerminal(`\r\n[System] 코드를 자동 저장했습니다: ${activeFileId}\r\n`));
     } catch (error) {
       return dispatch(writeToTerminal(`\r\n[Error] 실행 전 자동 저장에 실패했습니다: ${error.message}\r\n`));
     }
+
+    // 디버그는 안전 실행·샌드박스의 대상이 아니다. 팀 폴더의 파일 그대로 돈다.
+    if (isSandboxOn) {
+      dispatch(writeToTerminal("[System] 디버그는 샌드박스에서 고친 내용을 쓰지 않고 팀 파일로 실행됩니다.\n"));
+    }
+
     dispatch(writeToTerminal("[System] 백엔드 디버거와 연결을 시도합니다...\n"));
     const currentFileBreakpoints = breakpoints.filter((bp) => bp.path === activeFileId).map((bp) => ({ line: bp.line }));
 
@@ -371,6 +439,13 @@ if (tree && tree.children) {
 
   const handleMenuItemClick = async (menuName, itemName) => {
     setActiveMenu(null);
+
+    // 이 메뉴들은 팀 폴더에 바로 파일을 만든다. 샌드박스 안이라고 생각하고 누르면
+    // 팀원에게 그대로 보이므로, 샌드박스 중에는 탐색기에서 만들게 한다(탐색기는 샌드박스에 만든다).
+    if (isSandboxOn && ["새 파일", "다른 이름으로...", "파일 열기...", "폴더 열기..."].includes(itemName)) {
+      alert("샌드박스가 켜져 있는 동안에는 이 메뉴를 쓸 수 없어요.\n새 파일은 탐색기에서 만들거나, 샌드박스를 끄고 사용해 주세요.");
+      return;
+    }
 
     switch (itemName) {
       case "새 파일":
@@ -877,9 +952,15 @@ if (tree && tree.children) {
                     ? "text-gray-400 cursor-not-allowed"
                     : "text-emerald-600 hover:bg-white hover:shadow-sm active:scale-95"
                 }`}
-                title="빠른 실행"
+                title={isWaitingForSlot ? "다른 실행이 끝나기를 기다리는 중입니다" : "빠른 실행"}
               >
-                <VscPlay size={14} /> Run
+                {isWaitingForSlot ? (
+                  <span className="text-amber-600">⏳ 대기 중</span>
+                ) : (
+                  <>
+                    <VscPlay size={14} /> Run
+                  </>
+                )}
               </button>
               <div className="w-px h-3 bg-gray-300 mx-0.5"></div>
               <button
@@ -908,14 +989,13 @@ if (tree && tree.children) {
 
             <div className="w-px h-4 bg-gray-200"></div>
 
+            {/* 샌드박스는 브랜치가 아니라 개인 레이어다. 브랜치 버튼과 따로 둔다. */}
+            {mode === "team" && <SandboxControls />}
+
             <GitBranchControls
-              mode={mode}
               workspaceId={workspaceId}
               activeProject={activeProject}
               activeBranch={activeBranch}
-              currentNickname={currentNickname}
-              currentUserId={user?.id ?? user?.userId}
-              fileContents={fileContents}
             />
 
             {mode === "team" && <div className="w-px h-4 bg-gray-200 mx-1"></div>}

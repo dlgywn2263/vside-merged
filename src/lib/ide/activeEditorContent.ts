@@ -47,3 +47,30 @@ export function readActiveEditorContent(filePath: string): string | null {
 
   return snapshot.content;
 }
+
+type Flusher = () => Promise<void>;
+
+let flush: Flusher | null = null;
+
+/** CodeEditor 가 마운트될 때 등록한다. 지금 붙어 있는 동시편집 세션의 저장을 밀어내는 함수다. */
+export function registerActiveEditorFlusher(flusher: Flusher): void {
+  flush = flusher;
+}
+
+export function unregisterActiveEditorFlusher(flusher: Flusher): void {
+  if (flush === flusher) flush = null;
+}
+
+/**
+ * 지금 에디터가 붙어 있는 동시편집 세션의 저장을 끝까지 기다린다.
+ *
+ * 탭을 닫으면 세션이 "아직 저장 안 한 것"을 마지막으로 한 번 저장하는데, 그 저장은
+ * 기다려 주지 않고 나간다. 샌드박스를 반영하거나 버리기 직전에 탭을 닫으면, 그 늦은
+ * 저장이 방금 반영한(버린) 파일을 샌드박스에 다시 만들어 버린다. 그래서 먼저 이것으로
+ * 저장을 끝낸 뒤에 탭을 닫는다. 그러면 닫을 때는 저장할 것이 남아 있지 않다.
+ *
+ * 세션이 없으면(개인 모드, 열린 파일 없음) 아무것도 하지 않는다.
+ */
+export async function flushActiveEditorSession(): Promise<void> {
+  if (flush) await flush();
+}

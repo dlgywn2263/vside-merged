@@ -2,7 +2,7 @@
 
 // 경로: src/components/ide/GitDashboard.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -63,15 +63,12 @@ import {
   updateGitUrlApi,
 } from "@/lib/ide/api";
 import { renderGraph } from "@/lib/ide/gitGraphHelper";
-import { useAuth } from "@/contexts/AuthContext";
-import { isOwnSandboxBranch } from "@/hooks/ide/useGitBranches";
 
 const DEFAULT_BRANCH = "master";
 const OAUTH_RESULT_MESSAGE = "WEVAIS_GITHUB_OAUTH_RESULT";
 const OAUTH_RESULT_STORAGE_KEY = "wevaisGithubOAuthResult";
 const OAUTH_PENDING_STORAGE_KEY = "wevaisPendingGitRemoteAction";
 const OAUTH_RETURN_URL_STORAGE_KEY = "wevaisGithubOAuthReturnUrl";
-const SANDBOX_CLEANUP_STORAGE_KEY = "wevaisPendingSandboxCleanup";
 
 const BRANCHES_CHANGED_EVENT = "waivs:branches-changed";
 
@@ -141,15 +138,9 @@ const isMergeConflictError = (error) => {
   );
 };
 
-const isSandboxBranchName = (branchName = "") => {
-  const value = String(branchName || "");
-  return value.startsWith("focus-") || value.startsWith("focus/");
-};
-
 const normalizeBranchListForMerge = (branches = []) => {
   return Array.from(new Set(Array.isArray(branches) ? branches : []))
     .filter(Boolean)
-    .filter((branch) => !isSandboxBranchName(branch))
     .sort((a, b) => {
       const priority = (branch) => {
         const lower = String(branch).toLowerCase();
@@ -217,15 +208,6 @@ const getDashboardBranchMeta = (branchName = "") => {
       dotClass: "bg-rose-500",
       badgeClass: "border-rose-200 bg-rose-50 text-rose-700",
       activeClass: "border-rose-200 bg-rose-50 text-rose-900",
-    };
-  }
-
-  if (isSandboxBranchName(branch)) {
-    return {
-      label: "SANDBOX",
-      dotClass: "bg-indigo-500",
-      badgeClass: "border-indigo-200 bg-indigo-50 text-indigo-700",
-      activeClass: "border-indigo-200 bg-indigo-50 text-indigo-900",
     };
   }
 
@@ -402,18 +384,9 @@ export default function GitDashboard() {
 
   const [branchList, setBranchList] = useState([]);
 
-  // 샌드박스는 만든 사람의 개인 공간이라 남의 것은 목록에 그리지 않는다.
-  const { user } = useAuth();
-  const currentUserId = user?.id ?? user?.userId;
-  const visibleBranchList = useMemo(
-    () =>
-      branchList.filter(
-        (branch) =>
-          !isSandboxBranchName(branch) ||
-          isOwnSandboxBranch(branch, currentUserId),
-      ),
-    [branchList, currentUserId],
-  );
+  // 옛 샌드박스(focus-u… 브랜치)를 숨기던 거름이 있던 자리. 샌드박스는 이제 브랜치가 아니라서
+  // 남아 있는 focus- 브랜치도 평범한 브랜치로 보여 준다.
+  const visibleBranchList = branchList;
 
   const [historyLog, setHistoryLog] = useState([]);
 
@@ -840,63 +813,6 @@ export default function GitDashboard() {
     }
   };
 
-  useEffect(() => {
-  const handleOpenGitStatus = async (event) => {
-      const targetBranch = event.detail?.branchName || currentBranch;
-      const reason = event.detail?.reason || "";
-      const shouldSuppressConflictNotice = reason === "sandbox-conflict";
-
-      dispatch(closeAllFiles());
-      dispatch(clearVirtualTree());
-      dispatch(setActiveBranch(targetBranch));
-
-      setActiveView("status");
-
-      if (!workspaceId || !activeProject) return;
-
-      try {
-        const statusData = await fetchGitStatusApi(
-          workspaceId,
-          activeProject,
-          targetBranch,
-        );
-
-        const nextConflictedFiles = statusData.conflicted || [];
-
-        setStagedFiles(statusData.staged || []);
-        setUnstagedFiles(statusData.unstaged || []);
-        setConflictedFiles(nextConflictedFiles);
-        setIsMerging(Boolean(statusData.isMerging || nextConflictedFiles.length));
-
-        if (shouldSuppressConflictNotice) {
-          setConflictNotice(null);
-          return;
-        }
-
-        if (statusData.isMerging || nextConflictedFiles.length > 0) {
-          setConflictNotice({
-            branchName: targetBranch,
-            files: nextConflictedFiles,
-            fileCount: nextConflictedFiles.length,
-            createdAt: Date.now(),
-          });
-
-          return;
-        }
-
-        setConflictNotice(null);
-      } catch (error) {
-        console.error("Git Status 이동 처리 실패:", error);
-      }
-    };
-
-    window.addEventListener("waivs:open-git-status", handleOpenGitStatus);
-
-    return () => {
-      window.removeEventListener("waivs:open-git-status", handleOpenGitStatus);
-    };
-  }, [workspaceId, activeProject, currentBranch, dispatch]);
-
   const executeBranchMerge = async () => {
     const {
       sourceBranch,
@@ -1148,65 +1064,6 @@ export default function GitDashboard() {
     }
   };
 
-  const cleanupPendingSandboxBranch = async (targetBranch) => {
-    if (typeof window === "undefined") return "";
-
-    const rawCleanup = window.sessionStorage.getItem(SANDBOX_CLEANUP_STORAGE_KEY);
-
-    if (!rawCleanup) return "";
-
-    let cleanupPayload = null;
-
-    try {
-      cleanupPayload = JSON.parse(rawCleanup);
-    } catch {
-      window.sessionStorage.removeItem(SANDBOX_CLEANUP_STORAGE_KEY);
-      return "";
-    }
-
-    const sandboxBranch = cleanupPayload?.sandboxBranch;
-    const cleanupWorkspaceId = cleanupPayload?.workspaceId;
-    const cleanupProjectName = cleanupPayload?.projectName;
-    const cleanupTargetBranch = cleanupPayload?.targetBranch;
-
-    const isSameWorkspace =
-      !cleanupWorkspaceId || cleanupWorkspaceId === workspaceId;
-    const isSameProject = cleanupProjectName === activeProject;
-    const isSameTarget = cleanupTargetBranch === targetBranch;
-
-    if (
-      !isSameWorkspace ||
-      !isSameProject ||
-      !isSameTarget ||
-      !isSandboxBranchName(sandboxBranch)
-    ) {
-      return "";
-    }
-
-    try {
-      await deleteBranchApi(workspaceId, activeProject, sandboxBranch);
-
-        setBranchList((prev) =>
-          prev.filter((branch) => branch !== sandboxBranch),
-        );
-
-        notifyBranchesChanged({
-          workspaceId,
-          projectName: activeProject,
-          reason: "sandbox-cleanup-deleted",
-          branchName: sandboxBranch,
-        });
-
-        window.sessionStorage.removeItem(SANDBOX_CLEANUP_STORAGE_KEY);
-
-        await loadBranches();
-
-      return `\n샌드박스 브랜치 '${sandboxBranch}'도 자동 삭제했습니다.`;
-    } catch (error) {
-      return `\n단, 샌드박스 브랜치 '${sandboxBranch}' 자동 삭제에 실패했습니다: ${error.message}`;
-    }
-  };
-
   const handleCommit = async () => {
     if (!commitMessage.trim()) {
       showAlert({
@@ -1275,16 +1132,12 @@ export default function GitDashboard() {
         commitMessage,
       );
 
-      const sandboxCleanupMessage = wasMergeCommit
-        ? await cleanupPendingSandboxBranch(currentBranch)
-        : "";
-
       showAlert({
         title: "커밋 완료",
         message: wasMergeCommit
-          ? `병합 커밋이 정상적으로 생성되었습니다.${sandboxCleanupMessage}`
+          ? "병합 커밋이 정상적으로 생성되었습니다."
           : "변경사항이 정상적으로 커밋되었습니다.",
-        variant: sandboxCleanupMessage.includes("실패") ? "warning" : "success",
+        variant: "success",
       });
 
       setCommitMessage("");
