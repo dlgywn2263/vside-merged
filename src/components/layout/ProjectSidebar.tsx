@@ -68,12 +68,6 @@ type ProjectSidebarProps = {
 
   allProjectsHref?: string;
 
-  // "compact" 는 대시보드처럼 정보가 많은 화면용이다. 그림자를 빼고 줄 간격을 줄인다.
-
-  // 기본값("default")은 다른 페이지에서 쓰던 모양 그대로다.
-
-  density?: "default" | "compact";
-
 };
 
 function cn(
@@ -118,11 +112,7 @@ export default function ProjectSidebar({
 
   allProjectsHref = "/projects",
 
-  density = "default",
-
 }: ProjectSidebarProps) {
-
-  const compact = density === "compact";
 
   const router = useRouter();
 
@@ -484,9 +474,7 @@ export default function ProjectSidebar({
 
       className={cn(
 
-        "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white transition-[width] duration-200 lg:flex lg:flex-col",
-
-        compact ? "shadow-none" : "shadow-sm",
+        "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
 
         isPageScrolled
 
@@ -690,13 +678,7 @@ export default function ProjectSidebar({
 
                 placeholder="프로젝트 검색"
 
-                className={cn(
-
-                  "w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10",
-
-                  compact ? "h-8" : "h-9",
-
-                )}
+                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
 
               />
 
@@ -750,9 +732,7 @@ export default function ProjectSidebar({
 
                     className={cn(
 
-                      "rounded-md px-2 text-[11px] font-black transition",
-
-                      compact ? "py-1" : "py-1.5",
+                      "rounded-md px-2 py-1.5 text-[11px] font-black transition",
 
                       projectFilter ===
 
@@ -832,7 +812,7 @@ export default function ProjectSidebar({
 
         ) : sidebarExpanded ? (
 
-          <div className={compact ? "space-y-4" : "space-y-5"}>
+          <div className="space-y-5">
 
             {projectFilter !==
 
@@ -861,8 +841,6 @@ export default function ProjectSidebar({
                   onSelectWorkspace
 
                 }
-
-                compact={compact}
 
               />
 
@@ -895,8 +873,6 @@ export default function ProjectSidebar({
                   onSelectWorkspace
 
                 }
-
-                compact={compact}
 
               />
 
@@ -1046,9 +1022,7 @@ export default function ProjectSidebar({
 
                 className={cn(
 
-                  "flex w-full items-center justify-center gap-2 rounded-md border px-3 text-xs font-black transition",
-
-                  compact ? "h-8" : "py-2",
+                  "flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-black transition",
 
                   isSettingsPage
 
@@ -1086,13 +1060,7 @@ export default function ProjectSidebar({
 
               }
 
-              className={cn(
-
-                "flex w-full items-center justify-center gap-2 rounded-md border border-[#D9E1FF] bg-[#F7F9FF] px-3 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]",
-
-                compact ? "h-8" : "py-2",
-
-              )}
+              className="flex w-full items-center justify-center gap-2 rounded-md border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
 
             >
 
@@ -1130,8 +1098,6 @@ function WorkspaceSection({
 
   onSelect,
 
-  compact,
-
 }: {
 
   title: string;
@@ -1148,15 +1114,13 @@ function WorkspaceSection({
 
   ) => void;
 
-  compact: boolean;
-
 }) {
 
   return (
 
     <section>
 
-      <div className={cn("flex items-center justify-between px-2", compact ? "mb-1" : "mb-2")}>
+      <div className="mb-2 flex items-center justify-between px-2">
 
         <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-500">
 
@@ -1190,7 +1154,7 @@ function WorkspaceSection({
 
       </div>
 
-      <div className={compact ? "space-y-0.5" : "space-y-1"}>
+      <div className="space-y-1">
 
         {items.length === 0 ? (
 
@@ -1238,8 +1202,6 @@ function WorkspaceSection({
 
                 }
 
-                compact={compact}
-
               />
 
             ),
@@ -1264,8 +1226,6 @@ function WorkspaceButton({
 
   onClick,
 
-  compact,
-
 }: {
 
   workspace: WorkspaceSidebarItem;
@@ -1273,8 +1233,6 @@ function WorkspaceButton({
   selected: boolean;
 
   onClick: () => void;
-
-  compact: boolean;
 
 }) {
 
@@ -1288,9 +1246,7 @@ function WorkspaceButton({
 
       className={cn(
 
-        "flex w-full items-center gap-2 rounded-md px-2 text-left transition",
-
-        compact ? "py-1.5" : "py-2",
+        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition",
 
         selected
 
@@ -1312,9 +1268,7 @@ function WorkspaceButton({
 
         className={cn(
 
-          "grid shrink-0 place-items-center rounded-md",
-
-          compact ? "h-7 w-7" : "h-8 w-8",
+          "grid h-8 w-8 shrink-0 place-items-center rounded-md",
 
           selected
 
