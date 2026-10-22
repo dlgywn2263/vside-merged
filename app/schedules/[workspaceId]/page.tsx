@@ -16,6 +16,8 @@ import {
   Filter,
   ArrowUpRight,
   GripVertical,
+  LayoutDashboard,
+
   ListTodo,
   Loader2,
   Pencil,
@@ -48,9 +50,11 @@ import {
   getWorkspaceMembersApi,
 } from "@/lib/ide/api";
 
-import ProjectSidebar, {
-  type WorkspaceSidebarItem,
-} from "@/components/layout/ProjectSidebar";
+import type { WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
+
+import ProjectSwitcher from "@/components/main-dashboard/ProjectSwitcher";
+
+import Link from "next/link";
 
 import { getIdeHref } from "@/components/main-dashboard/dashboard.utils";
 
@@ -160,28 +164,28 @@ const STATUS_META: Record<
     label: "할 일",
     dot: "bg-slate-400",
     badge: "border-slate-200 bg-slate-50 text-slate-600",
-    board: "border-slate-200 bg-slate-50/70",
+    board: "border-slate-200 bg-slate-50/60",
   },
 
   progress: {
     label: "진행 중",
     dot: "bg-[#5873F9]",
     badge: "border-blue-200 bg-blue-50 text-blue-700",
-    board: "border-blue-100 bg-blue-50/40",
+    board: "border-slate-200 bg-slate-50/60",
   },
 
   done: {
     label: "완료",
     dot: "bg-emerald-500",
     badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    board: "border-emerald-100 bg-emerald-50/40",
+    board: "border-slate-200 bg-slate-50/60",
   },
 
   delayed: {
     label: "지연",
     dot: "bg-rose-500",
     badge: "border-rose-200 bg-rose-50 text-rose-700",
-    board: "border-rose-100 bg-rose-50/40",
+    board: "border-slate-200 bg-slate-50/60",
   },
 };
 
@@ -2803,856 +2807,502 @@ export default function ScheduleManagementPage() {
      RENDER
      ===================================================== */
 
+  const dashboardHref = workspaceId
+    ? `/dashboard/${encodeURIComponent(workspaceId)}?mode=${currentMode}`
+    : "/dashboard";
+
   return (
-    <main className="waivs-page flex min-h-[calc(100dvh-72px)] h-auto flex-none bg-[#F7F8FA] p-4 text-slate-950 md:p-5">
-      <div className="mx-auto flex min-h-0 w-full max-w-[1880px] flex-1 items-stretch gap-4">
-        <ProjectSidebar
-          workspaces={workspaces}
-          selectedWorkspaceId={workspaceId}
-          loading={workspaceLoading}
-          errorMessage={workspaceErrorMessage}
-          onSelectWorkspace={handleSelectWorkspace}
-        />
+    <main className="waivs-page min-h-[calc(100dvh-72px)] px-4 py-5 font-sans text-slate-900 md:px-6 md:py-6">
+      <div className="mx-auto flex min-h-[calc(100dvh-120px)] max-w-[1840px] flex-col rounded-md border border-slate-200 bg-white">
+        {/* ===============================================
+            TOP BAR: 대시보드 / 프로젝트(전환) / 일정
+            사이드바 대신 프로젝트 이름을 눌러 다른 프로젝트로 이동한다.
+           =============================================== */}
+        <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <nav
+            aria-label="현재 위치"
+            className="flex min-w-0 flex-wrap items-center gap-1 text-sm"
+          >
+            <Link
+              href={dashboardHref}
+              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
+              <LayoutDashboard size={14} />
+              대시보드
+            </Link>
 
-        {/* =================================================
-            MAIN WORKSPACE
-           ================================================= */}
-        <section className="flex min-h-0 min-w-0 flex-1">
-          <div className="waivs-panel flex min-h-full w-full flex-1 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-            {/* ===============================================
-                COMPACT HEADER
-               =============================================== */}
-            <div className="border-b border-slate-100 px-5 py-3">
-              <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#5873F9]">
-                      Schedule
-                    </p>
+            <ChevronRight size={14} className="text-slate-300" />
 
-                    <span
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-black",
-                        isTeam
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-blue-50 text-blue-700",
-                      )}
-                    >
-                      {isTeam
-                        ? "TEAM"
-                        : "PERSONAL"}
-                    </span>
+            <ProjectSwitcher
+              size="compact"
+              label={workspaceName}
+              workspaces={workspaces}
+              selectedWorkspaceId={workspaceId}
+              loading={workspaceLoading}
+              errorMessage={workspaceErrorMessage}
+              onSelectWorkspace={handleSelectWorkspace}
+            />
 
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">
-                      {
-                        currentRole
-                      }
-                    </span>
-                  </div>
+            <ChevronRight size={14} className="text-slate-300" />
 
-                  <div className="mt-1 flex min-w-0 items-end gap-3">
-                    <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
-                      {
-                        workspaceName
-                      }
-                    </h1>
+            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-semibold text-slate-900">
+              <CalendarDays size={14} className="text-[#5873F9]" />
+              일정
+            </span>
 
-                    <span className="hidden pb-0.5 text-xs font-semibold text-slate-400 sm:inline">
-                      일정 관리
-                    </span>
-                  </div>
-                </div>
+            <span
+              className={cn(
+                "ml-1.5 rounded border px-1.5 py-px text-[10px] font-semibold",
+                isTeam
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-blue-200 bg-blue-50 text-blue-700",
+              )}
+            >
+              {isTeam ? "Team" : "Personal"}
+            </span>
 
-                <div className="flex shrink-0 items-center gap-2">
+            <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold text-slate-500">
+              {currentRole}
+            </span>
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void loadSchedules();
+                void loadTeamMembers();
+                void loadAllProjectTodaySchedules(workspaces);
+              }}
+              className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+              title="새로고침"
+              aria-label="새로고침"
+            >
+              <RefreshCw size={14} />
+            </button>
+
+            <button
+              type="button"
+              disabled={!workspaceId}
+              onClick={() => {
+                if (!workspaceId) {
+                  return;
+                }
+
+                router.push(getIdeHref(workspaceId, currentMode));
+              }}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              작업하러 가기
+              <ArrowUpRight size={14} />
+            </button>
+
+            <button
+              type="button"
+              disabled={!workspaceId}
+              onClick={() => openCreateModal()}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus size={14} />
+              새 일정
+            </button>
+          </div>
+        </header>
+
+        {/* ===============================================
+            STATUS SUMMARY
+           =============================================== */}
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 border-b border-slate-100 px-5 py-2">
+          <HeaderMetric label="전체" value={totalCount} />
+
+          <span className="mx-1 h-4 w-px bg-slate-200" />
+
+          <HeaderMetric label="할 일" value={todoCount} dot={STATUS_META.todo.dot} />
+
+          <HeaderMetric
+            label="진행 중"
+            value={progressCount}
+            dot={STATUS_META.progress.dot}
+            active
+          />
+
+          <HeaderMetric label="완료" value={doneCount} dot={STATUS_META.done.dot} />
+
+          <HeaderMetric
+            label="지연"
+            value={delayedCount}
+            dot={STATUS_META.delayed.dot}
+            danger
+          />
+
+          <div className="ml-auto flex items-center gap-2.5">
+            <span className="text-[11px] font-medium text-slate-500">진행률</span>
+
+            <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-[#5873F9] transition-all"
+                style={{
+                  width: `${progressRate}%`,
+                }}
+              />
+            </div>
+
+            <span className="w-9 text-right text-xs font-semibold tabular-nums text-[#5873F9]">
+              {progressRate}%
+            </span>
+          </div>
+        </div>
+
+        {/* ===============================================
+            VIEW BAR
+           =============================================== */}
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-2 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-0.5">
+            <ViewButton
+              active={viewMode === "board"}
+              label="보드"
+              icon={ListTodo}
+              onClick={() => setViewMode("board")}
+            />
+
+            <ViewButton
+              active={viewMode === "calendar"}
+              label="캘린더"
+              icon={CalendarDays}
+              onClick={() => setViewMode("calendar")}
+            />
+
+            <ViewButton
+              active={viewMode === "gantt"}
+              label="간트"
+              icon={Clock3}
+              onClick={() => setViewMode("gantt")}
+            />
+
+            <ViewButton
+              active={viewMode === "list"}
+              label="리스트"
+              icon={FilePenLine}
+              onClick={() => setViewMode("list")}
+            />
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
+            {/* 오늘 일정 + 범위 선택
+                별도 행을 만들지 않고 같은 툴바 안에서 처리해서
+                메인 일정 영역이 아래로 밀리지 않도록 합니다. */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <SmartFilterButton
+                active={smartFilter === "today"}
+                label={`오늘 ${displayedTodayCount}`}
+                onClick={() => {
+                  const next = smartFilter === "today" ? "all" : "today";
+
+                  setSmartFilter(next);
+
+                  if (next === "all") {
+                    setAssigneeFilter("all");
+                  }
+                }}
+              />
+
+              {smartFilter === "today" && (
+                <div className="flex h-8 items-center rounded-md bg-slate-100 p-0.5">
                   <button
                     type="button"
                     onClick={() => {
-                      void loadSchedules();
-
-                      void loadTeamMembers();
-
-                      void loadAllProjectTodaySchedules(
-                        workspaces,
-                      );
+                      setTodayScope("selected");
+                      setAssigneeFilter("all");
                     }}
-                    className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
-                    title="새로고침"
-                  >
-                    <RefreshCw
-                      size={15}
-                    />
-                  </button>
-
-                <button
-  type="button"
-  disabled={!workspaceId}
-  onClick={() => {
-    if (!workspaceId) {
-      return;
-    }
-
-    router.push(
-      getIdeHref(
-        workspaceId,
-        currentMode,
-      ),
-    );
-  }}
-  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#D9E1FF] bg-white px-4 text-xs font-black text-[#5873F9] transition hover:bg-[#F7F9FF] disabled:cursor-not-allowed disabled:opacity-50"
->
-  작업하러가기
-  <ArrowUpRight size={17} />
-</button>
-
-                  <button
-                    type="button"
-                    disabled={
-                      !workspaceId
-                    }
-                    onClick={() =>
-                      openCreateModal()
-                    }
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Plus
-                      size={15}
-                    />
-                    새 일정
-                  </button>
-                </div>
-              </div>
-
-              {/* compact stats */}
-              <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-2.5">
-                <HeaderMetric
-                  label="전체"
-                  value={
-                    totalCount
-                  }
-                />
-
-                <HeaderMetric
-                  label="할 일"
-                  value={
-                    todoCount
-                  }
-                />
-
-                <HeaderMetric
-                  label="진행"
-                  value={
-                    progressCount
-                  }
-                  active
-                />
-
-                <HeaderMetric
-                  label="완료"
-                  value={
-                    doneCount
-                  }
-                />
-
-                <HeaderMetric
-                  label="지연"
-                  value={
-                    delayedCount
-                  }
-                  danger
-                />
-
-                <div className="ml-auto flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-400">
-                    진행률
-                  </span>
-
-                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-[#5873F9] transition-all"
-                      style={{
-                        width: `${progressRate}%`,
-                      }}
-                    />
-                  </div>
-
-                  <span className="text-xs font-black text-[#5873F9]">
-                    {
-                      progressRate
-                    }
-                    %
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* ===============================================
-                VIEW BAR
-               =============================================== */}
-            <div className="flex flex-col gap-2.5 border-b border-slate-100 px-5 py-2.5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
-                <ViewButton
-                  active={
-                    viewMode ===
-                    "board"
-                  }
-                  label="보드"
-                  icon={
-                    ListTodo
-                  }
-                  onClick={() =>
-                    setViewMode(
-                      "board",
-                    )
-                  }
-                />
-
-                <ViewButton
-                  active={
-                    viewMode ===
-                    "calendar"
-                  }
-                  label="캘린더"
-                  icon={
-                    CalendarDays
-                  }
-                  onClick={() =>
-                    setViewMode(
-                      "calendar",
-                    )
-                  }
-                />
-
-                <ViewButton
-                  active={
-                    viewMode ===
-                    "gantt"
-                  }
-                  label="간트"
-                  icon={
-                    Clock3
-                  }
-                  onClick={() =>
-                    setViewMode(
-                      "gantt",
-                    )
-                  }
-                />
-
-                <ViewButton
-                  active={
-                    viewMode ===
-                    "list"
-                  }
-                  label="리스트"
-                  icon={
-                    FilePenLine
-                  }
-                  onClick={() =>
-                    setViewMode(
-                      "list",
-                    )
-                  }
-                />
-              </div>
-
-              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-                {/* 오늘 일정 + 범위 선택
-                    별도 행을 만들지 않고 같은 툴바 안에서 처리해서
-                    메인 일정 영역이 아래로 밀리지 않도록 합니다. */}
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <SmartFilterButton
-                    active={
-                      smartFilter ===
-                      "today"
-                    }
-                    label={`오늘 ${displayedTodayCount}`}
-                    onClick={() => {
-                      const next =
-                        smartFilter ===
-                        "today"
-                          ? "all"
-                          : "today";
-
-                      setSmartFilter(
-                        next,
-                      );
-
-                      if (
-                        next ===
-                        "all"
-                      ) {
-                        setAssigneeFilter(
-                          "all",
-                        );
-                      }
-                    }}
-                  />
-
-                  {smartFilter ===
-                    "today" && (
-                    <div className="flex h-9 items-center rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] p-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTodayScope(
-                            "selected",
-                          );
-
-                          setAssigneeFilter(
-                            "all",
-                          );
-                        }}
-                        className={cn(
-                          "h-8 rounded-lg px-2.5 text-[10px] font-black transition",
-                          todayScope ===
-                            "selected"
-                            ? "bg-white text-[#5873F9] shadow-sm"
-                            : "text-slate-400 hover:text-slate-600",
-                        )}
-                      >
-                        선택 프로젝트
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTodayScope(
-                            "all",
-                          );
-
-                          setAssigneeFilter(
-                            "all",
-                          );
-                        }}
-                        className={cn(
-                          "flex h-8 items-center gap-1 rounded-lg px-2.5 text-[10px] font-black transition",
-                          todayScope ===
-                            "all"
-                            ? "bg-white text-[#5873F9] shadow-sm"
-                            : "text-slate-400 hover:text-slate-600",
-                        )}
-                      >
-                        전체 프로젝트
-
-                        {allTodayLoading &&
-                          todayScope ===
-                            "all" && (
-                            <Loader2
-                              size={10}
-                              className="animate-spin"
-                            />
-                          )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <SmartFilterButton
-                  active={
-                    smartFilter ===
-                    "noDevlog"
-                  }
-                  label={`일지 미작성 ${noDevlogCount}`}
-                  warning
-                  onClick={() =>
-                    setSmartFilter(
-                      smartFilter ===
-                        "noDevlog"
-                        ? "all"
-                        : "noDevlog",
-                    )
-                  }
-                />
-
-                <div className="relative">
-                  <Filter
-                    size={13}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <select
-                    value={
-                      statusFilter
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setStatusFilter(
-                        event.target
-                          .value as StatusFilter,
-                      )
-                    }
-                    className="h-9 rounded-xl border border-slate-200 bg-white pl-8 pr-7 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF]"
-                  >
-                    <option value="all">
-                      모든 상태
-                    </option>
-
-                    <option value="todo">
-                      할 일
-                    </option>
-
-                    <option value="progress">
-                      진행 중
-                    </option>
-
-                    <option value="done">
-                      완료
-                    </option>
-
-                    <option value="delayed">
-                      지연
-                    </option>
-                  </select>
-                </div>
-
-                <div className="relative min-w-[170px] flex-1 xl:max-w-[240px]">
-                  <Search
-                    size={14}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <input
-                    value={query}
-                    onChange={(
-                      event,
-                    ) =>
-                      setQuery(
-                        event.target
-                          .value,
-                      )
-                    }
-                    placeholder="일정 검색"
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-semibold outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ===============================================
-                ASSIGNEE BAR
-                - 선택 프로젝트 / 전체 프로젝트 모두 동일하게 노출
-                - 현재 사용자도 담당자 칩에서 "나"로 구분
-                - 전체 프로젝트에서는 실제 오늘 일정에 등장한 담당자 기준
-               =============================================== */}
-            {showAssigneeBar && (
-              <div className="border-b border-slate-100 bg-white px-5 py-2">
-                <div className="flex items-center gap-2 overflow-x-auto">
-                  <div className="mr-1 flex shrink-0 items-center gap-1.5 text-[11px] font-black text-slate-400">
-                    <UsersRound
-                      size={14}
-                    />
-                    담당자
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAssigneeFilter(
-                        "all",
-                      )
-                    }
                     className={cn(
-                      "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black transition",
-                      assigneeFilter ===
-                        "all"
-                        ? "border-[#C9D2FF] bg-[#EEF3FF] text-[#5873F9]"
-                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                      "h-7 rounded px-2.5 text-[11px] font-medium transition-colors",
+                      todayScope === "selected"
+                        ? "bg-white text-slate-900"
+                        : "text-slate-500 hover:text-slate-800",
                     )}
                   >
-                    전체
+                    선택 프로젝트
                   </button>
 
-                  {teamMemberLoading &&
-                  !(
-                    smartFilter ===
-                      "today" &&
-                    todayScope ===
-                      "all"
-                  ) ? (
-                    <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-400">
-                      <Loader2
-                        size={13}
-                        className="animate-spin"
-                      />
-                      팀원 조회 중
-                    </div>
-                  ) : (
-                    assigneeOptions.map(
-                      (option) => (
-                        <AssigneeFilterChip
-                          key={
-                            option.key
-                          }
-                          option={
-                            option
-                          }
-                          active={
-                            assigneeFilter ===
-                            option.key
-                          }
-                          onClick={() =>
-                            setAssigneeFilter(
-                              option.key,
-                            )
-                          }
-                        />
-                      ),
-                    )
-                  )}
-
-                  {memberErrorMessage &&
-                    !(
-                      smartFilter ===
-                        "today" &&
-                      todayScope ===
-                        "all"
-                    ) && (
-                    <span className="ml-2 shrink-0 text-[10px] font-semibold text-rose-500">
-                      {
-                        memberErrorMessage
-                      }
-                    </span>
-                  )}
-
-                  {smartFilter ===
-                    "today" &&
-                    todayScope ===
-                      "all" &&
-                    assigneeOptions.length ===
-                      0 &&
-                    !allTodayLoading && (
-                    <span className="ml-1 shrink-0 text-[10px] font-semibold text-slate-400">
-                      담당자가 지정된 오늘 일정이 없습니다.
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTodayScope("all");
+                      setAssigneeFilter("all");
+                    }}
+                    className={cn(
+                      "flex h-7 items-center gap-1 rounded px-2.5 text-[11px] font-medium transition-colors",
+                      todayScope === "all"
+                        ? "bg-white text-slate-900"
+                        : "text-slate-500 hover:text-slate-800",
+                    )}
+                  >
+                    전체 프로젝트
+                    {allTodayLoading && todayScope === "all" && (
+                      <Loader2 size={10} className="animate-spin" />
+                    )}
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {/* ===============================================
-                CONTENT
-               =============================================== */}
-            <div className="flex min-h-[360px] flex-1 flex-col bg-[#FBFCFE] p-3">
-              {loading ? (
-                <LoadingBox />
-              ) : errorMessage ? (
-                <ErrorBox
-                  message={
-                    errorMessage
-                  }
-                />
-              ) : !workspaceId ? (
-                <EmptyBox
-                  title="프로젝트를 선택해주세요."
-                  description="왼쪽 프로젝트 목록에서 일정을 확인할 프로젝트를 선택해주세요."
-                />
-              ) : filteredSchedules.length ===
-                  0 ? (
-                <EmptyBox
-                  title="표시할 일정이 없습니다."
-                  description="현재 검색 또는 필터 조건에 맞는 일정이 없습니다."
-                  action={
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openCreateModal()
-                      }
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#5873F9] px-4 py-2 text-xs font-black text-white"
-                    >
-                      <Plus
-                        size={14}
-                      />
-                      일정 만들기
-                    </button>
-                  }
-                />
-              ) : (
-                <>
-                  {viewMode ===
-                    "board" && (
-                    <BoardView
-                      schedules={
-                        filteredSchedules
-                      }
-                      teamMembers={
-                        teamMembers
-                      }
-                      isTeam={
-                        isTeam
-                      }
-                      onOpen={
-                        openScheduleDetail
-                      }
-                      onDragStart={
-                        handleDragStart
-                      }
-                      onStatusDrop={(
-                        event,
-                        status,
-                      ) => {
-                        event.preventDefault();
-
-                        const id =
-                          getDraggedScheduleId(
-                            event,
-                          );
-
-                        if (id) {
-                          void changeStatus(
-                            id,
-                            status,
-                          );
-                        }
-                      }}
-                      onWriteDevlog={
-                        goToDevlogWrite
-                      }
-                    />
-                  )}
-
-                  {viewMode ===
-                    "calendar" && (
-                    <CalendarView
-                      year={
-                        currentYear
-                      }
-                      month={
-                        currentMonth
-                      }
-                      todayDate={
-                        todayDate
-                      }
-                      cells={
-                        monthCells
-                      }
-                      schedules={
-                        filteredSchedules
-                      }
-                      onPrev={() =>
-                        moveMonth(
-                          -1,
-                        )
-                      }
-                      onNext={() =>
-                        moveMonth(
-                          1,
-                        )
-                      }
-                      onToday={
-                        moveMonthToday
-                      }
-                      onOpen={
-                        openScheduleDetail
-                      }
-                      onCreateForDate={
-                        openCreateModal
-                      }
-                      onDragStart={
-                        handleDragStart
-                      }
-                      onWriteDevlog={
-                        goToDevlogWrite
-                      }
-                      onDateDrop={(
-                        event,
-                        dateKey,
-                      ) => {
-                        event.preventDefault();
-
-                        const id =
-                          getDraggedScheduleId(
-                            event,
-                          );
-
-                        if (id) {
-                          void moveScheduleDate(
-                            id,
-                            dateKey,
-                          );
-                        }
-                      }}
-                    />
-                  )}
-
-                  {viewMode ===
-                    "gantt" && (
-                    <GanttView
-                      startDate={
-                        ganttStartDate
-                      }
-                      days={
-                        ganttDays
-                      }
-                      schedules={
-                        ganttSchedules
-                      }
-                      teamMembers={
-                        teamMembers
-                      }
-                      isTeam={
-                        isTeam
-                      }
-                      onPrev={() =>
-                        setGanttStartDate(
-                          (prev) =>
-                            addDays(
-                              prev,
-                              -14,
-                            ),
-                        )
-                      }
-                      onNext={() =>
-                        setGanttStartDate(
-                          (prev) =>
-                            addDays(
-                              prev,
-                              14,
-                            ),
-                        )
-                      }
-                      onToday={() => {
-                        const now =
-                          getTodayLocalDate();
-
-                        const day =
-                          now.getDay();
-
-                        now.setDate(
-                          now.getDate() +
-                            (day ===
-                            0
-                              ? -6
-                              : 1 -
-                                day),
-                        );
-
-                        setGanttStartDate(
-                          now,
-                        );
-                      }}
-                      onOpen={
-                        openScheduleDetail
-                      }
-                      onDragStart={
-                        handleDragStart
-                      }
-                      onWriteDevlog={
-                        goToDevlogWrite
-                      }
-                      onDateDrop={(
-                        event,
-                        dateKey,
-                      ) => {
-                        event.preventDefault();
-
-                        const id =
-                          getDraggedScheduleId(
-                            event,
-                          );
-
-                        if (id) {
-                          void moveScheduleDate(
-                            id,
-                            dateKey,
-                          );
-                        }
-                      }}
-                    />
-                  )}
-
-                  {viewMode ===
-                    "list" && (
-                    <ListView
-                      schedules={
-                        filteredSchedules
-                      }
-                      teamMembers={
-                        teamMembers
-                      }
-                      isTeam={
-                        isTeam
-                      }
-                      onOpen={
-                        openScheduleDetail
-                      }
-                      onStatusChange={
-                        changeStatus
-                      }
-                      onWriteDevlog={
-                        goToDevlogWrite
-                      }
-                      onOpenDevlog={
-                        goToDevlogs
-                      }
-                    />
-                  )}
-                </>
               )}
             </div>
+
+            <SmartFilterButton
+              active={smartFilter === "noDevlog"}
+              label={`일지 미작성 ${noDevlogCount}`}
+              warning
+              onClick={() =>
+                setSmartFilter(smartFilter === "noDevlog" ? "all" : "noDevlog")
+              }
+            />
+
+            <div className="relative">
+              <Filter
+                size={13}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as StatusFilter)
+                }
+                className="h-8 rounded-md border border-slate-200 bg-white pl-7 pr-7 text-xs font-medium text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:border-[#AAB8FF]"
+              >
+                <option value="all">모든 상태</option>
+                <option value="todo">할 일</option>
+                <option value="progress">진행 중</option>
+                <option value="done">완료</option>
+                <option value="delayed">지연</option>
+              </select>
+            </div>
+
+            <div className="relative min-w-[170px] flex-1 xl:max-w-[240px]">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="일정 검색"
+                className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-xs font-medium outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF]"
+              />
+            </div>
           </div>
-        </section>
+        </div>
+
+        {/* ===============================================
+            ASSIGNEE BAR
+            - 선택 프로젝트 / 전체 프로젝트 모두 동일하게 노출
+            - 현재 사용자도 담당자 칩에서 "나"로 구분
+            - 전체 프로젝트에서는 실제 오늘 일정에 등장한 담당자 기준
+           =============================================== */}
+        {showAssigneeBar && (
+          <div className="border-b border-slate-100 px-5 py-1.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              <div className="mr-1 flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                <UsersRound size={13} />
+                담당자
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setAssigneeFilter("all")}
+                className={cn(
+                  "h-7 shrink-0 rounded-md px-2.5 text-[11px] font-medium transition-colors",
+                  assigneeFilter === "all"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100",
+                )}
+              >
+                전체
+              </button>
+
+              {teamMemberLoading &&
+              !(smartFilter === "today" && todayScope === "all") ? (
+                <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-400">
+                  <Loader2 size={13} className="animate-spin" />
+                  팀원 조회 중
+                </div>
+              ) : (
+                assigneeOptions.map((option) => (
+                  <AssigneeFilterChip
+                    key={option.key}
+                    option={option}
+                    active={assigneeFilter === option.key}
+                    onClick={() => setAssigneeFilter(option.key)}
+                  />
+                ))
+              )}
+
+              {memberErrorMessage &&
+                !(smartFilter === "today" && todayScope === "all") && (
+                  <span className="ml-2 shrink-0 text-[11px] font-medium text-rose-500">
+                    {memberErrorMessage}
+                  </span>
+                )}
+
+              {smartFilter === "today" &&
+                todayScope === "all" &&
+                assigneeOptions.length === 0 &&
+                !allTodayLoading && (
+                  <span className="ml-1 shrink-0 text-[11px] font-medium text-slate-400">
+                    담당자가 지정된 오늘 일정이 없습니다.
+                  </span>
+                )}
+            </div>
+          </div>
+        )}
+
+        {/* ===============================================
+            CONTENT
+           =============================================== */}
+        <div className="flex min-h-[360px] flex-1 flex-col rounded-b-md bg-[#FAFAFB] p-4">
+          {loading ? (
+            <LoadingBox />
+          ) : errorMessage ? (
+            <ErrorBox message={errorMessage} />
+          ) : !workspaceId ? (
+            <EmptyBox
+              title="프로젝트를 선택해주세요."
+              description="위쪽 프로젝트 이름을 눌러 일정을 확인할 프로젝트를 선택해주세요."
+            />
+          ) : filteredSchedules.length === 0 ? (
+            <EmptyBox
+              title="표시할 일정이 없습니다."
+              description="현재 검색 또는 필터 조건에 맞는 일정이 없습니다."
+              action={
+                <button
+                  type="button"
+                  onClick={() => openCreateModal()}
+                  className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+                >
+                  <Plus size={14} />
+                  일정 만들기
+                </button>
+              }
+            />
+          ) : (
+            <>
+              {viewMode === "board" && (
+                <BoardView
+                  schedules={filteredSchedules}
+                  teamMembers={teamMembers}
+                  isTeam={isTeam}
+                  onOpen={openScheduleDetail}
+                  onDragStart={handleDragStart}
+                  onStatusDrop={(event, status) => {
+                    event.preventDefault();
+
+                    const id = getDraggedScheduleId(event);
+
+                    if (id) {
+                      void changeStatus(id, status);
+                    }
+                  }}
+                  onWriteDevlog={goToDevlogWrite}
+                />
+              )}
+
+              {viewMode === "calendar" && (
+                <CalendarView
+                  year={currentYear}
+                  month={currentMonth}
+                  todayDate={todayDate}
+                  cells={monthCells}
+                  schedules={filteredSchedules}
+                  onPrev={() => moveMonth(-1)}
+                  onNext={() => moveMonth(1)}
+                  onToday={moveMonthToday}
+                  onOpen={openScheduleDetail}
+                  onCreateForDate={openCreateModal}
+                  onDragStart={handleDragStart}
+                  onWriteDevlog={goToDevlogWrite}
+                  onDateDrop={(event, dateKey) => {
+                    event.preventDefault();
+
+                    const id = getDraggedScheduleId(event);
+
+                    if (id) {
+                      void moveScheduleDate(id, dateKey);
+                    }
+                  }}
+                />
+              )}
+
+              {viewMode === "gantt" && (
+                <GanttView
+                  startDate={ganttStartDate}
+                  days={ganttDays}
+                  schedules={ganttSchedules}
+                  teamMembers={teamMembers}
+                  isTeam={isTeam}
+                  onPrev={() => setGanttStartDate((prev) => addDays(prev, -14))}
+                  onNext={() => setGanttStartDate((prev) => addDays(prev, 14))}
+                  onToday={() => {
+                    const now = getTodayLocalDate();
+
+                    const day = now.getDay();
+
+                    now.setDate(now.getDate() + (day === 0 ? -6 : 1 - day));
+
+                    setGanttStartDate(now);
+                  }}
+                  onOpen={openScheduleDetail}
+                  onDragStart={handleDragStart}
+                  onWriteDevlog={goToDevlogWrite}
+                  onDateDrop={(event, dateKey) => {
+                    event.preventDefault();
+
+                    const id = getDraggedScheduleId(event);
+
+                    if (id) {
+                      void moveScheduleDate(id, dateKey);
+                    }
+                  }}
+                />
+              )}
+
+              {viewMode === "list" && (
+                <ListView
+                  schedules={filteredSchedules}
+                  teamMembers={teamMembers}
+                  isTeam={isTeam}
+                  onOpen={openScheduleDetail}
+                  onStatusChange={changeStatus}
+                  onWriteDevlog={goToDevlogWrite}
+                  onOpenDevlog={goToDevlogs}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* =================================================
           DETAIL MODAL
          ================================================= */}
-      {isDetailModalOpen &&
-        selectedSchedule && (
-          <ScheduleDetailModal
-            schedule={
-              selectedSchedule
-            }
-            members={
-              teamMembers
-            }
-            isTeam={
-              workspaces.find(
-                (workspace) =>
-                  workspace.id ===
-                  selectedSchedule.workspaceId,
-              )?.mode ===
-                "team" ||
-              isTeam
-            }
-            deleting={
-              deleting
-            }
-            onClose={() =>
-              setIsDetailModalOpen(
-                false,
-              )
-            }
-            onEdit={() =>
-              openEditModal(
-                selectedSchedule,
-              )
-            }
-            onDelete={() =>
-              void deleteSchedule(
-                selectedSchedule.id,
-              )
-            }
-            onStatusChange={(
-              status,
-            ) =>
-              void changeStatus(
-                selectedSchedule.id,
-                status,
-              )
-            }
-            onWriteDevlog={() =>
-              goToDevlogWrite(
-                selectedSchedule,
-              )
-            }
-            onOpenDevlog={() =>
-              goToDevlogs(
-                selectedSchedule,
-              )
-            }
-          />
-        )}
+      {isDetailModalOpen && selectedSchedule && (
+        <ScheduleDetailModal
+          schedule={selectedSchedule}
+          members={teamMembers}
+          isTeam={
+            workspaces.find(
+              (workspace) => workspace.id === selectedSchedule.workspaceId,
+            )?.mode === "team" || isTeam
+          }
+          deleting={deleting}
+          onClose={() => setIsDetailModalOpen(false)}
+          onEdit={() => openEditModal(selectedSchedule)}
+          onDelete={() => void deleteSchedule(selectedSchedule.id)}
+          onStatusChange={(status) =>
+            void changeStatus(selectedSchedule.id, status)
+          }
+          onWriteDevlog={() => goToDevlogWrite(selectedSchedule)}
+          onOpenDevlog={() => goToDevlogs(selectedSchedule)}
+        />
+      )}
 
       {/* =================================================
           CREATE
@@ -3662,68 +3312,44 @@ export default function ScheduleManagementPage() {
           mode="create"
           title="새 일정 만들기"
           description="작업 기간과 상태를 설정하고 프로젝트 일정에 추가합니다."
-          form={
-            createForm
-          }
-          setForm={
-            setCreateForm
-          }
-          members={
-            teamMembers
-          }
+          form={createForm}
+          setForm={setCreateForm}
+          members={teamMembers}
           isTeam={isTeam}
           saving={saving}
           submitLabel="일정 생성"
           onClose={() => {
             if (!saving) {
-              setIsCreateModalOpen(
-                false,
-              );
+              setIsCreateModalOpen(false);
             }
           }}
-          onSubmit={() =>
-            void createSchedule()
-          }
+          onSubmit={() => void createSchedule()}
         />
       )}
 
       {/* =================================================
           EDIT
          ================================================= */}
-      {isEditModalOpen &&
-        editingSchedule && (
-          <ScheduleFormModal
-            mode="edit"
-            title="일정 수정"
-            description="일정 내용, 기간, 상태와 담당자를 수정합니다."
-            form={
-              editForm
+      {isEditModalOpen && editingSchedule && (
+        <ScheduleFormModal
+          mode="edit"
+          title="일정 수정"
+          description="일정 내용, 기간, 상태와 담당자를 수정합니다."
+          form={editForm}
+          setForm={setEditForm}
+          members={teamMembers}
+          isTeam={isTeam}
+          saving={saving}
+          submitLabel="변경사항 저장"
+          onClose={() => {
+            if (!saving) {
+              setIsEditModalOpen(false);
+              setEditingSchedule(null);
             }
-            setForm={
-              setEditForm
-            }
-            members={
-              teamMembers
-            }
-            isTeam={isTeam}
-            saving={saving}
-            submitLabel="변경사항 저장"
-            onClose={() => {
-              if (!saving) {
-                setIsEditModalOpen(
-                  false,
-                );
-
-                setEditingSchedule(
-                  null,
-                );
-              }
-            }}
-            onSubmit={() =>
-              void updateSchedule()
-            }
-          />
-        )}
+          }}
+          onSubmit={() => void updateSchedule()}
+        />
+      )}
     </main>
   );
 }
@@ -3731,32 +3357,33 @@ export default function ScheduleManagementPage() {
 /* =========================================================
    HEADER
    ========================================================= */
-
 function HeaderMetric({
   label,
   value,
+  dot,
   active,
   danger,
 }: {
   label: string;
   value: number;
+  dot?: string;
   active?: boolean;
   danger?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] font-bold text-slate-400">
-        {label}
-      </span>
+    <div className="flex h-7 items-center gap-1.5 rounded-md px-2">
+      {dot ? <span className={cn("h-2 w-2 rounded-full", dot)} /> : null}
+
+      <span className="text-[11px] font-medium text-slate-500">{label}</span>
 
       <span
         className={cn(
-          "text-sm font-black",
+          "text-xs font-semibold tabular-nums",
           active
             ? "text-[#5873F9]"
-            : danger
-              ? "text-rose-500"
-              : "text-slate-800",
+            : danger && value > 0
+              ? "text-rose-600"
+              : "text-slate-900",
         )}
       >
         {value}
@@ -3782,14 +3409,15 @@ function ViewButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition",
+        "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
         active
-          ? "bg-white text-[#5873F9] shadow-sm"
-          : "text-slate-500 hover:text-slate-800",
+          ? "bg-slate-100 text-slate-900"
+          : "text-slate-500 hover:bg-slate-50 hover:text-slate-800",
       )}
     >
-      <Icon size={13} />
+      <Icon size={14} />
       {label}
     </button>
   );
@@ -3810,13 +3438,14 @@ function SmartFilterButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        "h-9 rounded-xl border px-3 text-[11px] font-black transition",
+        "h-8 rounded-md border px-2.5 text-xs font-medium transition-colors",
         active
           ? warning
             ? "border-amber-200 bg-amber-50 text-amber-700"
-            : "border-[#C9D2FF] bg-[#EEF3FF] text-[#5873F9]"
-          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+            : "border-[#C9D2FF] bg-[#EEF3FF] text-[#4058D6]"
+          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
       )}
     >
       {label}
@@ -3827,7 +3456,6 @@ function SmartFilterButton({
 /* =========================================================
    TEAM FILTER
    ========================================================= */
-
 function AssigneeFilterChip({
   option,
   active,
@@ -3842,47 +3470,33 @@ function AssigneeFilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 transition",
-        active
-          ? "border-[#C9D2FF] bg-[#EEF3FF]"
-          : "border-slate-200 bg-white hover:bg-slate-50",
+        "flex h-7 shrink-0 items-center gap-1.5 rounded-md pl-1 pr-2 transition-colors",
+        active ? "bg-[#EEF3FF]" : "hover:bg-slate-100",
       )}
     >
       <span
         className={cn(
-          "grid h-6 w-6 place-items-center rounded-full text-[9px] font-black",
-          active
-            ? "bg-[#5873F9] text-white"
-            : "bg-slate-100 text-slate-600",
+          "grid h-5 w-5 place-items-center rounded-full text-[10px] font-semibold",
+          active ? "bg-[#5873F9] text-white" : "bg-slate-200 text-slate-600",
         )}
       >
-        {getInitial(
-          option.name,
-        )}
+        {getInitial(option.name)}
       </span>
 
-      <span className="text-[11px] font-black text-slate-700">
+      <span
+        className={cn(
+          "text-[11px] font-medium",
+          active ? "text-[#4058D6]" : "text-slate-700",
+        )}
+      >
         {option.name}
-
         {option.isCurrentUser && (
-          <span className="ml-1 text-[#5873F9]">
-            나
-          </span>
+          <span className="ml-1 text-[#5873F9]">나</span>
         )}
       </span>
 
-      {option.role && (
-        <span
-          className={cn(
-            "text-[8px] font-black",
-            option.role ===
-              "OWNER"
-              ? "text-[#5873F9]"
-              : "text-slate-400",
-          )}
-        >
-          {option.role}
-        </span>
+      {option.role === "OWNER" && (
+        <span className="text-[10px] font-semibold text-slate-400">OWNER</span>
       )}
     </button>
   );
@@ -3891,7 +3505,6 @@ function AssigneeFilterChip({
 /* =========================================================
    BOARD VIEW
    ========================================================= */
-
 function BoardView({
   schedules,
   teamMembers,
@@ -3953,7 +3566,7 @@ function BoardView({
                 )
               }
               className={cn(
-                "flex min-h-[340px] min-w-0 flex-col rounded-xl border",
+                "flex min-h-[340px] min-w-0 flex-col rounded-md border",
                 meta.board,
               )}
             >
@@ -3966,13 +3579,13 @@ function BoardView({
                     )}
                   />
 
-                  <h3 className="text-xs font-black text-slate-800">
+                  <h3 className="text-xs font-semibold text-slate-800">
                     {
                       meta.label
                     }
                   </h3>
 
-                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black text-slate-400">
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
                     {
                       items.length
                     }
@@ -4020,7 +3633,7 @@ function BoardView({
 
                 {items.length ===
                   0 && (
-                  <div className="grid min-h-[120px] place-items-center rounded-xl border border-dashed border-slate-200 bg-white/50 text-center">
+                  <div className="grid min-h-[120px] place-items-center rounded-md border border-dashed border-slate-200 bg-white/50 text-center">
                     <p className="text-[11px] font-semibold text-slate-400">
                       여기에 작업을
                       드래그하세요.
@@ -4073,7 +3686,7 @@ function ScheduleBoardCard({
         onDragStart
       }
       onClick={onOpen}
-      className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-[#C9D2FF] hover:shadow-md"
+      className="group cursor-pointer rounded-md border border-slate-200 bg-white p-3 transition hover:border-[#C9D2FF]"
     >
       <div className="flex items-start gap-2">
         <GripVertical
@@ -4083,7 +3696,7 @@ function ScheduleBoardCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h4 className="line-clamp-2 text-[13px] font-black leading-5 text-slate-900">
+            <h4 className="line-clamp-2 text-[13px] font-semibold leading-5 text-slate-900">
               {schedule.title}
             </h4>
 
@@ -4110,7 +3723,7 @@ function ScheduleBoardCard({
             {isTeam ? (
               assigneeName ? (
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[9px] font-black text-[#5873F9]">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#5873F9]">
                     {getInitial(
                       assigneeName,
                     )}
@@ -4151,7 +3764,7 @@ function ScheduleBoardCard({
               ) =>
                 event.stopPropagation()
               }
-              className="mt-3 flex w-full items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-2 text-[10px] font-black text-amber-700 transition hover:bg-amber-100"
+              className="mt-3 flex w-full items-center justify-between rounded-md border border-amber-100 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100"
             >
               <span className="flex items-center gap-1.5">
                 <FilePenLine
@@ -4396,13 +4009,13 @@ function CalendarView({
     }, [cells]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+    <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
             aria-label="이전 달"
           >
             <ChevronLeft
@@ -4413,7 +4026,7 @@ function CalendarView({
           <button
             type="button"
             onClick={onNext}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
             aria-label="다음 달"
           >
             <ChevronRight
@@ -4422,7 +4035,7 @@ function CalendarView({
           </button>
 
           <div className="ml-1">
-            <h3 className="text-sm font-black tracking-tight text-slate-900">
+            <h3 className="text-sm font-semibold tracking-tight text-slate-900">
               {year}년 {month + 1}월
             </h3>
 
@@ -4435,7 +4048,7 @@ function CalendarView({
         <button
           type="button"
           onClick={onToday}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-500 transition hover:border-[#C9D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
         >
           오늘
         </button>
@@ -4447,7 +4060,7 @@ function CalendarView({
             <div
               key={day}
               className={cn(
-                "px-2 py-2.5 text-center text-[10px] font-black",
+                "px-2 py-2.5 text-center text-[10px] font-semibold",
                 index === 0
                   ? "text-rose-400"
                   : index === 6
@@ -4561,9 +4174,9 @@ function CalendarView({
                           <div className="flex h-[38px] items-center justify-between px-2 pt-1">
                             <span
                               className={cn(
-                                "grid h-6 w-6 place-items-center rounded-full text-[10px] font-black",
+                                "grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold",
                                 isToday
-                                  ? "bg-[#5873F9] text-white shadow-sm"
+                                  ? "bg-[#5873F9] text-white"
                                   : currentMonth
                                     ? dayIndex === 0
                                       ? "text-rose-400"
@@ -4587,7 +4200,7 @@ function CalendarView({
                                   dateKey,
                                 );
                               }}
-                              className="grid h-5 w-5 place-items-center rounded-md text-slate-300 opacity-0 transition hover:bg-white hover:text-[#5873F9] hover:shadow-sm group-hover/day:opacity-100"
+                              className="grid h-5 w-5 place-items-center rounded-md text-slate-300 opacity-0 transition hover:bg-white hover:text-[#5873F9] group-hover/day:opacity-100"
                               aria-label={`${dateKey} 일정 추가`}
                             >
                               <Plus
@@ -4668,7 +4281,7 @@ function CalendarView({
                             }
                           }}
                           className={cn(
-                            "pointer-events-auto absolute flex h-[22px] cursor-grab items-center gap-1.5 overflow-hidden border px-2 text-[9px] font-black shadow-[0_1px_2px_rgba(15,23,42,0.08)] transition hover:z-20 hover:-translate-y-[1px] hover:brightness-[0.98] hover:shadow-md active:cursor-grabbing",
+                            "pointer-events-auto absolute flex h-[22px] cursor-grab items-center gap-1.5 overflow-hidden border px-2 text-[10px] font-semibold transition hover:z-20 hover:-translate-y-[1px] hover:brightness-[0.98] active:cursor-grabbing",
                             STATUS_META[
                               schedule.status
                             ].badge,
@@ -4738,7 +4351,7 @@ function CalendarView({
 
                   {hiddenCount > 0 && (
                     <div
-                      className="absolute left-2 text-[9px] font-black text-slate-400"
+                      className="absolute left-2 text-[10px] font-semibold text-slate-400"
                       style={{
                         top:
                           laneCount *
@@ -4761,7 +4374,7 @@ function CalendarView({
           일정 Bar를 다른 날짜로 드래그하면 기간 길이를 유지한 채 이동합니다.
         </p>
 
-        <div className="flex items-center gap-3 text-[9px] font-bold text-slate-400">
+        <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400">
           <span className="flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             완료
@@ -4840,13 +4453,13 @@ function GanttView({
     ];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
           >
             <ChevronLeft
               size={15}
@@ -4856,7 +4469,7 @@ function GanttView({
           <button
             type="button"
             onClick={onNext}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
           >
             <ChevronRight
               size={15}
@@ -4864,7 +4477,7 @@ function GanttView({
           </button>
 
           <div className="ml-1">
-            <p className="text-xs font-black text-slate-800">
+            <p className="text-xs font-semibold text-slate-800">
               프로젝트 타임라인
             </p>
 
@@ -4887,7 +4500,7 @@ function GanttView({
         <button
           type="button"
           onClick={onToday}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-slate-500 hover:bg-slate-50"
+          className="rounded-md border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
         >
           오늘 기준
         </button>
@@ -4903,7 +4516,7 @@ function GanttView({
         >
           {/* header */}
           <div className="flex border-b border-slate-100 bg-slate-50">
-            <div className="w-[220px] shrink-0 border-r border-slate-200 px-4 py-2 text-[10px] font-black text-slate-400">
+            <div className="w-[220px] shrink-0 border-r border-slate-200 px-4 py-2 text-[10px] font-semibold text-slate-400">
               작업
             </div>
 
@@ -4932,7 +4545,7 @@ function GanttView({
                           "bg-slate-100/50",
                       )}
                     >
-                      <p className="text-[8px] font-bold text-slate-400">
+                      <p className="text-[10px] font-bold text-slate-400">
                         {
                           [
                             "일",
@@ -4948,7 +4561,7 @@ function GanttView({
                         }
                       </p>
 
-                      <p className="mt-0.5 text-[9px] font-black text-slate-600">
+                      <p className="mt-0.5 text-[10px] font-semibold text-slate-600">
                         {
                           date.getDate()
                         }
@@ -5042,13 +4655,13 @@ function GanttView({
                       />
 
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] font-black text-slate-800">
+                        <span className="block truncate text-[11px] font-semibold text-slate-800">
                           {
                             schedule.title
                           }
                         </span>
 
-                        <span className="mt-0.5 block truncate text-[9px] font-semibold text-slate-400">
+                        <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">
                           {isTeam
                             ? assigneeName ||
                               "담당자 미지정"
@@ -5067,7 +4680,7 @@ function GanttView({
                             schedule,
                           )
                         }
-                        className="mr-2 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 transition hover:bg-amber-100"
+                        className="mr-2 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-amber-50 text-amber-600 transition hover:bg-amber-100"
                         title="이 일정으로 개발일지 작성"
                       >
                         <FilePenLine
@@ -5151,7 +4764,7 @@ function GanttView({
                         )
                       }
                       className={cn(
-                        "absolute top-[13px] z-10 flex h-7 items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[9px] font-black shadow-sm transition hover:brightness-95",
+                        "absolute top-[13px] z-10 flex h-7 items-center gap-1.5 overflow-hidden rounded-md border px-2 text-[10px] font-semibold transition hover:brightness-95",
                         STATUS_META[
                           schedule
                             .status
@@ -5193,6 +4806,20 @@ function GanttView({
    LIST VIEW
    ========================================================= */
 
+// 목록은 상태별로 묶어 보여 준다. 급한 것부터 보이도록 지연 → 진행 중 → 할 일 → 완료 순.
+const LIST_GROUP_ORDER: ScheduleStatus[] = [
+  "delayed",
+  "progress",
+  "todo",
+  "done",
+];
+
+const OTHER_STATUS_META = {
+  label: "기타",
+  dot: "bg-slate-300",
+  badge: "border-slate-200 bg-white text-slate-600",
+};
+
 function ListView({
   schedules,
   teamMembers,
@@ -5219,198 +4846,177 @@ function ListView({
     schedule: ProjectScheduleItem,
   ) => void;
 }) {
+  // 알 수 없는 상태 값이 와도 목록에서 빠지지 않도록 "기타" 그룹에 모은다.
+  const groups = [
+    ...LIST_GROUP_ORDER.map((status) => ({
+      key: status as string,
+      label: STATUS_META[status].label,
+      dot: STATUS_META[status].dot,
+      items: schedules.filter((schedule) => schedule.status === status),
+    })),
+    {
+      key: "other",
+      label: OTHER_STATUS_META.label,
+      dot: OTHER_STATUS_META.dot,
+      items: schedules.filter(
+        (schedule) => !LIST_GROUP_ORDER.includes(schedule.status),
+      ),
+    },
+  ];
+
+  const gridCols = isTeam
+    ? "grid-cols-[minmax(220px,1fr)_160px_110px_150px_110px]"
+    : "grid-cols-[minmax(260px,1fr)_110px_170px_110px]";
+
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div
-        className={cn(
-          "grid gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-400",
-          isTeam
-            ? "grid-cols-[minmax(220px,1.7fr)_150px_110px_170px_130px]"
-            : "grid-cols-[minmax(260px,2fr)_110px_190px_130px]",
-        )}
-      >
-        <div>Task</div>
+    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+      <div className="min-w-[760px]">
+        <div
+          className={cn(
+            "grid gap-3 border-b border-slate-200 px-4 py-2 text-[11px] font-medium text-slate-500",
+            gridCols,
+          )}
+        >
+          <div>작업</div>
+          {isTeam && <div>담당자</div>}
+          <div>상태</div>
+          <div>기간</div>
+          <div>개발일지</div>
+        </div>
 
-        {isTeam && (
-          <div>
-            Assignee
-          </div>
-        )}
+        {groups.map((group) => {
+          const { items } = group;
 
-        <div>Status</div>
-
-        <div>Period</div>
-
-        <div>Devlog</div>
-      </div>
-
-      {schedules.map(
-        (schedule) => {
-          const member =
-            teamMembers.find(
-              (item) =>
-                item.userId ===
-                schedule.assigneeUserId,
-            );
-
-          const assigneeName =
-            member
-              ? getMemberName(
-                  member,
-                )
-              : schedule.assigneeName;
+          if (items.length === 0) {
+            return null;
+          }
 
           return (
-            <div
-              key={
-                schedule.id
-              }
-              className={cn(
-                "grid items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-[#FBFCFF]",
-                isTeam
-                  ? "grid-cols-[minmax(220px,1.7fr)_150px_110px_170px_130px]"
-                  : "grid-cols-[minmax(260px,2fr)_110px_190px_130px]",
-              )}
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  onOpen(
-                    schedule,
-                  )
-                }
-                className="min-w-0 text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <span
+            <section key={group.key}>
+              <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5">
+                <span className={cn("h-2 w-2 rounded-full", group.dot)} />
+
+                <h3 className="text-xs font-semibold text-slate-800">
+                  {group.label}
+                </h3>
+
+                <span className="text-xs tabular-nums text-slate-400">
+                  {items.length}
+                </span>
+              </div>
+
+              {items.map((schedule) => {
+                const member = teamMembers.find(
+                  (item) => item.userId === schedule.assigneeUserId,
+                );
+
+                const assigneeName = member
+                  ? getMemberName(member)
+                  : schedule.assigneeName;
+
+                const meta = STATUS_META[schedule.status] ?? OTHER_STATUS_META;
+
+                return (
+                  <div
+                    key={schedule.id}
                     className={cn(
-                      "h-2 w-2 shrink-0 rounded-full",
-                      STATUS_META[
-                        schedule.status
-                      ].dot,
+                      "group grid h-11 items-center gap-3 border-b border-slate-100 px-4 transition-colors last:border-b-0 hover:bg-[#F7F9FF]",
+                      gridCols,
                     )}
-                  />
-
-                  <span className="truncate text-xs font-black text-slate-800">
-                    {
-                      schedule.title
-                    }
-                  </span>
-                </div>
-
-                <p className="mt-1 truncate pl-4 text-[10px] font-semibold text-slate-400">
-                  {getProjectName(
-                    schedule,
-                  )}
-                </p>
-              </button>
-
-              {isTeam && (
-                <div>
-                  {assigneeName ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-[#EEF3FF] text-[9px] font-black text-[#5873F9]">
-                        {getInitial(
-                          assigneeName,
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpen(schedule)}
+                      className="flex min-w-0 items-center gap-2.5 text-left"
+                    >
+                      <span
+                        className={cn(
+                          "h-2 w-2 shrink-0 rounded-full",
+                          meta.dot,
                         )}
+                      />
+
+                      <span className="truncate text-[13px] font-medium text-slate-900 group-hover:text-[#4058D6]">
+                        {schedule.title}
                       </span>
 
-                      <span className="truncate text-[10px] font-bold text-slate-600">
-                        {
-                          assigneeName
+                      <span className="hidden shrink-0 truncate text-[11px] text-slate-400 xl:inline">
+                        {getProjectName(schedule)}
+                      </span>
+                    </button>
+
+                    {isTeam && (
+                      <div className="min-w-0">
+                        {assigneeName ? (
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#5873F9]">
+                              {getInitial(assigneeName)}
+                            </span>
+
+                            <span className="truncate text-xs text-slate-700">
+                              {assigneeName}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">미지정</span>
+                        )}
+                      </div>
+                    )}
+
+                    <div>
+                      <select
+                        value={schedule.status}
+                        onChange={(event) =>
+                          void onStatusChange(
+                            schedule.id,
+                            event.target.value as ScheduleStatus,
+                          )
                         }
-                      </span>
+                        aria-label={`${schedule.title} 상태`}
+                        className={cn(
+                          "h-7 rounded-md border px-1.5 text-[11px] font-medium outline-none",
+                          meta.badge,
+                        )}
+                      >
+                        <option value="todo">할 일</option>
+                        <option value="progress">진행 중</option>
+                        <option value="done">완료</option>
+                        <option value="delayed">지연</option>
+                      </select>
                     </div>
-                  ) : (
-                    <span className="text-[10px] font-semibold text-slate-400">
-                      미지정
-                    </span>
-                  )}
-                </div>
-              )}
 
-              <div>
-                <select
-                  value={
-                    schedule.status
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    void onStatusChange(
-                      schedule.id,
-                      event.target
-                        .value as ScheduleStatus,
-                    )
-                  }
-                  className={cn(
-                    "h-8 rounded-lg border px-2 text-[10px] font-black outline-none",
-                    STATUS_META[
-                      schedule.status
-                    ].badge,
-                  )}
-                >
-                  <option value="todo">
-                    할 일
-                  </option>
+                    <div className="font-mono text-[11px] text-slate-500">
+                      {getSchedulePeriodText(schedule)}
+                    </div>
 
-                  <option value="progress">
-                    진행 중
-                  </option>
-
-                  <option value="done">
-                    완료
-                  </option>
-
-                  <option value="delayed">
-                    지연
-                  </option>
-                </select>
-              </div>
-
-              <div className="text-[10px] font-bold text-slate-500">
-                {getSchedulePeriodText(
-                  schedule,
-                )}
-              </div>
-
-              <div>
-                {schedule.hasDevlog ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onOpenDevlog(
-                        schedule,
-                      )
-                    }
-                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] font-black text-emerald-700"
-                  >
-                    <CheckCircle2
-                      size={11}
-                    />
-                    작성 완료
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onWriteDevlog(
-                        schedule,
-                      )
-                    }
-                    className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10px] font-black text-amber-700 transition hover:bg-amber-100"
-                  >
-                    <FilePenLine
-                      size={11}
-                    />
-                    작성하기
-                  </button>
-                )}
-              </div>
-            </div>
+                    <div>
+                      {schedule.hasDevlog ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDevlog(schedule)}
+                          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                        >
+                          <CheckCircle2 size={12} />
+                          작성 완료
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onWriteDevlog(schedule)}
+                          className="inline-flex h-7 items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
+                        >
+                          <FilePenLine size={12} />
+                          작성하기
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
           );
-        },
-      )}
+        })}
+      </div>
     </div>
   );
 }
@@ -5477,14 +5083,14 @@ function ScheduleDetailModal({
                 }
               />
 
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-500">
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
                 {getProjectName(
                   schedule,
                 )}
               </span>
             </div>
 
-            <h2 className="text-lg font-black tracking-tight text-slate-950">
+            <h2 className="text-lg font-semibold tracking-tight text-slate-950">
               {schedule.title}
             </h2>
           </div>
@@ -5492,7 +5098,7 @@ function ScheduleDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"
+            className="grid h-8 w-8 place-items-center rounded-md text-slate-400 hover:bg-slate-100"
           >
             <X size={16} />
           </button>
@@ -5510,27 +5116,27 @@ function ScheduleDetailModal({
 
           {isTeam && (
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 담당자
               </p>
 
               {assigneeName ? (
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-black text-[#5873F9]">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#5873F9]">
                     {getInitial(
                       assigneeName,
                     )}
                   </span>
 
                   <div>
-                    <p className="text-xs font-black text-slate-800">
+                    <p className="text-xs font-semibold text-slate-800">
                       {
                         assigneeName
                       }
                     </p>
 
                     {memberRole && (
-                      <p className="text-[9px] font-black text-[#5873F9]">
+                      <p className="text-[10px] font-semibold text-[#5873F9]">
                         {
                           memberRole
                         }
@@ -5549,18 +5155,18 @@ function ScheduleDetailModal({
         </div>
 
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
             설명
           </p>
 
-          <div className="mt-2 min-h-[82px] whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs font-medium leading-6 text-slate-600">
+          <div className="mt-2 min-h-[82px] whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs font-medium leading-6 text-slate-600">
             {schedule.description ||
               "등록된 상세 내용이 없습니다."}
           </div>
         </div>
 
         <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
             상태
           </p>
 
@@ -5576,7 +5182,7 @@ function ScheduleDetailModal({
                     )
                   }
                   className={cn(
-                    "rounded-xl border px-2 py-2 text-[10px] font-black transition",
+                    "rounded-md border px-2 py-2 text-[10px] font-semibold transition",
                     schedule.status ===
                       status
                       ? STATUS_META[
@@ -5599,7 +5205,7 @@ function ScheduleDetailModal({
         {/* devlog */}
         <div
           className={cn(
-            "rounded-xl border p-4",
+            "rounded-md border p-4",
             schedule.hasDevlog
               ? "border-emerald-100 bg-emerald-50/60"
               : "border-amber-100 bg-amber-50/60",
@@ -5622,7 +5228,7 @@ function ScheduleDetailModal({
 
                 <p
                   className={cn(
-                    "text-xs font-black",
+                    "text-xs font-semibold",
                     schedule.hasDevlog
                       ? "text-emerald-800"
                       : "text-amber-800",
@@ -5652,7 +5258,7 @@ function ScheduleDetailModal({
                 onClick={
                   onOpenDevlog
                 }
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-[10px] font-black text-emerald-700 shadow-sm"
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[10px] font-semibold text-emerald-700"
               >
                 개발일지 보기
                 <ArrowRight
@@ -5665,7 +5271,7 @@ function ScheduleDetailModal({
                 onClick={
                   onWriteDevlog
                 }
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-[10px] font-black text-white transition hover:bg-amber-600"
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-amber-500 px-3 text-[10px] font-semibold text-white transition hover:bg-amber-600"
               >
                 <FilePenLine
                   size={11}
@@ -5682,7 +5288,7 @@ function ScheduleDetailModal({
           type="button"
           disabled={deleting}
           onClick={onDelete}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 text-[11px] font-black text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
         >
           {deleting ? (
             <Loader2
@@ -5700,7 +5306,7 @@ function ScheduleDetailModal({
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-[11px] font-black text-white transition hover:bg-[#4863E8]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#5873F9] px-4 text-[11px] font-semibold text-white transition hover:bg-[#4863E8]"
         >
           <Pencil
             size={13}
@@ -5771,18 +5377,18 @@ function ScheduleFormModal({
       <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-6 py-5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5873F9]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5873F9]">
               Schedule
             </span>
 
-            <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[9px] font-black text-[#5873F9]">
+            <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[10px] font-semibold text-[#5873F9]">
               {isEdit
                 ? "EDIT"
                 : "NEW"}
             </span>
           </div>
 
-          <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
             {title}
           </h2>
 
@@ -5795,7 +5401,7 @@ function ScheduleFormModal({
           type="button"
           disabled={saving}
           onClick={onClose}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
           aria-label="일정 모달 닫기"
         >
           <X size={17} />
@@ -5812,11 +5418,11 @@ function ScheduleFormModal({
              ============================================= */}
           <div>
             <div className="flex items-center gap-1">
-              <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 Title
               </label>
 
-              <span className="text-[10px] font-black text-rose-500">
+              <span className="text-[10px] font-semibold text-rose-500">
                 *
               </span>
             </div>
@@ -5834,14 +5440,14 @@ function ScheduleFormModal({
               }
               placeholder="예: 로그인 API 구현"
               autoFocus
-              className="mt-1 w-full border-0 border-b border-slate-200 bg-transparent px-0 pb-3 pt-1 text-[19px] font-black tracking-tight text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#5873F9]"
+              className="mt-1 w-full border-0 border-b border-slate-200 bg-transparent px-0 pb-3 pt-1 text-[19px] font-semibold tracking-tight text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#5873F9]"
             />
           </div>
 
           {/* =============================================
               META INFORMATION
              ============================================= */}
-          <section className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+          <section className="mt-5 overflow-hidden rounded-md border border-slate-200">
             {/* PERIOD */}
             <ScheduleMetaRow
               icon={
@@ -5878,7 +5484,7 @@ function ScheduleFormModal({
                       }),
                     )
                   }
-                  className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                  className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
                 />
 
                 <ArrowRight
@@ -5907,7 +5513,7 @@ function ScheduleFormModal({
                       }),
                     )
                   }
-                  className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+                  className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
                 />
               </div>
             </ScheduleMetaRow>
@@ -6000,7 +5606,7 @@ function ScheduleFormModal({
                                 )
                               }
                               className={cn(
-                                "flex h-9 items-center gap-2 rounded-lg border py-1 pl-1.5 pr-3 transition",
+                                "flex h-9 items-center gap-2 rounded-md border py-1 pl-1.5 pr-3 transition",
                                 active
                                   ? "border-[#BFCBFF] bg-[#EEF3FF]"
                                   : "border-slate-200 bg-white hover:bg-slate-50",
@@ -6008,7 +5614,7 @@ function ScheduleFormModal({
                             >
                               <span
                                 className={cn(
-                                  "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-black",
+                                  "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-semibold",
                                   active
                                     ? "bg-[#5873F9] text-white"
                                     : "bg-slate-100 text-slate-600",
@@ -6019,13 +5625,13 @@ function ScheduleFormModal({
                                 )}
                               </span>
 
-                              <span className="text-[10px] font-black text-slate-700">
+                              <span className="text-[10px] font-semibold text-slate-700">
                                 {name}
                               </span>
 
                               <span
                                 className={cn(
-                                  "text-[8px] font-black",
+                                  "text-[10px] font-semibold",
                                   role ===
                                     "OWNER"
                                     ? "text-[#5873F9]"
@@ -6086,7 +5692,7 @@ function ScheduleFormModal({
           <section className="mt-5">
             <div className="mb-2 flex items-end justify-between">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                   Detail
                 </span>
 
@@ -6120,7 +5726,7 @@ function ScheduleFormModal({
               }
               rows={7}
               placeholder={`작업 내용이나 참고사항을 입력해주세요.\n\n예)\n- 로그인 API 구현\n- 인증 실패 예외 처리\n- Postman 테스트 진행`}
-              className="w-full resize-none rounded-xl border border-slate-200 bg-[#FBFCFE] p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+              className="w-full resize-none rounded-md border border-slate-200 bg-[#FBFCFE] p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
             />
           </section>
         </div>
@@ -6139,7 +5745,7 @@ function ScheduleFormModal({
             type="button"
             disabled={saving}
             onClick={onClose}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 rounded-md border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
           >
             취소
           </button>
@@ -6153,7 +5759,7 @@ function ScheduleFormModal({
               !form.endDate
             }
             onClick={onSubmit}
-            className="inline-flex h-9 min-w-[110px] items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 min-w-[110px] items-center justify-center gap-2 rounded-md bg-[#5873F9] px-4 text-xs font-semibold text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saving ? (
               <>
@@ -6219,7 +5825,7 @@ function ScheduleMetaRow({
       >
         {icon}
 
-        <span className="text-[10px] font-black text-slate-500">
+        <span className="text-[10px] font-semibold text-slate-500">
           {label}
         </span>
       </div>
@@ -6260,7 +5866,7 @@ function ScheduleStatusButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[10px] font-black transition",
+        "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-[10px] font-semibold transition",
         active
           ? meta.badge
           : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
@@ -6361,7 +5967,7 @@ function ModalShell({
       event.stopPropagation()
     }
     className={cn(
-      "pointer-events-auto flex max-h-[calc(100dvh-50px)] w-full flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]",
+      "pointer-events-auto flex max-h-[calc(100dvh-50px)] w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]",
       width,
     )}
   >
@@ -6382,7 +5988,7 @@ function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold",
         meta.badge,
       )}
     >
@@ -6407,11 +6013,11 @@ function DetailValue({
 }) {
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </p>
 
-      <p className="mt-2 text-xs font-black text-slate-700">
+      <p className="mt-2 text-xs font-semibold text-slate-700">
         {value}
       </p>
     </div>
@@ -6421,7 +6027,7 @@ function DetailValue({
 function LoadingBox() {
   return (
     <div className="grid min-h-[320px] flex-1 place-items-center">
-      <div className="flex items-center gap-2 text-xs font-black text-slate-400">
+      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
         <Loader2
           size={16}
           className="animate-spin text-[#5873F9]"
@@ -6440,13 +6046,13 @@ function ErrorBox({
 }) {
   return (
     <div className="grid min-h-[320px] flex-1 place-items-center">
-      <div className="max-w-md rounded-xl border border-rose-100 bg-rose-50 p-4 text-center">
+      <div className="max-w-md rounded-md border border-rose-100 bg-rose-50 p-4 text-center">
         <AlertTriangle
           size={20}
           className="mx-auto text-rose-500"
         />
 
-        <p className="mt-2 text-xs font-black text-rose-700">
+        <p className="mt-2 text-xs font-semibold text-rose-700">
           {message}
         </p>
       </div>
@@ -6466,13 +6072,13 @@ function EmptyBox({
   return (
     <div className="grid min-h-[320px] flex-1 place-items-center">
       <div className="max-w-sm text-center">
-        <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-[#EEF3FF] text-[#5873F9]">
+        <div className="mx-auto grid h-11 w-11 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
           <CalendarDays
             size={20}
           />
         </div>
 
-        <h3 className="mt-3 text-sm font-black text-slate-700">
+        <h3 className="mt-3 text-sm font-semibold text-slate-700">
           {title}
         </h3>
 

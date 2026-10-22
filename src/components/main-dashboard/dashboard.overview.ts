@@ -6,9 +6,10 @@
 import {
   fetchGitHistoryApi,
   fetchWorkspaceDevlogsApi,
-  fetchWorkspaceSchedulesApi,
   getWorkspaceMembersApi,
 } from "@/lib/ide/api";
+// 일정은 일정 관리 화면과 같은 API 를 쓴다. ide/api 쪽 같은 이름의 함수는 담당자 필드를 버린다.
+import { fetchWorkspaceSchedulesApi } from "@/lib/schedules/scheduleApi";
 import {
   fetchWorkspaceApiSpecsApi,
   fetchWorkspaceDesignDocumentApi,
@@ -31,7 +32,8 @@ const MAX_COMMITS_PER_PROJECT = 10;
 export type OverviewSchedule = {
   id: string;
   title: string;
-  category: string;
+  assigneeUserId: number | null;
+  assigneeName: string;
   status: ScheduleStatusKey;
   startKey: string;
   endKey: string;
@@ -125,8 +127,6 @@ async function loadSchedules(
   // 기간 없이 부르면 이 프로젝트의 일정 전체가 온다. 지난달에 끝났어야 할 미완료 일정도 보인다.
   const list = (await fetchWorkspaceSchedulesApi({
     workspaceId,
-    startDate: undefined,
-    endDate: undefined,
   })) as unknown[];
 
   return list.map((raw, index) => {
@@ -139,7 +139,9 @@ async function loadSchedules(
     return {
       id: String(item.id ?? index),
       title: asText(item.title) || "제목 없는 일정",
-      category: asText(item.category),
+      assigneeUserId:
+        typeof item.assigneeUserId === "number" ? item.assigneeUserId : null,
+      assigneeName: asText(item.assigneeName),
       status: getScheduleStatusKey(asText(item.status)),
       startKey,
       endKey: normalizeDateKey(asText(item.endDate)) || startKey,
@@ -339,7 +341,9 @@ export function buildActivity(overview: ProjectOverview): ActivityItem[] {
       kind: "schedule",
       action: change.edited ? "일정 수정" : "일정 등록",
       title: schedule.title,
-      detail: schedule.category || undefined,
+      detail: schedule.assigneeName
+        ? `담당 ${schedule.assigneeName}`
+        : undefined,
       time: change.time,
     });
   });

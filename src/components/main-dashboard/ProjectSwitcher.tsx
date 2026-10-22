@@ -26,6 +26,8 @@ type Props = {
   errorMessage: string;
   onSelectWorkspace: (workspace: WorkspaceSidebarItem) => void;
   allProjectsHref?: string;
+  // "compact" 는 일정 관리처럼 경로 표시(대시보드 / 프로젝트 / 일정) 안에 넣을 때 쓴다.
+  size?: "default" | "compact";
 };
 
 const FILTERS: Array<[ProjectFilter, string]> = [
@@ -44,7 +46,10 @@ export default function ProjectSwitcher({
   errorMessage,
   onSelectWorkspace,
   allProjectsHref = "/projects",
+  size = "default",
 }: Props) {
+  const compact = size === "compact";
+
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
@@ -135,15 +140,29 @@ export default function ProjectSwitcher({
           onClick={() => setOpen((prev) => !prev)}
           aria-haspopup="dialog"
           aria-expanded={open}
-          className="group -ml-2 inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-[#F2F5FF]"
+          className={`group inline-flex max-w-full items-center rounded-md text-left transition-colors hover:bg-[#F2F5FF] ${
+            compact ? "gap-1 px-1.5 py-1" : "-ml-2 gap-2 px-2 py-1"
+          }`}
         >
-          <span className="truncate text-[26px] font-bold leading-tight tracking-tight text-gray-900">
+          <span
+            className={`truncate text-gray-900 ${
+              compact
+                ? "text-sm font-semibold"
+                : "text-[26px] font-bold leading-tight tracking-tight"
+            }`}
+          >
             {label}
           </span>
 
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded border border-gray-200 bg-white text-gray-500 transition-colors group-hover:border-[#AAB8FF] group-hover:text-[#5873F9]">
+          <span
+            className={`grid shrink-0 place-items-center rounded text-gray-500 transition-colors group-hover:text-[#5873F9] ${
+              compact
+                ? "h-5 w-5"
+                : "h-6 w-6 border border-gray-200 bg-white group-hover:border-[#AAB8FF]"
+            }`}
+          >
             <ChevronDown
-              size={14}
+              size={compact ? 13 : 14}
               strokeWidth={2.4}
               className={`transition-transform ${open ? "rotate-180" : ""}`}
             />

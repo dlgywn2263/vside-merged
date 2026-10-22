@@ -939,6 +939,7 @@ export default function MainDashboard({
                 loading={sectionLoading}
                 errorMessage={errorMessage}
                 schedules={overview?.schedules}
+                members={overview?.members}
                 workspaceId={currentWorkspaceId}
                 mode={currentMode}
               />
@@ -1328,6 +1329,7 @@ function TaskFocusPanel({
   loading,
   errorMessage,
   schedules,
+  members,
   workspaceId,
   mode,
 }: {
@@ -1335,10 +1337,20 @@ function TaskFocusPanel({
   loading: boolean;
   errorMessage: string;
   schedules: OverviewSchedule[] | null | undefined;
+  members: ProjectOverview["members"] | undefined;
   workspaceId: string;
   mode: WorkspaceMode;
 }) {
   const todayKey = formatDateKey(new Date());
+
+  // 일정에 이름 없이 담당자 번호만 온 경우 팀원 목록에서 이름을 찾는다(일정 관리 화면과 같은 방식).
+  const getAssigneeName = (schedule: OverviewSchedule) =>
+    schedule.assigneeName ||
+    (Array.isArray(members)
+      ? members.find((member) => member.userId === schedule.assigneeUserId)
+          ?.name
+      : "") ||
+    "";
 
   const tasks = (schedules ?? [])
     .filter((schedule) => schedule.status !== "done")
@@ -1449,6 +1461,8 @@ function TaskFocusPanel({
 
           <ul className="space-y-1.5">
             {visibleTasks.map(({ schedule, daysLeft, urgency }) => {
+              const assigneeName = getAssigneeName(schedule);
+
               const meta = SCHEDULE_STATUS_META[schedule.status];
 
               const accent =
@@ -1489,8 +1503,20 @@ function TaskFocusPanel({
                         {schedule.title}
                       </p>
 
-                      <p className="mt-0.5 truncate text-[11px] text-gray-400">
-                        {schedule.category || "분류 없음"}
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-gray-400">
+                        {assigneeName ? (
+                          <>
+                            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#EEF2FF] text-[9px] font-bold text-[#4058D6]">
+                              {assigneeName.slice(0, 1).toUpperCase()}
+                            </span>
+
+                            <span className="truncate text-gray-600">
+                              {assigneeName}
+                            </span>
+                          </>
+                        ) : (
+                          <span>담당자 미지정</span>
+                        )}
                       </p>
                     </div>
 
