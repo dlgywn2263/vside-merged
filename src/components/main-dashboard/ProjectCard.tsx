@@ -39,55 +39,55 @@ export default function ProjectCard({ project }: Props) {
           router.push(projectMainHref);
         }
       }}
-      className="bg-white border border-gray-200 rounded-xl p-5 hover:border-[#5873F9]/50 hover:shadow-md transition-all group flex flex-col justify-between min-h-[210px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#5873F9]/30"
+      className="group flex min-h-[188px] cursor-pointer flex-col justify-between rounded-md border border-gray-200 bg-white p-4 transition-colors hover:border-[#AAB8FF] focus:outline-none focus-visible:border-[#5873F9]"
     >
       <div>
-        <div className="flex justify-between items-start mb-2">
-          <span className="bg-gray-100 text-gray-600 text-[11px] font-medium px-2.5 py-1 rounded-md">
+        <div className="mb-2.5 flex items-center gap-1.5">
+          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-600">
             {project.tech}
           </span>
 
           <span
-            className={`text-[11px] font-semibold px-2 py-1 rounded-md ${
+            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
               project.type === "team"
-                ? "text-blue-600 bg-blue-50"
-                : "text-purple-600 bg-purple-50"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-blue-50 text-blue-700"
             }`}
           >
             {project.type === "team" ? "Team" : "Personal"}
           </span>
         </div>
 
-        <h3 className="font-bold text-gray-900 group-hover:text-[#5873F9] transition-colors truncate">
+        <h3 className="truncate text-sm font-bold text-gray-900 transition-colors group-hover:text-[#5873F9]">
           {project.title}
         </h3>
 
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-gray-500">
           {project.role === "owner" ? "Owner" : "Member"}
         </p>
       </div>
 
       <div className="mt-4">
-        <div className="flex justify-between items-end mb-1.5">
-          <span className="text-xs text-gray-400">{project.lastModified}</span>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <span className="truncate text-xs text-gray-400">{project.lastModified}</span>
 
-          <span className="text-xs font-semibold text-[#5873F9]">
+          <span className="shrink-0 text-xs font-bold tabular-nums text-[#5873F9]">
             {project.progress}%
           </span>
         </div>
 
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
           <div
             className="bg-[#5873F9] h-1.5 rounded-full transition-all duration-500"
             style={{ width: `${project.progress}%` }}
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-3.5 grid grid-cols-3 gap-2">
           <Link
             href={getDevlogHref(project.workspaceId, project.type)}
             onClick={handleButtonClick}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9] transition-colors"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-700 transition-colors hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
           >
             개발일지
           </Link>
@@ -95,7 +95,7 @@ export default function ProjectCard({ project }: Props) {
           <Link
             href={getScheduleHref(project.workspaceId, project.type)}
             onClick={handleButtonClick}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs font-semibold text-gray-600 hover:border-[#5873F9] hover:bg-[#F7F9FF] hover:text-[#5873F9] transition-colors"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-700 transition-colors hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
           >
             일정
           </Link>
@@ -103,7 +103,7 @@ export default function ProjectCard({ project }: Props) {
           <Link
             href={getAivsHref(project.workspaceId, project.type)}
             onClick={handleButtonClick}
-            className="inline-flex items-center justify-center rounded-lg bg-[#5873F9] px-2 py-2 text-xs font-semibold text-white hover:bg-[#4863E8] transition-colors"
+            className="inline-flex h-8 items-center justify-center rounded-md bg-[#5873F9] px-2 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
           >
             AIVS
           </Link>

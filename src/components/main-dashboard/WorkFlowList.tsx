@@ -11,60 +11,51 @@ type Props = {
 export default function WorkFlowList({ title, emptyText, items }: Props) {
   return (
     <div>
-      <h4 className="mb-2 text-sm font-bold text-gray-900">{title}</h4>
+      <h4 className="mb-1 text-xs font-semibold text-gray-500">{title}</h4>
 
       {items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-3 py-3 text-xs text-gray-400">
-          {emptyText}
-        </p>
+        <p className="py-1.5 text-xs text-gray-400">{emptyText}</p>
       ) : (
-        <div className="space-y-2">
+        <ul className="divide-y divide-gray-100">
           {items.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="block rounded-xl border border-gray-200 bg-white px-3 py-3 transition hover:border-[#5873F9]/50 hover:bg-[#F7F9FF]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-gray-900">
+            <li key={item.id}>
+              <Link
+                href={item.href}
+                className="-mx-2 flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-gray-50"
+              >
+                <span
+                  className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                    item.type === "schedule" ? "bg-[#5873F9]" : "bg-purple-400"
+                  }`}
+                />
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold text-gray-900">
                     {item.title}
                   </p>
 
-                  <p className="mt-1 truncate text-xs text-gray-400">
-                    {item.workspaceName}
+                  <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-gray-400">
+                    <span className="truncate">{item.workspaceName}</span>
+
+                    {item.stage ? (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span className="shrink-0">{item.stage}</span>
+                      </>
+                    ) : null}
+
+                    {item.status ? (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span className="shrink-0">{item.status}</span>
+                      </>
+                    ) : null}
                   </p>
                 </div>
-
-                <span
-                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
-                    item.type === "schedule"
-                      ? "bg-blue-50 text-blue-600"
-                      : "bg-purple-50 text-purple-600"
-                  }`}
-                >
-                  {item.type === "schedule" ? "일정" : "일지"}
-                </span>
-              </div>
-
-              {item.stage || item.status ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {item.stage ? (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                      {item.stage}
-                    </span>
-                  ) : null}
-
-                  {item.status ? (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                      {item.status}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </Link>
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
