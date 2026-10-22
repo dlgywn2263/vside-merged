@@ -907,6 +907,9 @@ export default function MainDashboard({
           workspace={selectedWorkspace}
           workspaceId={currentWorkspaceId}
           mode={currentMode}
+          progress={projectProgress}
+          doneScheduleCount={doneScheduleCount}
+          totalScheduleCount={totalScheduleCount}
           switcher={
             <ProjectSwitcher
               label={
@@ -1153,15 +1156,23 @@ function DashboardHero({
   workspace,
   workspaceId,
   mode,
+  progress,
+  doneScheduleCount,
+  totalScheduleCount,
   switcher,
 }: {
   isProjectMode: boolean;
   workspace: WorkspaceListResponse | null;
   workspaceId: string;
   mode: WorkspaceMode;
+  progress: number;
+  doneScheduleCount: number;
+  totalScheduleCount: number;
   switcher: ReactNode;
 }) {
   const isTeam = mode === "team";
+
+  const safeProgress = Math.min(Math.max(progress, 0), 100);
 
   return (
     <section className="rounded-md border border-gray-200 bg-white">
@@ -1215,7 +1226,41 @@ function DashboardHero({
           )}
         </div>
 
-        <div className="flex w-full shrink-0 items-center gap-2 md:w-auto">
+        <div className="flex w-full shrink-0 flex-col gap-4 md:w-auto lg:flex-row lg:items-center lg:gap-6">
+          {isProjectMode && workspace ? (
+            <div className="w-full lg:w-64">
+              <div className="flex items-end justify-between">
+                <span className="text-[11px] font-semibold text-gray-500">
+                  일정 진행률
+                </span>
+
+                <span className="text-lg font-bold leading-none tabular-nums text-[#5873F9]">
+                  {safeProgress}
+                  <span className="ml-0.5 text-xs">%</span>
+                </span>
+              </div>
+
+              <div
+                className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#E4E9FF]"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={safeProgress}
+                aria-label="일정 진행률"
+              >
+                <div
+                  className="h-full rounded-full bg-[#5873F9] transition-all duration-500"
+                  style={{ width: `${safeProgress}%` }}
+                />
+              </div>
+
+              <p className="mt-1 text-right text-[11px] tabular-nums text-gray-400">
+                완료 {doneScheduleCount} / 전체 {totalScheduleCount}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-2 lg:border-l lg:border-gray-100 lg:pl-6">
           {isProjectMode && workspace ? (
             <Link
               href={`/dashboard/${encodeURIComponent(
@@ -1243,6 +1288,7 @@ function DashboardHero({
             <Code2 size={15} strokeWidth={2.2} />
             작업하러 가기
           </Link>
+          </div>
         </div>
       </div>
     </section>
