@@ -1219,6 +1219,9 @@ function DashboardHero({
                 </span>
               </span>
             </div>
+          ) : isProjectMode ? (
+            // 프로젝트 정보를 받기 전에는 메인 화면 문구 대신 자리만 잡아 둔다
+            <div className="mt-2 h-5 w-64 animate-pulse rounded bg-gray-100" />
           ) : (
             <p className="mt-1.5 text-xs text-gray-500">
               프로젝트 구조 중심 협업을 위한 웹 IDE 플랫폼 · 프로젝트 이름을

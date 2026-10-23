@@ -13,12 +13,20 @@ import {
   ChevronRight,
   Clock3,
   FilePenLine,
-  Filter,
   ArrowUpRight,
   GripVertical,
   LayoutDashboard,
 
-  ListTodo,
+  CalendarClock,
+
+  GanttChart,
+
+  Inbox,
+
+  Rows3,
+
+  SquareKanban,
+
   Loader2,
   Pencil,
   Plus,
@@ -158,6 +166,7 @@ const STATUS_META: Record<
     dot: string;
     badge: string;
     board: string;
+    bar: string;
   }
 > = {
   todo: {
@@ -165,6 +174,7 @@ const STATUS_META: Record<
     dot: "bg-slate-400",
     badge: "border-slate-200 bg-slate-50 text-slate-600",
     board: "border-slate-200 bg-slate-50/60",
+    bar: "border-slate-300 bg-slate-100 text-slate-700",
   },
 
   progress: {
@@ -172,6 +182,7 @@ const STATUS_META: Record<
     dot: "bg-[#5873F9]",
     badge: "border-blue-200 bg-blue-50 text-blue-700",
     board: "border-slate-200 bg-slate-50/60",
+    bar: "border-[#8EA0FF] bg-[#E4E9FF] text-[#2F45C7]",
   },
 
   done: {
@@ -179,6 +190,7 @@ const STATUS_META: Record<
     dot: "bg-emerald-500",
     badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
     board: "border-slate-200 bg-slate-50/60",
+    bar: "border-emerald-300 bg-emerald-100 text-emerald-800",
   },
 
   delayed: {
@@ -186,6 +198,7 @@ const STATUS_META: Record<
     dot: "bg-rose-500",
     badge: "border-rose-200 bg-rose-50 text-rose-700",
     board: "border-slate-200 bg-slate-50/60",
+    bar: "border-rose-300 bg-rose-100 text-rose-800",
   },
 };
 
@@ -713,6 +726,17 @@ function isDateInScheduleRange(
   );
 }
 
+// 완료되지 않았는데 끝나는 날이 오늘보다 앞이면 기한이 지난 일정이다.
+function isScheduleOverdue(
+  schedule: ProjectScheduleItem,
+) {
+  return (
+    schedule.status !== "done" &&
+    Boolean(schedule.endDate) &&
+    schedule.endDate <
+      getDateKeyFromDate(getTodayLocalDate())
+  );
+}
 function getSchedulePeriodText(
   schedule: ProjectScheduleItem,
 ) {
@@ -2811,6 +2835,87 @@ export default function ScheduleManagementPage() {
     ? `/dashboard/${encodeURIComponent(workspaceId)}?mode=${currentMode}`
     : "/dashboard";
 
+  const viewOptions: Array<{
+    value: ScheduleViewMode;
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+  }> = [
+    { value: "board", label: "보드", icon: SquareKanban },
+    { value: "list", label: "리스트", icon: Rows3 },
+    { value: "calendar", label: "캘린더", icon: CalendarDays },
+    { value: "gantt", label: "간트", icon: GanttChart },
+  ];
+
+  const statusOptions: Array<{
+    value: StatusFilter;
+    label: string;
+    count: number;
+  }> = [
+    { value: "all", label: "모든 상태", count: totalCount },
+    { value: "delayed", label: STATUS_META.delayed.label, count: delayedCount },
+    { value: "progress", label: STATUS_META.progress.label, count: progressCount },
+    { value: "todo", label: STATUS_META.todo.label, count: todoCount },
+    { value: "done", label: STATUS_META.done.label, count: doneCount },
+  ];
+
+  const currentViewLabel =
+    viewOptions.find((option) => option.value === viewMode)?.label ?? "보드";
+
+  const toggleTodayFilter = () => {
+    const next = smartFilter === "today" ? "all" : "today";
+
+    setSmartFilter(next);
+
+    if (next === "all") {
+      setAssigneeFilter("all");
+    }
+  };
+
+  const toggleNoDevlogFilter = () =>
+    setSmartFilter(smartFilter === "noDevlog" ? "all" : "noDevlog");
+
+  const todayScopeSwitch = (
+    <div className="flex h-7 items-center rounded-md bg-slate-100 p-0.5">
+      <button
+        type="button"
+        onClick={() => {
+          setTodayScope("selected");
+          setAssigneeFilter("all");
+        }}
+        className={cn(
+          "h-6 flex-1 rounded px-2 text-[11px] font-medium transition-colors",
+          todayScope === "selected"
+            ? "bg-white text-slate-900"
+            : "text-slate-500 hover:text-slate-800",
+        )}
+      >
+        이 프로젝트
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setTodayScope("all");
+          setAssigneeFilter("all");
+        }}
+        className={cn(
+          "flex h-6 flex-1 items-center justify-center gap-1 rounded px-2 text-[11px] font-medium transition-colors",
+          todayScope === "all"
+            ? "bg-white text-slate-900"
+            : "text-slate-500 hover:text-slate-800",
+        )}
+      >
+        전체 프로젝트
+        {allTodayLoading && todayScope === "all" && (
+          <Loader2 size={10} className="animate-spin" />
+        )}
+      </button>
+    </div>
+  );
+
+  const hideAssigneeOptions =
+    teamMemberLoading && !(smartFilter === "today" && todayScope === "all");
+
   return (
     <main className="waivs-page min-h-[calc(100dvh-72px)] px-4 py-5 font-sans text-slate-900 md:px-6 md:py-6">
       <div className="mx-auto flex min-h-[calc(100dvh-120px)] max-w-[1840px] flex-col rounded-md border border-slate-200 bg-white">
@@ -2909,156 +3014,236 @@ export default function ScheduleManagementPage() {
           </div>
         </header>
 
-        {/* ===============================================
-            STATUS SUMMARY
-           =============================================== */}
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 border-b border-slate-100 px-5 py-2">
-          <HeaderMetric label="전체" value={totalCount} />
+        <div className="flex min-h-0 flex-1">
+          {/* ===============================================
+              LEFT RAIL (lg 이상)
+              보기 · 빠른 필터 · 상태 · 담당자 · 진행률을 한 열에 모은다.
+              좁은 화면에서는 본문 위 툴바가 같은 역할을 한다.
+             =============================================== */}
+          <aside className="hidden w-[248px] shrink-0 flex-col gap-5 border-r border-slate-200 bg-[#FBFBFC] px-3 py-4 lg:flex">
+            <RailSection title="보기">
+              {viewOptions.map((option) => (
+                <RailItem
+                  key={option.value}
+                  active={viewMode === option.value}
+                  icon={option.icon}
+                  label={option.label}
+                  onClick={() => setViewMode(option.value)}
+                />
+              ))}
+            </RailSection>
 
-          <span className="mx-1 h-4 w-px bg-slate-200" />
-
-          <HeaderMetric label="할 일" value={todoCount} dot={STATUS_META.todo.dot} />
-
-          <HeaderMetric
-            label="진행 중"
-            value={progressCount}
-            dot={STATUS_META.progress.dot}
-            active
-          />
-
-          <HeaderMetric label="완료" value={doneCount} dot={STATUS_META.done.dot} />
-
-          <HeaderMetric
-            label="지연"
-            value={delayedCount}
-            dot={STATUS_META.delayed.dot}
-            danger
-          />
-
-          <div className="ml-auto flex items-center gap-2.5">
-            <span className="text-[11px] font-medium text-slate-500">진행률</span>
-
-            <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-[#5873F9] transition-all"
-                style={{
-                  width: `${progressRate}%`,
-                }}
-              />
-            </div>
-
-            <span className="w-9 text-right text-xs font-semibold tabular-nums text-[#5873F9]">
-              {progressRate}%
-            </span>
-          </div>
-        </div>
-
-        {/* ===============================================
-            VIEW BAR
-           =============================================== */}
-        <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-2 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-0.5">
-            <ViewButton
-              active={viewMode === "board"}
-              label="보드"
-              icon={ListTodo}
-              onClick={() => setViewMode("board")}
-            />
-
-            <ViewButton
-              active={viewMode === "calendar"}
-              label="캘린더"
-              icon={CalendarDays}
-              onClick={() => setViewMode("calendar")}
-            />
-
-            <ViewButton
-              active={viewMode === "gantt"}
-              label="간트"
-              icon={Clock3}
-              onClick={() => setViewMode("gantt")}
-            />
-
-            <ViewButton
-              active={viewMode === "list"}
-              label="리스트"
-              icon={FilePenLine}
-              onClick={() => setViewMode("list")}
-            />
-          </div>
-
-          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
-            {/* 오늘 일정 + 범위 선택
-                별도 행을 만들지 않고 같은 툴바 안에서 처리해서
-                메인 일정 영역이 아래로 밀리지 않도록 합니다. */}
-            <div className="flex shrink-0 items-center gap-1.5">
-              <SmartFilterButton
+            <RailSection title="빠른 필터">
+              <RailItem
                 active={smartFilter === "today"}
-                label={`오늘 ${displayedTodayCount}`}
-                onClick={() => {
-                  const next = smartFilter === "today" ? "all" : "today";
-
-                  setSmartFilter(next);
-
-                  if (next === "all") {
-                    setAssigneeFilter("all");
-                  }
-                }}
+                icon={CalendarClock}
+                label="오늘 일정"
+                count={displayedTodayCount}
+                onClick={toggleTodayFilter}
               />
 
               {smartFilter === "today" && (
-                <div className="flex h-8 items-center rounded-md bg-slate-100 p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTodayScope("selected");
-                      setAssigneeFilter("all");
-                    }}
-                    className={cn(
-                      "h-7 rounded px-2.5 text-[11px] font-medium transition-colors",
-                      todayScope === "selected"
-                        ? "bg-white text-slate-900"
-                        : "text-slate-500 hover:text-slate-800",
-                    )}
-                  >
-                    선택 프로젝트
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTodayScope("all");
-                      setAssigneeFilter("all");
-                    }}
-                    className={cn(
-                      "flex h-7 items-center gap-1 rounded px-2.5 text-[11px] font-medium transition-colors",
-                      todayScope === "all"
-                        ? "bg-white text-slate-900"
-                        : "text-slate-500 hover:text-slate-800",
-                    )}
-                  >
-                    전체 프로젝트
-                    {allTodayLoading && todayScope === "all" && (
-                      <Loader2 size={10} className="animate-spin" />
-                    )}
-                  </button>
-                </div>
+                <div className="px-1 pb-1 pt-0.5">{todayScopeSwitch}</div>
               )}
+
+              <RailItem
+                active={smartFilter === "noDevlog"}
+                icon={FilePenLine}
+                label="개발일지 미작성"
+                count={noDevlogCount}
+                tone="warning"
+                onClick={toggleNoDevlogFilter}
+              />
+            </RailSection>
+
+            <RailSection title="상태">
+              {statusOptions.map((option) => (
+                <RailItem
+                  key={option.value}
+                  active={statusFilter === option.value}
+                  status={option.value === "all" ? undefined : option.value}
+                  icon={option.value === "all" ? Inbox : undefined}
+                  label={option.label}
+                  count={option.count}
+                  tone={
+                    option.value === "delayed" && option.count > 0
+                      ? "danger"
+                      : undefined
+                  }
+                  onClick={() => setStatusFilter(option.value)}
+                />
+              ))}
+            </RailSection>
+
+            {showAssigneeBar && (
+              <RailSection title="담당자">
+                <RailItem
+                  active={assigneeFilter === "all"}
+                  icon={UsersRound}
+                  label="모든 담당자"
+                  onClick={() => setAssigneeFilter("all")}
+                />
+
+                {hideAssigneeOptions ? (
+                  <p className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-400">
+                    <Loader2 size={12} className="animate-spin" />
+                    팀원 조회 중
+                  </p>
+                ) : (
+                  assigneeOptions.map((option) => (
+                    <AssigneeFilterChip
+                      key={option.key}
+                      option={option}
+                      active={assigneeFilter === option.key}
+                      onClick={() => setAssigneeFilter(option.key)}
+                    />
+                  ))
+                )}
+
+                {memberErrorMessage &&
+                  !(smartFilter === "today" && todayScope === "all") && (
+                    <p className="px-2.5 py-1 text-[11px] text-rose-500">
+                      {memberErrorMessage}
+                    </p>
+                  )}
+
+                {smartFilter === "today" &&
+                  todayScope === "all" &&
+                  assigneeOptions.length === 0 &&
+                  !allTodayLoading && (
+                    <p className="px-2.5 py-1 text-[11px] text-slate-400">
+                      담당자가 지정된 오늘 일정이 없습니다.
+                    </p>
+                  )}
+              </RailSection>
+            )}
+
+            <div className="mt-auto rounded-md border border-slate-200 bg-white p-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-[11px] font-medium text-slate-500">
+                  진행률
+                </span>
+
+                <span className="text-sm font-semibold tabular-nums text-slate-900">
+                  {progressRate}%
+                </span>
+              </div>
+
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-[#5873F9] transition-all"
+                  style={{
+                    width: `${progressRate}%`,
+                  }}
+                />
+              </div>
+
+              <p className="mt-1.5 text-[11px] tabular-nums text-slate-400">
+                완료 {doneCount} / 전체 {totalCount}
+              </p>
+            </div>
+          </aside>
+
+          {/* ===============================================
+              MAIN
+             =============================================== */}
+          <section className="flex min-w-0 flex-1 flex-col">
+            <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-2.5 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="text-sm font-semibold text-slate-900">
+                  {currentViewLabel}
+                </h1>
+
+                <span className="text-xs tabular-nums text-slate-400">
+                  {filteredSchedules.length}개
+                </span>
+
+                {/* 지금 걸려 있는 필터를 한눈에 보여 주고 바로 해제할 수 있게 한다 */}
+                {smartFilter !== "all" && (
+                  <ActiveFilterChip
+                    label={smartFilter === "today" ? "오늘 일정" : "개발일지 미작성"}
+                    onClear={() => {
+                      setSmartFilter("all");
+                      setAssigneeFilter("all");
+                    }}
+                  />
+                )}
+
+                {statusFilter !== "all" && (
+                  <ActiveFilterChip
+                    label={STATUS_META[statusFilter].label}
+                    onClear={() => setStatusFilter("all")}
+                  />
+                )}
+
+                {assigneeFilter !== "all" && (
+                  <ActiveFilterChip
+                    label={
+                      assigneeOptions.find(
+                        (option) => option.key === assigneeFilter,
+                      )?.name ?? "담당자"
+                    }
+                    onClear={() => setAssigneeFilter("all")}
+                  />
+                )}
+              </div>
+
+              <div className="relative w-full md:w-[260px]">
+                <Search
+                  size={13}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="일정 검색"
+                  className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-xs font-medium outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF]"
+                />
+              </div>
             </div>
 
-            <SmartFilterButton
-              active={smartFilter === "noDevlog"}
-              label={`일지 미작성 ${noDevlogCount}`}
-              warning
-              onClick={() =>
-                setSmartFilter(smartFilter === "noDevlog" ? "all" : "noDevlog")
-              }
-            />
+            {/* 좁은 화면용 툴바: 왼쪽 패널과 같은 필터를 한 줄로 */}
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-5 py-2 lg:hidden">
+              {viewOptions.map((option) => {
+                const Icon = option.icon;
 
-            <div className="relative">
-              <Filter
-                size={13}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setViewMode(option.value)}
+                    aria-pressed={viewMode === option.value}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+                      viewMode === option.value
+                        ? "bg-slate-100 text-slate-900"
+                        : "text-slate-500 hover:bg-slate-50",
+                    )}
+                  >
+                    <Icon size={14} />
+                    {option.label}
+                  </button>
+                );
+              })}
+
+              <span className="mx-1 h-4 w-px bg-slate-200" />
+
+              <SmartFilterButton
+                active={smartFilter === "today"}
+                label={`오늘 ${displayedTodayCount}`}
+                onClick={toggleTodayFilter}
+              />
+
+              {smartFilter === "today" && (
+                <div className="w-[200px]">{todayScopeSwitch}</div>
+              )}
+
+              <SmartFilterButton
+                active={smartFilter === "noDevlog"}
+                label={`일지 미작성 ${noDevlogCount}`}
+                warning
+                onClick={toggleNoDevlogFilter}
               />
 
               <select
@@ -3066,217 +3251,164 @@ export default function ScheduleManagementPage() {
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
                 }
-                className="h-8 rounded-md border border-slate-200 bg-white pl-7 pr-7 text-xs font-medium text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:border-[#AAB8FF]"
+                aria-label="상태 필터"
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-[#AAB8FF]"
               >
-                <option value="all">모든 상태</option>
-                <option value="todo">할 일</option>
-                <option value="progress">진행 중</option>
-                <option value="done">완료</option>
-                <option value="delayed">지연</option>
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label} {option.count}
+                  </option>
+                ))}
               </select>
-            </div>
 
-            <div className="relative min-w-[170px] flex-1 xl:max-w-[240px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="일정 검색"
-                className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-xs font-medium outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF]"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ===============================================
-            ASSIGNEE BAR
-            - 선택 프로젝트 / 전체 프로젝트 모두 동일하게 노출
-            - 현재 사용자도 담당자 칩에서 "나"로 구분
-            - 전체 프로젝트에서는 실제 오늘 일정에 등장한 담당자 기준
-           =============================================== */}
-        {showAssigneeBar && (
-          <div className="border-b border-slate-100 px-5 py-1.5">
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              <div className="mr-1 flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                <UsersRound size={13} />
-                담당자
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setAssigneeFilter("all")}
-                className={cn(
-                  "h-7 shrink-0 rounded-md px-2.5 text-[11px] font-medium transition-colors",
-                  assigneeFilter === "all"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100",
-                )}
-              >
-                전체
-              </button>
-
-              {teamMemberLoading &&
-              !(smartFilter === "today" && todayScope === "all") ? (
-                <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-400">
-                  <Loader2 size={13} className="animate-spin" />
-                  팀원 조회 중
-                </div>
-              ) : (
-                assigneeOptions.map((option) => (
-                  <AssigneeFilterChip
-                    key={option.key}
-                    option={option}
-                    active={assigneeFilter === option.key}
-                    onClick={() => setAssigneeFilter(option.key)}
-                  />
-                ))
-              )}
-
-              {memberErrorMessage &&
-                !(smartFilter === "today" && todayScope === "all") && (
-                  <span className="ml-2 shrink-0 text-[11px] font-medium text-rose-500">
-                    {memberErrorMessage}
-                  </span>
-                )}
-
-              {smartFilter === "today" &&
-                todayScope === "all" &&
-                assigneeOptions.length === 0 &&
-                !allTodayLoading && (
-                  <span className="ml-1 shrink-0 text-[11px] font-medium text-slate-400">
-                    담당자가 지정된 오늘 일정이 없습니다.
-                  </span>
-                )}
-            </div>
-          </div>
-        )}
-
-        {/* ===============================================
-            CONTENT
-           =============================================== */}
-        <div className="flex min-h-[360px] flex-1 flex-col rounded-b-md bg-[#FAFAFB] p-4">
-          {loading ? (
-            <LoadingBox />
-          ) : errorMessage ? (
-            <ErrorBox message={errorMessage} />
-          ) : !workspaceId ? (
-            <EmptyBox
-              title="프로젝트를 선택해주세요."
-              description="위쪽 프로젝트 이름을 눌러 일정을 확인할 프로젝트를 선택해주세요."
-            />
-          ) : filteredSchedules.length === 0 ? (
-            <EmptyBox
-              title="표시할 일정이 없습니다."
-              description="현재 검색 또는 필터 조건에 맞는 일정이 없습니다."
-              action={
-                <button
-                  type="button"
-                  onClick={() => openCreateModal()}
-                  className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+              {showAssigneeBar && !hideAssigneeOptions && (
+                <select
+                  value={assigneeFilter}
+                  onChange={(event) => setAssigneeFilter(event.target.value)}
+                  aria-label="담당자 필터"
+                  className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-[#AAB8FF]"
                 >
-                  <Plus size={14} />
-                  일정 만들기
-                </button>
-              }
-            />
-          ) : (
-            <>
-              {viewMode === "board" && (
-                <BoardView
-                  schedules={filteredSchedules}
-                  teamMembers={teamMembers}
-                  isTeam={isTeam}
-                  onOpen={openScheduleDetail}
-                  onDragStart={handleDragStart}
-                  onStatusDrop={(event, status) => {
-                    event.preventDefault();
-
-                    const id = getDraggedScheduleId(event);
-
-                    if (id) {
-                      void changeStatus(id, status);
-                    }
-                  }}
-                  onWriteDevlog={goToDevlogWrite}
-                />
+                  <option value="all">모든 담당자</option>
+                  {assigneeOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.name}
+                      {option.isCurrentUser ? " (나)" : ""}
+                    </option>
+                  ))}
+                </select>
               )}
+            </div>
 
-              {viewMode === "calendar" && (
-                <CalendarView
-                  year={currentYear}
-                  month={currentMonth}
-                  todayDate={todayDate}
-                  cells={monthCells}
-                  schedules={filteredSchedules}
-                  onPrev={() => moveMonth(-1)}
-                  onNext={() => moveMonth(1)}
-                  onToday={moveMonthToday}
-                  onOpen={openScheduleDetail}
-                  onCreateForDate={openCreateModal}
-                  onDragStart={handleDragStart}
-                  onWriteDevlog={goToDevlogWrite}
-                  onDateDrop={(event, dateKey) => {
-                    event.preventDefault();
-
-                    const id = getDraggedScheduleId(event);
-
-                    if (id) {
-                      void moveScheduleDate(id, dateKey);
-                    }
-                  }}
+            {/* ===============================================
+                CONTENT
+               =============================================== */}
+            <div className="flex min-h-[360px] flex-1 flex-col rounded-br-md bg-white p-4">
+              {loading ? (
+                <LoadingBox />
+              ) : errorMessage ? (
+                <ErrorBox message={errorMessage} />
+              ) : !workspaceId ? (
+                <EmptyBox
+                  title="프로젝트를 선택해주세요."
+                  description="위쪽 프로젝트 이름을 눌러 일정을 확인할 프로젝트를 선택해주세요."
                 />
-              )}
-
-              {viewMode === "gantt" && (
-                <GanttView
-                  startDate={ganttStartDate}
-                  days={ganttDays}
-                  schedules={ganttSchedules}
-                  teamMembers={teamMembers}
-                  isTeam={isTeam}
-                  onPrev={() => setGanttStartDate((prev) => addDays(prev, -14))}
-                  onNext={() => setGanttStartDate((prev) => addDays(prev, 14))}
-                  onToday={() => {
-                    const now = getTodayLocalDate();
-
-                    const day = now.getDay();
-
-                    now.setDate(now.getDate() + (day === 0 ? -6 : 1 - day));
-
-                    setGanttStartDate(now);
-                  }}
-                  onOpen={openScheduleDetail}
-                  onDragStart={handleDragStart}
-                  onWriteDevlog={goToDevlogWrite}
-                  onDateDrop={(event, dateKey) => {
-                    event.preventDefault();
-
-                    const id = getDraggedScheduleId(event);
-
-                    if (id) {
-                      void moveScheduleDate(id, dateKey);
-                    }
-                  }}
+              ) : filteredSchedules.length === 0 ? (
+                <EmptyBox
+                  title="표시할 일정이 없습니다."
+                  description="현재 검색 또는 필터 조건에 맞는 일정이 없습니다."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => openCreateModal()}
+                      className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+                    >
+                      <Plus size={14} />
+                      일정 만들기
+                    </button>
+                  }
                 />
-              )}
+              ) : (
+                <>
+                  {viewMode === "board" && (
+                    <BoardView
+                      schedules={filteredSchedules}
+                      teamMembers={teamMembers}
+                      isTeam={isTeam}
+                      onOpen={openScheduleDetail}
+                      onDragStart={handleDragStart}
+                      onStatusDrop={(event, status) => {
+                        event.preventDefault();
 
-              {viewMode === "list" && (
-                <ListView
-                  schedules={filteredSchedules}
-                  teamMembers={teamMembers}
-                  isTeam={isTeam}
-                  onOpen={openScheduleDetail}
-                  onStatusChange={changeStatus}
-                  onWriteDevlog={goToDevlogWrite}
-                  onOpenDevlog={goToDevlogs}
-                />
+                        const id = getDraggedScheduleId(event);
+
+                        if (id) {
+                          void changeStatus(id, status);
+                        }
+                      }}
+                      onWriteDevlog={goToDevlogWrite}
+                    />
+                  )}
+
+                  {viewMode === "calendar" && (
+                    <CalendarView
+                      year={currentYear}
+                      month={currentMonth}
+                      todayDate={todayDate}
+                      cells={monthCells}
+                      schedules={filteredSchedules}
+                      onPrev={() => moveMonth(-1)}
+                      onNext={() => moveMonth(1)}
+                      onToday={moveMonthToday}
+                      onOpen={openScheduleDetail}
+                      onCreateForDate={openCreateModal}
+                      onDragStart={handleDragStart}
+                      onWriteDevlog={goToDevlogWrite}
+                      onDateDrop={(event, dateKey) => {
+                        event.preventDefault();
+
+                        const id = getDraggedScheduleId(event);
+
+                        if (id) {
+                          void moveScheduleDate(id, dateKey);
+                        }
+                      }}
+                    />
+                  )}
+
+                  {viewMode === "gantt" && (
+                    <GanttView
+                      startDate={ganttStartDate}
+                      days={ganttDays}
+                      schedules={ganttSchedules}
+                      teamMembers={teamMembers}
+                      isTeam={isTeam}
+                      onPrev={() =>
+                        setGanttStartDate((prev) => addDays(prev, -14))
+                      }
+                      onNext={() =>
+                        setGanttStartDate((prev) => addDays(prev, 14))
+                      }
+                      onToday={() => {
+                        const now = getTodayLocalDate();
+
+                        const day = now.getDay();
+
+                        now.setDate(
+                          now.getDate() + (day === 0 ? -6 : 1 - day),
+                        );
+
+                        setGanttStartDate(now);
+                      }}
+                      onOpen={openScheduleDetail}
+                      onDragStart={handleDragStart}
+                      onWriteDevlog={goToDevlogWrite}
+                      onDateDrop={(event, dateKey) => {
+                        event.preventDefault();
+
+                        const id = getDraggedScheduleId(event);
+
+                        if (id) {
+                          void moveScheduleDate(id, dateKey);
+                        }
+                      }}
+                    />
+                  )}
+
+                  {viewMode === "list" && (
+                    <ListView
+                      schedules={filteredSchedules}
+                      teamMembers={teamMembers}
+                      isTeam={isTeam}
+                      onOpen={openScheduleDetail}
+                      onStatusChange={changeStatus}
+                      onWriteDevlog={goToDevlogWrite}
+                      onOpenDevlog={goToDevlogs}
+                    />
+                  )}
+                </>
               )}
-            </>
-          )}
+            </div>
+          </section>
         </div>
       </div>
 
@@ -3355,54 +3487,112 @@ export default function ScheduleManagementPage() {
 }
 
 /* =========================================================
-   HEADER
+   STATUS ICON
+   Linear 처럼 상태를 원 모양 아이콘 하나로 구분한다.
+   할 일: 빈 원 / 진행 중: 반쯤 찬 원 / 완료: 체크 원 / 지연: 느낌표 원
    ========================================================= */
-function HeaderMetric({
-  label,
-  value,
-  dot,
-  active,
-  danger,
+function StatusIcon({
+  status,
+  size = 14,
 }: {
-  label: string;
-  value: number;
-  dot?: string;
-  active?: boolean;
-  danger?: boolean;
+  status?: ScheduleStatus | string;
+  size?: number;
+}) {
+  if (status === "done") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden className="shrink-0">
+        <circle cx="7" cy="7" r="6.5" fill="#10B981" />
+        <path
+          d="M4.2 7.2 6.1 9 9.8 5.2"
+          fill="none"
+          stroke="white"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (status === "delayed") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden className="shrink-0">
+        <circle cx="7" cy="7" r="6.5" fill="#F43F5E" />
+        <path d="M7 3.6v4.1" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="7" cy="10.1" r="0.95" fill="white" />
+      </svg>
+    );
+  }
+
+  if (status === "progress") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden className="shrink-0">
+        <circle cx="7" cy="7" r="5.75" fill="none" stroke="#5873F9" strokeWidth="1.5" />
+        <path d="M7 3.5a3.5 3.5 0 0 1 0 7Z" fill="#5873F9" />
+      </svg>
+    );
+  }
+
+  if (status === "todo") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden className="shrink-0">
+        <circle cx="7" cy="7" r="5.75" fill="none" stroke="#94A3B8" strokeWidth="1.5" />
+      </svg>
+    );
+  }
+
+  // 알 수 없는 상태: 점선 원
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden className="shrink-0">
+      <circle
+        cx="7"
+        cy="7"
+        r="5.75"
+        fill="none"
+        stroke="#CBD5E1"
+        strokeWidth="1.5"
+        strokeDasharray="2 2"
+      />
+    </svg>
+  );
+}
+
+/* =========================================================
+   LEFT RAIL
+   ========================================================= */
+function RailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-7 items-center gap-1.5 rounded-md px-2">
-      {dot ? <span className={cn("h-2 w-2 rounded-full", dot)} /> : null}
+    <div>
+      <p className="px-2.5 pb-1 text-[11px] font-medium text-slate-400">
+        {title}
+      </p>
 
-      <span className="text-[11px] font-medium text-slate-500">{label}</span>
-
-      <span
-        className={cn(
-          "text-xs font-semibold tabular-nums",
-          active
-            ? "text-[#5873F9]"
-            : danger && value > 0
-              ? "text-rose-600"
-              : "text-slate-900",
-        )}
-      >
-        {value}
-      </span>
+      <div className="space-y-px">{children}</div>
     </div>
   );
 }
 
-function ViewButton({
+function RailItem({
   active,
-  label,
   icon: Icon,
+  status,
+  label,
+  count,
+  tone,
   onClick,
 }: {
   active: boolean;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  status?: ScheduleStatus;
   label: string;
-  icon: React.ComponentType<{
-    size?: number;
-  }>;
+  count?: number;
+  tone?: "warning" | "danger";
   onClick: () => void;
 }) {
   return (
@@ -3411,15 +3601,60 @@ function ViewButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+        "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors",
         active
-          ? "bg-slate-100 text-slate-900"
-          : "text-slate-500 hover:bg-slate-50 hover:text-slate-800",
+          ? "bg-white font-medium text-slate-900 ring-1 ring-inset ring-slate-200"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
       )}
     >
-      <Icon size={14} />
-      {label}
+      {status ? (
+        <StatusIcon status={status} />
+      ) : Icon ? (
+        <Icon
+          size={14}
+          className={active ? "text-[#5873F9]" : "text-slate-400"}
+        />
+      ) : null}
+
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+
+      {typeof count === "number" ? (
+        <span
+          className={cn(
+            "text-xs tabular-nums",
+            tone === "danger"
+              ? "font-semibold text-rose-600"
+              : tone === "warning" && count > 0
+                ? "font-semibold text-amber-600"
+                : "text-slate-400",
+          )}
+        >
+          {count}
+        </span>
+      ) : null}
     </button>
+  );
+}
+
+function ActiveFilterChip({
+  label,
+  onClear,
+}: {
+  label: string;
+  onClear: () => void;
+}) {
+  return (
+    <span className="inline-flex h-6 items-center gap-1 rounded-md border border-[#D9E1FF] bg-[#F5F7FF] pl-2 pr-1 text-[11px] font-medium text-[#4058D6]">
+      {label}
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label={`${label} 필터 해제`}
+        className="grid h-4 w-4 place-items-center rounded hover:bg-[#E4E9FF]"
+      >
+        <X size={11} />
+      </button>
+    </span>
   );
 }
 
@@ -3454,7 +3689,7 @@ function SmartFilterButton({
 }
 
 /* =========================================================
-   TEAM FILTER
+   TEAM FILTER (왼쪽 패널의 담당자 항목)
    ========================================================= */
 function AssigneeFilterChip({
   option,
@@ -3469,34 +3704,32 @@ function AssigneeFilterChip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        "flex h-7 shrink-0 items-center gap-1.5 rounded-md pl-1 pr-2 transition-colors",
-        active ? "bg-[#EEF3FF]" : "hover:bg-slate-100",
+        "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors",
+        active
+          ? "bg-white font-medium text-slate-900 ring-1 ring-inset ring-slate-200"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
       )}
     >
       <span
         className={cn(
-          "grid h-5 w-5 place-items-center rounded-full text-[10px] font-semibold",
+          "grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-semibold",
           active ? "bg-[#5873F9] text-white" : "bg-slate-200 text-slate-600",
         )}
       >
         {getInitial(option.name)}
       </span>
 
-      <span
-        className={cn(
-          "text-[11px] font-medium",
-          active ? "text-[#4058D6]" : "text-slate-700",
-        )}
-      >
+      <span className="min-w-0 flex-1 truncate">
         {option.name}
         {option.isCurrentUser && (
-          <span className="ml-1 text-[#5873F9]">나</span>
+          <span className="ml-1 text-[11px] text-[#5873F9]">나</span>
         )}
       </span>
 
       {option.role === "OWNER" && (
-        <span className="text-[10px] font-semibold text-slate-400">OWNER</span>
+        <span className="text-[10px] font-medium text-slate-400">OWNER</span>
       )}
     </button>
   );
@@ -3532,119 +3765,78 @@ function BoardView({
     schedule: ProjectScheduleItem,
   ) => void;
 }) {
+  const [dropTarget, setDropTarget] = useState<ScheduleStatus | null>(null);
+
   return (
-    <div className="grid min-h-[360px] flex-1 grid-cols-1 gap-3 xl:grid-cols-4">
-      {BOARD_STATUSES.map(
-        (status) => {
-          const meta =
-            STATUS_META[status];
+    <div className="grid min-h-[360px] flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {BOARD_STATUSES.map((status) => {
+        const meta = STATUS_META[status];
 
-          const items =
-            schedules.filter(
-              (schedule) =>
-                schedule.status ===
-                status,
-            );
+        const items = schedules.filter(
+          (schedule) => schedule.status === status,
+        );
 
-          return (
-            <section
-              key={status}
-              onDragOver={(
-                event,
-              ) => {
-                event.preventDefault();
+        return (
+          <section
+            key={status}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
 
-                event.dataTransfer.dropEffect =
-                  "move";
-              }}
-              onDrop={(
-                event,
-              ) =>
-                onStatusDrop(
-                  event,
-                  status,
-                )
+              if (dropTarget !== status) setDropTarget(status);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                setDropTarget(null);
               }
-              className={cn(
-                "flex min-h-[340px] min-w-0 flex-col rounded-md border",
-                meta.board,
-              )}
-            >
-              <div className="flex items-center justify-between border-b border-black/5 px-3.5 py-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      meta.dot,
-                    )}
-                  />
+            }}
+            onDrop={(event) => {
+              setDropTarget(null);
+              onStatusDrop(event, status);
+            }}
+            className={cn(
+              "flex min-h-[340px] min-w-0 flex-col rounded-md transition-colors",
+              dropTarget === status
+                ? "bg-[#EEF2FF] ring-1 ring-inset ring-[#AAB8FF]"
+                : "bg-slate-50",
+            )}
+          >
+            <div className="flex h-10 items-center gap-2 px-3">
+              <StatusIcon status={status} />
 
-                  <h3 className="text-xs font-semibold text-slate-800">
-                    {
-                      meta.label
-                    }
-                  </h3>
+              <h3 className="text-[13px] font-medium text-slate-800">
+                {meta.label}
+              </h3>
 
-                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                    {
-                      items.length
-                    }
-                  </span>
+              <span className="text-xs tabular-nums text-slate-400">
+                {items.length}
+              </span>
+            </div>
+
+            <div className="flex-1 space-y-1.5 px-1.5 pb-2">
+              {items.map((schedule) => (
+                <ScheduleBoardCard
+                  key={schedule.id}
+                  schedule={schedule}
+                  members={teamMembers}
+                  isTeam={isTeam}
+                  onOpen={() => onOpen(schedule)}
+                  onDragStart={(event) => onDragStart(event, schedule)}
+                  onWriteDevlog={() => onWriteDevlog(schedule)}
+                />
+              ))}
+
+              {items.length === 0 && (
+                <div className="grid min-h-[96px] place-items-center rounded-md border border-dashed border-slate-200 text-center">
+                  <p className="text-[11px] text-slate-400">
+                    여기로 끌어 놓아 상태 변경
+                  </p>
                 </div>
-              </div>
-
-              <div className="flex-1 space-y-2 p-2.5">
-                {items.map(
-                  (schedule) => (
-                    <ScheduleBoardCard
-                      key={
-                        schedule.id
-                      }
-                      schedule={
-                        schedule
-                      }
-                      members={
-                        teamMembers
-                      }
-                      isTeam={
-                        isTeam
-                      }
-                      onOpen={() =>
-                        onOpen(
-                          schedule,
-                        )
-                      }
-                      onDragStart={(
-                        event,
-                      ) =>
-                        onDragStart(
-                          event,
-                          schedule,
-                        )
-                      }
-                      onWriteDevlog={() =>
-                        onWriteDevlog(
-                          schedule,
-                        )
-                      }
-                    />
-                  ),
-                )}
-
-                {items.length ===
-                  0 && (
-                  <div className="grid min-h-[120px] place-items-center rounded-md border border-dashed border-slate-200 bg-white/50 text-center">
-                    <p className="text-[11px] font-semibold text-slate-400">
-                      여기에 작업을
-                      드래그하세요.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        },
-      )}
+              )}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -3666,119 +3858,94 @@ function ScheduleBoardCard({
   ) => void;
   onWriteDevlog: () => void;
 }) {
-  const member =
-    members.find(
-      (item) =>
-        item.userId ===
-        schedule.assigneeUserId,
-    );
+  const member = members.find(
+    (item) => item.userId === schedule.assigneeUserId,
+  );
 
-  const assigneeName =
-    member
-      ? getMemberName(member)
-      : schedule.assigneeName ||
-        "";
+  const assigneeName = member
+    ? getMemberName(member)
+    : schedule.assigneeName || "";
 
   return (
     <article
       draggable
-      onDragStart={
-        onDragStart
-      }
+      onDragStart={onDragStart}
       onClick={onOpen}
-      className="group cursor-pointer rounded-md border border-slate-200 bg-white p-3 transition hover:border-[#C9D2FF]"
+      className="group cursor-grab rounded-md border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300 active:cursor-grabbing"
     >
       <div className="flex items-start gap-2">
-        <GripVertical
-          size={14}
-          className="mt-0.5 shrink-0 cursor-grab text-slate-300 group-hover:text-slate-400"
-        />
+        <span className="mt-[3px]">
+          <StatusIcon status={schedule.status} size={13} />
+        </span>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <h4 className="line-clamp-2 text-[13px] font-semibold leading-5 text-slate-900">
-              {schedule.title}
-            </h4>
+        <h4 className="line-clamp-2 min-w-0 flex-1 text-[13px] font-medium leading-5 text-slate-900">
+          {schedule.title}
+        </h4>
 
-            {!schedule.hasDevlog && (
-              <span
-                title="개발일지 미작성"
-                className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-400"
-              />
-            )}
-          </div>
-
-          <p className="mt-2 text-[10px] font-bold text-slate-400">
-            {formatCompactDate(
-              schedule.startDate,
-            )}
-            {schedule.startDate !==
-              schedule.endDate &&
-              ` ~ ${formatCompactDate(
-                schedule.endDate,
-              )}`}
-          </p>
-
-          <div className="mt-3 flex min-w-0 items-center justify-between gap-2">
-            {isTeam ? (
-              assigneeName ? (
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#5873F9]">
-                    {getInitial(
-                      assigneeName,
-                    )}
-                  </span>
-
-                  <span className="truncate text-[10px] font-bold text-slate-500">
-                    {
-                      assigneeName
-                    }
-                  </span>
-                </div>
-              ) : (
-                <span className="text-[10px] font-bold text-slate-400">
-                  담당자 미지정
-                </span>
-              )
-            ) : (
-              <span className="truncate text-[10px] font-semibold text-slate-400">
-                {getProjectName(
-                  schedule,
-                )}
-              </span>
-            )}
-          </div>
-
-          {!schedule.hasDevlog && (
-            <button
-              type="button"
-              onClick={(
-                event,
-              ) => {
-                event.stopPropagation();
-
-                onWriteDevlog();
-              }}
-              onMouseDown={(
-                event,
-              ) =>
-                event.stopPropagation()
-              }
-              className="mt-3 flex w-full items-center justify-between rounded-md border border-amber-100 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-100"
+        {isTeam ? (
+          assigneeName ? (
+            <span
+              title={assigneeName}
+              className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#4058D6]"
             >
-              <span className="flex items-center gap-1.5">
-                <FilePenLine
-                  size={12}
-                />
-                개발일지 미작성
-              </span>
+              {getInitial(assigneeName)}
+            </span>
+          ) : (
+            <span
+              title="담당자 미지정"
+              className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-slate-300 text-slate-300"
+            >
+              <UserRound size={11} />
+            </span>
+          )
+        ) : null}
+      </div>
 
-              <ArrowRight
-                size={12}
-              />
-            </button>
+      <div className="mt-2 flex flex-wrap items-center gap-1 pl-[21px]">
+        <span
+          title={isScheduleOverdue(schedule) ? "기한 지남" : undefined}
+          className={cn(
+            "inline-flex h-5 items-center gap-1 rounded border px-1.5 font-mono text-[10px]",
+            isScheduleOverdue(schedule)
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : "border-slate-200 text-slate-500",
           )}
-        </div>
+        >
+          <CalendarDays size={10} />
+          {formatCompactDate(schedule.startDate)}
+          {schedule.startDate !== schedule.endDate &&
+            ` – ${formatCompactDate(schedule.endDate)}`}
+        </span>
+
+        {!isTeam && (
+          <span className="inline-flex h-5 max-w-full items-center truncate rounded border border-slate-200 px-1.5 text-[10px] text-slate-500">
+            {getProjectName(schedule)}
+          </span>
+        )}
+
+        {schedule.hasDevlog ? (
+          <span
+            title="개발일지 작성 완료"
+            className="inline-flex h-5 items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-medium text-emerald-700"
+          >
+            <CheckCircle2 size={10} />
+            일지
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onWriteDevlog();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            title="개발일지 작성하기"
+            className="inline-flex h-5 items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
+          >
+            <FilePenLine size={10} />
+            일지 작성
+          </button>
+        )}
       </div>
     </article>
   );
@@ -4284,7 +4451,7 @@ function CalendarView({
                             "pointer-events-auto absolute flex h-[22px] cursor-grab items-center gap-1.5 overflow-hidden border px-2 text-[10px] font-semibold transition hover:z-20 hover:-translate-y-[1px] hover:brightness-[0.98] active:cursor-grabbing",
                             STATUS_META[
                               schedule.status
-                            ].badge,
+                            ].bar,
                             segment.continuesFromPreviousWeek
                               ? "rounded-l-none border-l-0"
                               : "rounded-l-md",
@@ -4768,7 +4935,7 @@ function GanttView({
                         STATUS_META[
                           schedule
                             .status
-                        ].badge,
+                        ].bar,
                       )}
                       style={{
                         left:
@@ -4814,12 +4981,6 @@ const LIST_GROUP_ORDER: ScheduleStatus[] = [
   "done",
 ];
 
-const OTHER_STATUS_META = {
-  label: "기타",
-  dot: "bg-slate-300",
-  badge: "border-slate-200 bg-white text-slate-600",
-};
-
 function ListView({
   schedules,
   teamMembers,
@@ -4851,61 +5012,40 @@ function ListView({
     ...LIST_GROUP_ORDER.map((status) => ({
       key: status as string,
       label: STATUS_META[status].label,
-      dot: STATUS_META[status].dot,
       items: schedules.filter((schedule) => schedule.status === status),
     })),
     {
       key: "other",
-      label: OTHER_STATUS_META.label,
-      dot: OTHER_STATUS_META.dot,
+      label: "기타",
       items: schedules.filter(
         (schedule) => !LIST_GROUP_ORDER.includes(schedule.status),
       ),
     },
   ];
 
-  const gridCols = isTeam
-    ? "grid-cols-[minmax(220px,1fr)_160px_110px_150px_110px]"
-    : "grid-cols-[minmax(260px,1fr)_110px_170px_110px]";
-
   return (
-    <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
-      <div className="min-w-[760px]">
-        <div
-          className={cn(
-            "grid gap-3 border-b border-slate-200 px-4 py-2 text-[11px] font-medium text-slate-500",
-            gridCols,
-          )}
-        >
-          <div>작업</div>
-          {isTeam && <div>담당자</div>}
-          <div>상태</div>
-          <div>기간</div>
-          <div>개발일지</div>
-        </div>
+    <div className="-mx-4 -mt-4 flex-1">
+      {groups.map((group) => {
+        if (group.items.length === 0) {
+          return null;
+        }
 
-        {groups.map((group) => {
-          const { items } = group;
+        return (
+          <section key={group.key}>
+            <div className="sticky top-0 z-10 flex h-9 items-center gap-2 border-b border-slate-100 bg-slate-50 px-5">
+              <StatusIcon status={group.key} />
 
-          if (items.length === 0) {
-            return null;
-          }
+              <h3 className="text-[13px] font-medium text-slate-800">
+                {group.label}
+              </h3>
 
-          return (
-            <section key={group.key}>
-              <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-1.5">
-                <span className={cn("h-2 w-2 rounded-full", group.dot)} />
+              <span className="text-xs tabular-nums text-slate-400">
+                {group.items.length}
+              </span>
+            </div>
 
-                <h3 className="text-xs font-semibold text-slate-800">
-                  {group.label}
-                </h3>
-
-                <span className="text-xs tabular-nums text-slate-400">
-                  {items.length}
-                </span>
-              </div>
-
-              {items.map((schedule) => {
+            <ul>
+              {group.items.map((schedule) => {
                 const member = teamMembers.find(
                   (item) => item.userId === schedule.assigneeUserId,
                 );
@@ -4914,56 +5054,18 @@ function ListView({
                   ? getMemberName(member)
                   : schedule.assigneeName;
 
-                const meta = STATUS_META[schedule.status] ?? OTHER_STATUS_META;
-
                 return (
-                  <div
+                  <li
                     key={schedule.id}
-                    className={cn(
-                      "group grid h-11 items-center gap-3 border-b border-slate-100 px-4 transition-colors last:border-b-0 hover:bg-[#F7F9FF]",
-                      gridCols,
-                    )}
+                    className="group flex h-11 items-center gap-3 border-b border-slate-100 px-5 transition-colors hover:bg-[#F7F9FF]"
                   >
-                    <button
-                      type="button"
-                      onClick={() => onOpen(schedule)}
-                      className="flex min-w-0 items-center gap-2.5 text-left"
+                    {/* 상태 아이콘 위에 투명한 select 를 겹쳐, 아이콘을 눌러 바로 상태를 바꾼다 */}
+                    <label
+                      className="relative grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded transition-colors hover:bg-slate-100"
+                      title="상태 변경"
                     >
-                      <span
-                        className={cn(
-                          "h-2 w-2 shrink-0 rounded-full",
-                          meta.dot,
-                        )}
-                      />
+                      <StatusIcon status={schedule.status} />
 
-                      <span className="truncate text-[13px] font-medium text-slate-900 group-hover:text-[#4058D6]">
-                        {schedule.title}
-                      </span>
-
-                      <span className="hidden shrink-0 truncate text-[11px] text-slate-400 xl:inline">
-                        {getProjectName(schedule)}
-                      </span>
-                    </button>
-
-                    {isTeam && (
-                      <div className="min-w-0">
-                        {assigneeName ? (
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#5873F9]">
-                              {getInitial(assigneeName)}
-                            </span>
-
-                            <span className="truncate text-xs text-slate-700">
-                              {assigneeName}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">미지정</span>
-                        )}
-                      </div>
-                    )}
-
-                    <div>
                       <select
                         value={schedule.status}
                         onChange={(event) =>
@@ -4972,51 +5074,103 @@ function ListView({
                             event.target.value as ScheduleStatus,
                           )
                         }
-                        aria-label={`${schedule.title} 상태`}
-                        className={cn(
-                          "h-7 rounded-md border px-1.5 text-[11px] font-medium outline-none",
-                          meta.badge,
-                        )}
+                        aria-label={`${schedule.title} 상태 변경`}
+                        className="absolute inset-0 cursor-pointer opacity-0"
                       >
                         <option value="todo">할 일</option>
                         <option value="progress">진행 중</option>
                         <option value="done">완료</option>
                         <option value="delayed">지연</option>
                       </select>
-                    </div>
+                    </label>
 
-                    <div className="font-mono text-[11px] text-slate-500">
-                      {getSchedulePeriodText(schedule)}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(schedule)}
+                      className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+                    >
+                      <span
+                        className={cn(
+                          "truncate text-[13px] font-medium group-hover:text-[#4058D6]",
+                          schedule.status === "done"
+                            ? "text-slate-500"
+                            : "text-slate-900",
+                        )}
+                      >
+                        {schedule.title}
+                      </span>
 
-                    <div>
-                      {schedule.hasDevlog ? (
-                        <button
-                          type="button"
-                          onClick={() => onOpenDevlog(schedule)}
-                          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
-                        >
-                          <CheckCircle2 size={12} />
-                          작성 완료
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onWriteDevlog(schedule)}
-                          className="inline-flex h-7 items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
-                        >
-                          <FilePenLine size={12} />
-                          작성하기
-                        </button>
+                      {!isTeam && (
+                        <span className="hidden shrink-0 truncate text-xs text-slate-400 md:inline">
+                          {getProjectName(schedule)}
+                        </span>
                       )}
-                    </div>
-                  </div>
+                    </button>
+
+                    {schedule.hasDevlog ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenDevlog(schedule)}
+                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                      >
+                        <CheckCircle2 size={11} />
+                        일지
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onWriteDevlog(schedule)}
+                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
+                      >
+                        <FilePenLine size={11} />
+                        일지 작성
+                      </button>
+                    )}
+
+                    <span
+                      title={isScheduleOverdue(schedule) ? "기한 지남" : undefined}
+                      className={cn(
+                        "hidden w-[132px] shrink-0 text-right font-mono text-[11px] md:block",
+                        isScheduleOverdue(schedule)
+                          ? "font-semibold text-rose-600"
+                          : "text-slate-500",
+                      )}
+                    >
+                      {getSchedulePeriodText(schedule)}
+                    </span>
+
+                    {isTeam && (
+                      <span className="flex w-[120px] shrink-0 items-center justify-end gap-1.5">
+                        {assigneeName ? (
+                          <>
+                            <span className="hidden truncate text-xs text-slate-600 lg:inline">
+                              {assigneeName}
+                            </span>
+
+                            <span
+                              title={assigneeName}
+                              className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#4058D6]"
+                            >
+                              {getInitial(assigneeName)}
+                            </span>
+                          </>
+                        ) : (
+                          <span
+                            title="담당자 미지정"
+                            className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-slate-300 text-slate-300"
+                          >
+                            <UserRound size={11} />
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </li>
                 );
               })}
-            </section>
-          );
-        })}
-      </div>
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

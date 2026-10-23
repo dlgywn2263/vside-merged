@@ -273,7 +273,9 @@ export default function ProjectSwitcher({
                               {workspace.role?.toLowerCase() === "owner"
                                 ? "OWNER"
                                 : "MEMBER"}
-                              {" · "}작업 폴더 {workspace.childCount}개
+                              {/* 작업 폴더 수는 화면마다 채워지지 않는 경우가 있어(일정 관리) 옛 사이드바처럼 역할과 종류만 보여 준다 */}
+                              {" · "}
+                              {isTeam ? "팀 프로젝트" : "개인 프로젝트"}
                             </span>
                           </span>
 
