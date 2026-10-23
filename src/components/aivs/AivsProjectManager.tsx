@@ -19,9 +19,16 @@ import {
 
   ArrowUpRight,
 
+  ChevronRight,
+
+  GitBranch,
+
+  GitCommitHorizontal,
+
+  LayoutDashboard,
+
   CalendarCheck,
 
-  CheckCircle2,
 
   Clock3,
 
@@ -83,11 +90,16 @@ import {
 
 } from "@/components/main-dashboard/dashboard.utils";
 
-import ProjectSidebar, {
+import type { WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
 
-  type WorkspaceSidebarItem,
+import ProjectSwitcher from "@/components/main-dashboard/ProjectSwitcher";
 
-} from "@/components/layout/ProjectSidebar";
+import {
+  loadCommits,
+  loadMembers,
+  type OverviewCommit,
+  type OverviewMember,
+} from "@/components/main-dashboard/dashboard.overview";
 
 /* =========================================================
 
@@ -432,7 +444,7 @@ function StatusPill({ status }: { status: SubProjectStatus }) {
 
       className={cn(
 
-        "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-black",
+        "inline-flex h-5 shrink-0 items-center rounded border px-1.5 text-[10px] font-semibold",
 
         getStatusClassName(status),
 
@@ -455,435 +467,246 @@ function StatusPill({ status }: { status: SubProjectStatus }) {
 ========================================================= */
 
 function SubProjectCard({
-
   project,
-
   mode,
-
   open,
-
   canDelete,
-
   onOpenMenu,
-
   onCloseMenu,
-
   onOpenInfo,
-
   onDelete,
-
   menuRef,
-
 }: {
-
   project: SubProject;
-
   mode: WorkspaceMode;
-
   open: boolean;
-
   canDelete: boolean;
-
   onOpenMenu: () => void;
-
   onCloseMenu: () => void;
-
   onOpenInfo: () => void;
-
   onDelete: () => void;
-
   menuRef: React.RefObject<HTMLDivElement | null>;
-
 }) {
-
   const status = normalizeStatus(project.status);
-
   const progress = getProgress(project);
-
   const scheduleCount = project.scheduleCount ?? 0;
-
   const doneScheduleCount = project.doneScheduleCount ?? 0;
-
   const devlogCount = project.devlogCount ?? 0;
-
   const memberCount = project.memberCount ?? 1;
-
   const openHref = getIdeHref(project.workspaceId, mode);
-
   const scheduleHref = getScheduleHref(project.workspaceId, mode);
-
   const devlogHref = getDevlogHref(project.workspaceId, mode);
 
   return (
-
-    <section className="group relative flex min-h-[176px] flex-col rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BFCBFF] hover:shadow-[0_6px_18px_rgba(15,23,42,0.07)]">
-
+    <section className="group relative flex flex-col rounded-md border border-slate-200 bg-white p-4 transition-colors hover:border-[#AAB8FF]">
       {/* =================================================
-
           TOP
-
       ================================================= */}
-
-      <div className="flex min-w-0 items-start gap-2.5">
-
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#EEF3FF] text-[#5873F9]">
-
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
           <FolderKanban size={17} strokeWidth={2.2} />
-
         </div>
 
         <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-slate-900">
+            {project.name}
+          </h3>
 
-          <div className="flex min-w-0 items-center gap-2">
-
-            <h3 className="min-w-0 flex-1 truncate text-[13px] font-black text-slate-900">
-
-              {project.name}
-
-            </h3>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex h-5 items-center rounded border border-slate-200 bg-slate-50 px-1.5 font-mono text-[10px] font-medium text-slate-600">
+              {project.language || "General"}
+            </span>
 
             <StatusPill status={status} />
-
           </div>
-
-          <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
-
-            {project.description?.trim()
-
-              ? project.description
-
-              : `${project.language || "General"} 기반 작업 폴더입니다.`}
-
-          </p>
-
         </div>
 
         {/* ===============================================
-
             MORE MENU
-
         =============================================== */}
-
         <div
-
-          className="relative -mr-1 -mt-1 shrink-0"
-
+          className="relative -mr-1.5 -mt-1.5 shrink-0"
           ref={open ? menuRef : null}
-
         >
-
           <button
-
             type="button"
-
-            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-
+            className="grid h-8 w-8 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             aria-label="작업 폴더 메뉴"
-
             onClick={onOpenMenu}
-
           >
-
             <MoreVertical size={15} />
-
           </button>
 
           {open ? (
-
-            <div className="absolute right-0 top-9 z-20 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
-
+            <div className="absolute right-0 top-9 z-20 w-44 overflow-hidden rounded-md border border-slate-300 bg-white py-1">
               <Link
-
                 href={openHref}
-
-                className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 onClick={onCloseMenu}
-
               >
-
                 <FolderOpen size={14} className="text-slate-400" />
-
                 작업 폴더 열기
-
               </Link>
 
               <Link
-
                 href={scheduleHref}
-
-                className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 onClick={onCloseMenu}
-
               >
-
                 <CalendarCheck size={14} className="text-slate-400" />
-
                 일정관리
-
               </Link>
 
               <Link
-
                 href={devlogHref}
-
-                className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 onClick={onCloseMenu}
-
               >
-
                 <FileText size={14} className="text-slate-400" />
-
                 개발일지
-
               </Link>
 
               <button
-
                 type="button"
-
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50"
-
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
                 onClick={() => {
-
                   onCloseMenu();
-
                   onOpenInfo();
-
                 }}
-
               >
-
                 <Info size={14} className="text-slate-400" />
-
                 프로젝트 정보
-
               </button>
 
               {canDelete ? (
-
                 <>
-
                   <div className="my-1 h-px bg-slate-100" />
 
                   <button
-
                     type="button"
-
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50"
-
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-rose-600 hover:bg-rose-50"
                     onClick={() => {
-
                       onCloseMenu();
-
                       onDelete();
-
                     }}
-
                   >
-
                     <Trash2 size={14} />
-
                     삭제
-
                   </button>
-
                 </>
-
               ) : null}
-
             </div>
-
           ) : null}
-
         </div>
-
       </div>
 
+      <p className="mt-2.5 line-clamp-1 text-xs text-slate-500">
+        {project.description?.trim()
+          ? project.description
+          : `${project.language || "General"} 기반 작업 폴더입니다.`}
+      </p>
+
       {/* =================================================
-
           PROGRESS
-
       ================================================= */}
-
-      <div className="mt-3">
-
+      <div className="mt-3.5">
         <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[11px] font-medium text-slate-500">진행률</span>
 
-          <span className="text-[10px] font-bold text-slate-400">
-
-            진행률
-
-          </span>
-
-          <span className="text-[10px] font-black text-slate-700">
-
+          <span className="text-xs font-semibold tabular-nums text-slate-900">
             {progress}%
-
           </span>
-
         </div>
 
         <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-
           <div
-
             className={cn(
-
               "h-full rounded-full transition-all",
-
               getProgressBarClassName(status),
-
             )}
-
             style={{
-
               width: `${progress}%`,
-
             }}
-
           />
+        </div>
+      </div>
 
+      {/* =================================================
+          META
+      ================================================= */}
+      <div className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-md border border-slate-100 bg-slate-50/60 text-center">
+        <div className="px-2 py-1.5">
+          <p className="flex items-center justify-center gap-1 text-[10px] text-slate-400">
+            <CalendarCheck size={11} />
+            일정
+          </p>
+
+          <p className="mt-0.5 text-xs font-semibold tabular-nums text-slate-800">
+            {doneScheduleCount}/{scheduleCount}
+          </p>
         </div>
 
-      </div>
+        <div className="px-2 py-1.5">
+          <p className="flex items-center justify-center gap-1 text-[10px] text-slate-400">
+            <FileText size={11} />
+            일지
+          </p>
 
-      {/* =================================================
-
-          META
-
-      ================================================= */}
-
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-bold text-slate-500">
-
-        <span className="inline-flex items-center gap-1.5">
-
-          <CalendarCheck size={12} className="text-slate-400" />
-
-          일정
-
-          <strong className="font-black text-slate-700">
-
-            {doneScheduleCount}/{scheduleCount}
-
-          </strong>
-
-        </span>
-
-        <span className="h-3 w-px bg-slate-200" />
-
-        <span className="inline-flex items-center gap-1.5">
-
-          <FileText size={12} className="text-slate-400" />
-
-          일지
-
-          <strong className="font-black text-slate-700">
-
+          <p className="mt-0.5 text-xs font-semibold tabular-nums text-slate-800">
             {devlogCount}
+          </p>
+        </div>
 
-          </strong>
+        <div className="px-2 py-1.5">
+          <p className="flex items-center justify-center gap-1 text-[10px] text-slate-400">
+            <UsersRound size={11} />
+            인원
+          </p>
 
-        </span>
-
-        <span className="h-3 w-px bg-slate-200" />
-
-        <span className="inline-flex items-center gap-1.5">
-
-          <UsersRound size={12} className="text-slate-400" />
-
-          인원
-
-          <strong className="font-black text-slate-700">
-
+          <p className="mt-0.5 text-xs font-semibold tabular-nums text-slate-800">
             {memberCount}
-
-          </strong>
-
-        </span>
-
+          </p>
+        </div>
       </div>
 
       {/* =================================================
-
           FOOTER
-
       ================================================= */}
-
-      <div className="mt-auto flex min-w-0 items-center justify-between gap-3 border-t border-slate-100 pt-3">
-
+      <div className="mt-3.5 flex min-w-0 items-center justify-between gap-3 border-t border-slate-100 pt-3">
         <div className="min-w-0 flex-1">
-
           {project.gitUrl ? (
-
             <a
-
               href={project.gitUrl}
-
               target="_blank"
-
               rel="noreferrer"
-
-              className="flex min-w-0 items-center gap-1 text-[9px] font-semibold text-slate-400 transition hover:text-[#5873F9]"
-
+              className="flex min-w-0 items-center gap-1 text-[11px] text-slate-500 transition-colors hover:text-[#5873F9]"
             >
-
+              <GitBranch size={12} className="shrink-0 text-emerald-600" />
               <span className="truncate">{project.gitUrl}</span>
-
               <ExternalLink size={10} className="shrink-0" />
-
             </a>
-
           ) : (
-
-            <p className="truncate text-[9px] font-semibold text-slate-400">
-
-              {project.language || "General"} · 최근 수정{" "}
-
-              {formatDate(project.updatedAt)}
-
+            <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
+              <GitBranch size={12} className="shrink-0" />
+              원격 저장소 없음
             </p>
-
           )}
 
+          <p className="mt-0.5 font-mono text-[10px] text-slate-400">
+            최근 수정 {formatDate(project.updatedAt)}
+          </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-
-          {project.gitUrl ? (
-
-            <span className="hidden text-[9px] font-semibold text-slate-300 2xl:inline">
-
-              {formatDate(project.updatedAt)}
-
-            </span>
-
-          ) : null}
-
-          <Link
-
-            href={openHref}
-
-            className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#5873F9] px-2.5 text-[10px] font-black text-white transition hover:bg-[#4863E8]"
-
-          >
-
-            열기
-
-            <ArrowUpRight size={11} />
-
-          </Link>
-
-        </div>
-
+        <Link
+          href={openHref}
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+        >
+          열기
+          <ArrowUpRight size={13} />
+        </Link>
       </div>
-
     </section>
-
   );
-
 }
 
 /* =========================================================
@@ -1689,864 +1512,840 @@ export function AivsProjectManager({
 
   ======================================================= */
 
+  /* =======================================================
+     최근 작업 이어하기
+     IDE(useWorkspaceEntry)는 이 브라우저의 localStorage 에
+     lastProject_{워크스페이스} 로 마지막에 연 작업 폴더 이름을 남긴다.
+     그 기록이 있으면 그 폴더를, 없으면 가장 최근에 수정된 폴더를 보여 준다.
+     (서버에는 "최근 작업" 기록이 없어 다른 사람·다른 기기 기록은 알 수 없다)
+  ======================================================= */
+  const [lastOpenedName, setLastOpenedName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function readLastOpened() {
+      let value: string | null = null;
+
+      try {
+        value = currentWorkspaceId
+          ? localStorage.getItem(`lastProject_${currentWorkspaceId}`)
+          : null;
+      } catch {
+        value = null;
+      }
+
+      if (!ignore) setLastOpenedName(value);
+    }
+
+    void readLastOpened();
+
+    return () => {
+      ignore = true;
+    };
+  }, [currentWorkspaceId]);
+
+  const lastOpenedProject = lastOpenedName
+    ? projects.find((project) => project.name === lastOpenedName) ?? null
+    : null;
+
+  const recentlyUpdatedProject =
+    [...projects].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0] ??
+    null;
+
+  const continueProject = lastOpenedProject ?? recentlyUpdatedProject;
+
+  /* =======================================================
+     오른쪽 개발 정보: 팀원 · 최근 커밋 (기존 조회 API)
+  ======================================================= */
+  const [members, setMembers] = useState<
+    OverviewMember[] | "personal" | "loading" | null
+  >("loading");
+
+  const [commits, setCommits] = useState<OverviewCommit[] | "loading" | null>(
+    "loading",
+  );
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadDevInfo() {
+      if (!selectedWorkspace) return;
+
+      setMembers("loading");
+      setCommits("loading");
+
+      const [memberResult, commitResult] = await Promise.allSettled([
+        selectedWorkspace.mode === "team"
+          ? loadMembers(String(selectedWorkspace.id))
+          : Promise.resolve("personal" as const),
+        loadCommits(selectedWorkspace),
+      ]);
+
+      if (ignore) return;
+
+      setMembers(
+        memberResult.status === "fulfilled" ? memberResult.value : null,
+      );
+
+      setCommits(
+        commitResult.status === "fulfilled"
+          ? [...commitResult.value].sort((a, b) => b.time - a.time)
+          : null,
+      );
+    }
+
+    void loadDevInfo();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedWorkspace]);
+
+  const languageSummary = Object.entries(
+    projects.reduce<Record<string, number>>((acc, project) => {
+      const language = project.language || "General";
+
+      acc[language] = (acc[language] ?? 0) + 1;
+
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1]);
+
+  const gitConnectedProjects = projects.filter((project) => project.gitUrl);
+
+  const totalScheduleCount = projects.reduce(
+    (sum, project) => sum + (project.scheduleCount ?? 0),
+    0,
+  );
+
+  const totalDoneScheduleCount = projects.reduce(
+    (sum, project) => sum + (project.doneScheduleCount ?? 0),
+    0,
+  );
+
+  const statusTabs: Array<{
+    value: "all" | SubProjectStatus;
+    label: string;
+    count: number;
+  }> = [
+    { value: "all", label: "전체", count: allSubProjectCount },
+    { value: "todo", label: "시작 전", count: todoCount },
+    { value: "progress", label: "진행 중", count: progressCount },
+    { value: "done", label: "완료", count: doneCount },
+    { value: "hold", label: "보류", count: holdCount },
+  ];
+
+  const dashboardHref = currentWorkspaceId
+    ? `/dashboard/${encodeURIComponent(currentWorkspaceId)}?mode=${currentMode}`
+    : "/dashboard";
+
+  const rememberWorkspace = () => {
+    if (typeof window === "undefined" || !currentWorkspaceId) {
+      return;
+    }
+
+    localStorage.setItem("currentWorkspaceId", String(currentWorkspaceId));
+    localStorage.setItem("currentWorkspaceMode", currentMode);
+  };
+
   return (
-
     <>
+      {/* 카드 없이 TopNav 아래 화면 전체를 쓰는 작업 공간(일정·설계 관리와 같은 틀) */}
+      <main className="waivs-page flex flex-col bg-white font-sans text-slate-900 lg:h-[calc(100dvh-65px)] lg:min-h-0 lg:overflow-hidden">
+        {/* =================================================
+            PAGE HEADER
+        ================================================= */}
+        <header className="flex shrink-0 flex-col gap-3 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 lg:h-[62px] lg:flex-row lg:items-center lg:justify-between lg:px-5 lg:py-0">
+          <nav
+            aria-label="현재 위치"
+            className="flex min-w-0 flex-wrap items-center gap-1 text-sm"
+          >
+            <Link
+              href={dashboardHref}
+              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
+            >
+              <LayoutDashboard size={14} />
+              대시보드
+            </Link>
 
-      <main className="waivs-page flex min-h-0 flex-1 p-4 font-sans md:p-5">
+            <ChevronRight size={14} className="text-slate-300" />
 
-        <div className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 gap-4">
+            <ProjectSwitcher
+              size="compact"
+              label={workspaceName}
+              workspaces={sidebarWorkspaces}
+              selectedWorkspaceId={currentWorkspaceId ?? ""}
+              loading={sidebarLoading}
+              errorMessage={sidebarError}
+              onSelectWorkspace={handleSelectWorkspace}
+            />
 
+            <ChevronRight size={14} className="text-slate-300" />
+
+            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-semibold text-slate-900">
+              <Code2 size={14} className="text-[#5873F9]" />
+              AIVS 작업 폴더
+            </span>
+
+            <span
+              className={cn(
+                "ml-1.5 rounded border px-1.5 py-px text-[10px] font-semibold",
+                currentMode === "team"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-blue-200 bg-blue-50 text-blue-700",
+              )}
+            >
+              {currentMode === "team" ? "Team" : "Personal"}
+            </span>
+
+            <span className="rounded border border-slate-200 bg-white px-1.5 py-px text-[10px] font-semibold text-slate-500">
+              {isWorkspaceOwner ? "OWNER" : "MEMBER"}
+            </span>
+          </nav>
+
+        </header>
+
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
           {/* =================================================
-
-              SIDEBAR
-
+              MAIN (남은 너비 전체)
           ================================================= */}
+          <section className="min-w-0 flex-1 lg:overflow-y-auto">
+            <div className="space-y-5 px-4 py-5 lg:px-6">
+              {/* ===============================================
+                  최근 작업 이어하기
+              =============================================== */}
+              {!loading && !error && continueProject ? (
+                <ContinueWorkPanel
+                  project={continueProject}
+                  source={lastOpenedProject ? "opened" : "updated"}
+                  href={getIdeHref(continueProject.workspaceId, currentMode)}
+                  onNavigate={rememberWorkspace}
+                />
+              ) : null}
 
-          <ProjectSidebar
+              {/* ===============================================
+                  작업 폴더 목록 제목 + 추가 (헤더에서 옮겨 옴)
+              =============================================== */}
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
+                    작업 폴더
+                    <span className="rounded bg-slate-100 px-1.5 py-px text-xs font-semibold tabular-nums text-slate-500">
+                      {allSubProjectCount}
+                    </span>
+                  </h2>
 
-            workspaces={sidebarWorkspaces}
+                  <p className="mt-0.5 truncate text-xs text-slate-500">
+                    현재 선택된 상위 프로젝트에 속한 작업 폴더만 표시합니다.
+                  </p>
+                </div>
 
-            selectedWorkspaceId={currentWorkspaceId ?? ""}
+                <button
+                  type="button"
+                  onClick={handleOpenCreateProjectModal}
+                  className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+                >
+                  <Plus size={14} />
+                  작업 폴더 추가
+                </button>
+              </div>
 
-            loading={sidebarLoading}
+              {/* ===============================================
+                  FILTER / SORT / SEARCH
+              =============================================== */}
+              <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 xl:flex-row xl:items-end xl:justify-between">
+                <div className="-mb-3 flex items-stretch gap-1 overflow-x-auto">
+                  {statusTabs.map((item) => {
+                    const active = statusFilter === item.value;
 
-            errorMessage={sidebarError}
-
-            onSelectWorkspace={handleSelectWorkspace}
-
-          />
-
-          {/* =================================================
-
-              CONTENT
-
-          ================================================= */}
-
-          <div className="flex min-w-0 flex-1">
-
-            <section className="waivs-panel flex min-h-0 flex-1 flex-col overflow-hidden">
-
-              {/* =================================================
-
-                  AIVS HEADER
-
-              ================================================= */}
-
-              <div className="shrink-0">
-
-                {/* =============================================
-
-                    TITLE / ACTION
-
-                ============================================= */}
-
-                <div className="shrink-0 px-5 py-3">
-
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-
-                    <div className="min-w-0">
-
-                      <div className="flex flex-wrap items-center gap-2">
-
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#5873F9]">
-
-                          AIVS
-
-                        </p>
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setStatusFilter(item.value)}
+                        aria-pressed={active}
+                        className={cn(
+                          "inline-flex h-9 items-center gap-1.5 border-b-2 px-2.5 text-[13px] font-medium transition-colors",
+                          active
+                            ? "border-[#5873F9] text-[#4058D6]"
+                            : "border-transparent text-slate-500 hover:text-slate-900",
+                        )}
+                      >
+                        {item.label}
 
                         <span
-
                           className={cn(
-
-                            "inline-flex h-5 items-center rounded-full px-2 text-[9px] font-black uppercase",
-
-                            currentMode === "team"
-
-                              ? "bg-emerald-50 text-emerald-600"
-
-                              : "bg-[#EEF3FF] text-[#4F6AF6]",
-
-                          )}
-
-                        >
-
-                          {currentMode === "team" ? "TEAM" : "PERSONAL"}
-
-                        </span>
-
-                        <span className="inline-flex h-5 items-center rounded-full bg-slate-100 px-2 text-[9px] font-black uppercase text-slate-500">
-
-                          {isWorkspaceOwner ? "OWNER" : "MEMBER"}
-
-                        </span>
-
-                      </div>
-
-                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-
-                        <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
-
-                          {workspaceName}
-
-                        </h1>
-
-                        <span className="text-xs font-bold text-slate-400">
-
-                          작업 관리
-
-                        </span>
-
-                      </div>
-
-                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
-
-                        선택된 프로젝트 안의 작업 폴더를 AIVS 작업 단위로
-
-                        관리합니다.
-
-                      </p>
-
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-
-                      {currentWorkspaceId ? (
-
-                        <Link
-
-                          href={getIdeHref(
-
-                            String(currentWorkspaceId),
-
-                            currentMode,
-
-                          )}
-
-                          onClick={() => {
-
-                            if (typeof window === "undefined") {
-
-                              return;
-
-                            }
-
-                            localStorage.setItem(
-
-                              "currentWorkspaceId",
-
-                              String(currentWorkspaceId),
-
-                            );
-
-                            localStorage.setItem(
-
-                              "currentWorkspaceMode",
-
-                              currentMode,
-
-                            );
-
-                          }}
-
-                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#D9E1FF] bg-white px-4 text-xs font-black text-[#5873F9] transition hover:bg-[#F7F9FF]"
-
-                        >
-
-                          작업하러가기
-
-                          <ArrowUpRight size={15} />
-
-                        </Link>
-
-                      ) : (
-
-                        <button
-
-                          type="button"
-
-                          disabled
-
-                          className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs font-black text-slate-400"
-
-                        >
-
-                          작업하러가기
-
-                          <ArrowUpRight size={15} />
-
-                        </button>
-
-                      )}
-
-                      <button
-
-                        type="button"
-
-                        onClick={handleOpenCreateProjectModal}
-
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8]"
-
-                      >
-
-                        <Plus size={14} />
-
-                        작업 폴더 추가
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-                {/* =============================================
-
-                    STATISTICS
-
-                ============================================= */}
-
-                <div className="border-t border-slate-100 px-5">
-
-                  <div className="flex min-h-[50px] flex-col justify-center gap-3 py-3 xl:flex-row xl:items-center xl:justify-between xl:py-0">
-
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-bold text-slate-400">
-
-                      <span>
-
-                        전체{" "}
-
-                        <strong className="ml-1 font-black text-slate-900">
-
-                          {allSubProjectCount}
-
-                        </strong>
-
-                      </span>
-
-                      <span>
-
-                        시작 전{" "}
-
-                        <strong className="ml-1 font-black text-slate-900">
-
-                          {todoCount}
-
-                        </strong>
-
-                      </span>
-
-                      <span>
-
-                        진행{" "}
-
-                        <strong className="ml-1 font-black text-[#5873F9]">
-
-                          {progressCount}
-
-                        </strong>
-
-                      </span>
-
-                      <span>
-
-                        완료{" "}
-
-                        <strong className="ml-1 font-black text-slate-900">
-
-                          {doneCount}
-
-                        </strong>
-
-                      </span>
-
-                      <span>
-
-                        보류{" "}
-
-                        <strong className="ml-1 font-black text-amber-500">
-
-                          {holdCount}
-
-                        </strong>
-
-                      </span>
-
-                      <span>
-
-                        개발일지{" "}
-
-                        <strong className="ml-1 font-black text-slate-900">
-
-                          {totalDevlogCount}
-
-                        </strong>
-
-                      </span>
-
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-3">
-
-                      <span className="text-[10px] font-bold text-slate-400">
-
-                        평균 진행률
-
-                      </span>
-
-                      <div className="h-1.5 w-[118px] overflow-hidden rounded-full bg-slate-100">
-
-                        <div
-
-                          className="h-full rounded-full bg-[#5873F9] transition-all"
-
-                          style={{
-
-                            width: `${averageProgress}%`,
-
-                          }}
-
-                        />
-
-                      </div>
-
-                      <span className="min-w-[28px] text-right text-[11px] font-black text-[#5873F9]">
-
-                        {averageProgress}%
-
-                      </span>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* =================================================
-
-                  FILTER / SORT / SEARCH
-
-              ================================================= */}
-
-              <div className="shrink-0 border-y border-slate-100 px-5 py-3">
-
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-
-                  {/* =============================================
-
-                      STATUS FILTER
-
-                  ============================================= */}
-
-                  <div className="inline-flex w-fit items-center rounded-xl bg-[#F3F6FB] p-1">
-
-                    {[
-
-                      {
-
-                        value: "all",
-
-                        label: "전체",
-
-                      },
-
-                      {
-
-                        value: "todo",
-
-                        label: "시작 전",
-
-                      },
-
-                      {
-
-                        value: "progress",
-
-                        label: "진행 중",
-
-                      },
-
-                      {
-
-                        value: "done",
-
-                        label: "완료",
-
-                      },
-
-                      {
-
-                        value: "hold",
-
-                        label: "보류",
-
-                      },
-
-                    ].map((item) => {
-
-                      const active = statusFilter === item.value;
-
-                      return (
-
-                        <button
-
-                          key={item.value}
-
-                          type="button"
-
-                          onClick={() =>
-
-                            setStatusFilter(
-
-                              item.value as "all" | SubProjectStatus,
-
-                            )
-
-                          }
-
-                          className={cn(
-
-                            "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px] font-black transition",
-
+                            "rounded px-1.5 py-px text-[11px] font-semibold tabular-nums",
                             active
-
-                              ? "bg-white text-[#5873F9] shadow-[0_1px_4px_rgba(15,23,42,0.08)]"
-
-                              : "text-slate-500 hover:bg-white/60 hover:text-slate-700",
-
+                              ? "bg-[#EEF2FF] text-[#4058D6]"
+                              : "bg-slate-100 text-slate-500",
                           )}
-
                         >
-
-                          {item.label}
-
-                        </button>
-
-                      );
-
-                    })}
-
-                  </div>
-
-                  {/* =============================================
-
-                      SORT + SEARCH
-
-                  ============================================= */}
-
-                  <div className="flex w-full items-center gap-2 xl:w-auto">
-
-                    <div className="relative shrink-0">
-
-                      <Filter
-
-                        size={13}
-
-                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-
-                      />
-
-                      <select
-
-                        value={sortType}
-
-                        onChange={(event) =>
-
-                          setSortType(event.target.value as SortType)
-
-                        }
-
-                        className="h-9 min-w-[154px] appearance-none rounded-xl border border-slate-200 bg-white pl-8 pr-8 text-[11px] font-bold text-slate-600 outline-none transition hover:border-slate-300 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
-
-                      >
-
-                        <option value="recent">최근 수정순</option>
-
-                        <option value="name">이름순</option>
-
-                        <option value="progress">진행률 높은순</option>
-
-                      </select>
-
-                      <svg
-
-                        className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
-
-                        viewBox="0 0 20 20"
-
-                        fill="none"
-
-                        stroke="currentColor"
-
-                        strokeWidth="1.8"
-
-                      >
-
-                        <path
-
-                          d="m6 8 4 4 4-4"
-
-                          strokeLinecap="round"
-
-                          strokeLinejoin="round"
-
-                        />
-
-                      </svg>
-
-                    </div>
-
-                    <div className="relative min-w-0 flex-1 xl:w-[320px] xl:flex-none">
-
-                      <Search
-
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-
-                        size={14}
-
-                      />
-
-                      <input
-
-                        value={query}
-
-                        onChange={(event) => setQuery(event.target.value)}
-
-                        placeholder="작업 폴더 검색"
-
-                        className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[11px] font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
-
-                      />
-
-                    </div>
-
-                  </div>
-
+                          {item.count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-              </div>
+                <div className="flex w-full items-center gap-2 xl:w-auto">
+                  <div className="relative shrink-0">
+                    <Filter
+                      size={13}
+                      className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
 
-              {/* =================================================
-
-                  WORKSPACE LIST
-
-              ================================================= */}
-
-              <div className="min-h-[260px] flex-1 px-5 pb-5 pt-4">
-
-                {/* LOADING */}
-
-                {loading ? (
-
-                  <div className="rounded-xl border border-slate-200 bg-white px-5 py-9 text-center">
-
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
-
-                      <Clock3 size={22} />
-
-                    </div>
-
-                    <p className="mt-4 text-sm font-black text-gray-800">
-
-                      작업 폴더를 불러오는 중입니다.
-
-                    </p>
-
-                    <p className="mt-1 text-sm text-gray-500">
-
-                      데이터를 조회하고 있습니다.
-
-                    </p>
-
-                  </div>
-
-                ) : null}
-
-                {/* ERROR */}
-
-                {!loading && error ? (
-
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-5 text-sm font-semibold text-red-600 shadow-sm">
-
-                    {error}
-
-                  </div>
-
-                ) : null}
-
-                {/* EMPTY */}
-
-                {!loading && !error && filteredProjects.length === 0 ? (
-
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-white px-5 py-9 text-center">
-
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-
-                      <Code2 size={22} />
-
-                    </div>
-
-                    <p className="mt-4 text-sm font-black text-gray-800">
-
-                      표시할 작업 폴더가 없습니다.
-
-                    </p>
-
-                    <p className="mt-1 text-sm text-gray-500">
-
-                      검색어나 필터를 다시 확인하거나 새 작업 폴더를 추가해
-
-                      주세요.
-
-                    </p>
-
-                    <button
-
-                      type="button"
-
-                      onClick={handleOpenCreateProjectModal}
-
-                      className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 py-2.5 text-sm font-black text-white transition hover:bg-[#4863E8]"
-
+                    <select
+                      value={sortType}
+                      onChange={(event) =>
+                        setSortType(event.target.value as SortType)
+                      }
+                      aria-label="정렬"
+                      className="h-8 min-w-[140px] appearance-none rounded-md border border-slate-200 bg-white pl-7 pr-7 text-xs font-medium text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:border-[#AAB8FF]"
                     >
+                      <option value="recent">최근 수정순</option>
+                      <option value="name">이름순</option>
+                      <option value="progress">진행률 높은순</option>
+                    </select>
 
-                      <Plus size={17} />
-
-                      작업 폴더 추가
-
-                    </button>
-
+                    <svg
+                      className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path
+                        d="m6 8 4 4 4-4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </div>
 
-                ) : null}
+                  <div className="relative min-w-0 flex-1 xl:w-[260px] xl:flex-none">
+                    <Search
+                      className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      size={13}
+                    />
 
-                {/* PROJECT LIST */}
-
-                {!loading && !error && filteredProjects.length > 0 ? (
-
-                  <>
-
-                    <div className="mb-3 flex items-center justify-between gap-3 px-1">
-
-                      <div>
-
-                        <p className="text-sm font-black text-gray-900">
-
-                          작업 폴더 {filteredProjects.length}개
-
-                        </p>
-
-                        <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
-
-                          현재 선택된 상위 프로젝트에 속한 항목만 표시합니다.
-
-                        </p>
-
-                      </div>
-
-                      <div className="hidden items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500 sm:flex">
-
-                        <CheckCircle2 size={14} />
-
-                        완료 {doneCount}개 · 진행 {progressCount}개
-
-                      </div>
-
-                    </div>
-
-                    <div className="grid gap-3 xl:grid-cols-2 2xl:grid-cols-3">
-
-                      {filteredProjects.map((project) => (
-
-                        <SubProjectCard
-
-                          key={project.id}
-
-                          project={project}
-
-                          mode={currentMode}
-
-                          open={openMenuId === project.id}
-
-                          canDelete={isWorkspaceOwner}
-
-                          menuRef={menuRef}
-
-                          onOpenMenu={() =>
-
-                            setOpenMenuId((current) =>
-
-                              current === project.id ? null : project.id,
-
-                            )
-
-                          }
-
-                          onCloseMenu={() => setOpenMenuId(null)}
-
-                          onOpenInfo={() => setInfoProject(project)}
-
-                          onDelete={() => openDeleteModal(project)}
-
-                        />
-
-                      ))}
-
-                    </div>
-
-                  </>
-
-                ) : null}
-
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="작업 폴더 검색"
+                      className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-xs font-medium text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF]"
+                    />
+                  </div>
+                </div>
               </div>
 
-            </section>
+              {/* ===============================================
+                  FOLDER LIST
+              =============================================== */}
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-xs text-slate-400">
+                  <Clock3 size={15} />
+                  작업 폴더를 불러오는 중입니다.
+                </div>
+              ) : null}
 
-          </div>
+              {!loading && error ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-4 text-sm font-medium text-red-600">
+                  {error}
 
+                  {currentWorkspaceId ? (
+                    <IdeEntryLink
+                      href={getIdeHref(String(currentWorkspaceId), currentMode)}
+                      onNavigate={rememberWorkspace}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!loading && !error && filteredProjects.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-200 px-5 py-12 text-center">
+                  <div className="mx-auto grid h-10 w-10 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+                    <Code2 size={20} />
+                  </div>
+
+                  <p className="mt-3 text-sm font-semibold text-slate-800">
+                    표시할 작업 폴더가 없습니다.
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    검색어나 필터를 다시 확인하거나 새 작업 폴더를 추가해
+                    주세요.
+                  </p>
+
+                  {/* 이어하기 영역은 폴더가 없으면 나오지 않는다. 헤더의 "작업하러 가기"를 뺐으니 같은 주소를 여기 남긴다 */}
+                  {projects.length === 0 && currentWorkspaceId ? (
+                    <IdeEntryLink
+                      href={getIdeHref(String(currentWorkspaceId), currentMode)}
+                      onNavigate={rememberWorkspace}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!loading && !error && filteredProjects.length > 0 ? (
+                <div>
+                  {filteredProjects.length !== allSubProjectCount ? (
+                    <p className="mb-3 text-xs text-slate-500">
+                      조건에 맞는 작업 폴더{" "}
+                      <strong className="font-semibold tabular-nums text-slate-900">
+                        {filteredProjects.length}
+                      </strong>
+                      개
+                    </p>
+                  ) : null}
+
+                  {/* 카드 폭을 300~360px 로 묶어, 폴더가 1개여도 커지지 않고 많아도 같은 크기로 줄 맞춰 놓인다 */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,360px))] gap-3">
+                    {filteredProjects.map((project) => (
+                      <SubProjectCard
+                        key={project.id}
+                        project={project}
+                        mode={currentMode}
+                        open={openMenuId === project.id}
+                        canDelete={isWorkspaceOwner}
+                        menuRef={menuRef}
+                        onOpenMenu={() =>
+                          setOpenMenuId((current) =>
+                            current === project.id ? null : project.id,
+                          )
+                        }
+                        onCloseMenu={() => setOpenMenuId(null)}
+                        onOpenInfo={() => setInfoProject(project)}
+                        onDelete={() => openDeleteModal(project)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          {/* =================================================
+              DEV INFO PANEL (300~340px)
+          ================================================= */}
+          <aside className="w-full shrink-0 border-t border-slate-200 bg-white lg:w-[300px] lg:overflow-y-auto lg:border-l lg:border-t-0 xl:w-[340px]">
+            <div className="divide-y divide-slate-200">
+              {/* 작업 현황 */}
+              <DevInfoSection title="작업 현황">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-slate-500">평균 진행률</span>
+
+                  <span className="text-lg font-semibold tabular-nums text-[#5873F9]">
+                    {averageProgress}%
+                  </span>
+                </div>
+
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-[#5873F9] transition-all"
+                    style={{
+                      width: `${averageProgress}%`,
+                    }}
+                  />
+                </div>
+
+                <dl className="mt-3.5 grid grid-cols-3 divide-x divide-slate-100 text-center">
+                  <DevInfoStat label="작업 폴더" value={`${allSubProjectCount}`} />
+                  <DevInfoStat
+                    label="일정 완료"
+                    value={`${totalDoneScheduleCount}/${totalScheduleCount}`}
+                  />
+                  <DevInfoStat label="개발일지" value={`${totalDevlogCount}`} />
+                </dl>
+              </DevInfoSection>
+
+              {/* 개발 환경 */}
+              <DevInfoSection title="개발 환경">
+                <p className="text-[11px] font-medium text-slate-500">언어</p>
+
+                {languageSummary.length === 0 ? (
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    작업 폴더가 없습니다.
+                  </p>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {languageSummary.map(([language, count]) => (
+                      <span
+                        key={language}
+                        className="inline-flex h-6 items-center gap-1 rounded border border-slate-200 px-1.5 font-mono text-[11px] text-slate-700"
+                      >
+                        {language}
+                        <span className="text-slate-400">{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <p className="mt-3 flex items-center justify-between text-[11px] font-medium text-slate-500">
+                  {/* gitUrl 은 원격 저장소(GitHub 등) 주소다. 아래 커밋은 로컬 저장소 기록이라 연결이 없어도 보인다 */}
+                  원격 저장소 연결
+                  <span className="tabular-nums text-slate-700">
+                    {gitConnectedProjects.length}/{allSubProjectCount} 폴더
+                  </span>
+                </p>
+
+                {gitConnectedProjects.length === 0 ? (
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    원격 저장소가 연결된 작업 폴더가 없습니다.
+                  </p>
+                ) : (
+                  <ul className="mt-1.5 space-y-1">
+                    {gitConnectedProjects.map((project) => (
+                      <li key={project.id}>
+                        <a
+                          href={project.gitUrl ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:text-[#5873F9]"
+                        >
+                          <GitBranch size={12} className="shrink-0 text-emerald-600" />
+                          <span className="shrink-0 font-medium text-slate-800">
+                            {project.name}
+                          </span>
+                          <span className="truncate text-slate-400">
+                            {project.gitUrl}
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </DevInfoSection>
+
+              {/* 팀원 */}
+              <DevInfoSection
+                title="프로젝트 팀원"
+                count={Array.isArray(members) ? members.length : undefined}
+              >
+                {members === "loading" ? (
+                  <p className="text-xs text-slate-400">팀원을 불러오는 중입니다.</p>
+                ) : members === "personal" ? (
+                  <p className="text-xs text-slate-400">
+                    개인 프로젝트예요. 팀원 기능은 팀 프로젝트에서 사용할 수
+                    있어요.
+                  </p>
+                ) : !members ? (
+                  <p className="text-xs text-red-500">팀원 목록을 불러오지 못했습니다.</p>
+                ) : members.length === 0 ? (
+                  <p className="text-xs text-slate-400">참여 중인 팀원이 없습니다.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {members.map((member) => (
+                      <li
+                        key={member.userId}
+                        className="flex items-center gap-2.5 py-1"
+                      >
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[11px] font-semibold text-[#4058D6]">
+                          {member.name.slice(0, 1).toUpperCase()}
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium text-slate-800">
+                            {member.name}
+                          </span>
+
+                          <span className="block truncate text-[11px] text-slate-400">
+                            {member.email || "-"}
+                          </span>
+                        </span>
+
+                        <span
+                          className={cn(
+                            "shrink-0 rounded px-1 py-px text-[10px] font-semibold",
+                            member.isOwner
+                              ? "bg-[#EEF2FF] text-[#5873F9]"
+                              : "bg-slate-100 text-slate-500",
+                          )}
+                        >
+                          {member.isOwner ? "OWNER" : "MEMBER"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </DevInfoSection>
+
+              {/* 최근 커밋 */}
+              <DevInfoSection title="최근 커밋">
+                {commits === "loading" ? (
+                  <p className="text-xs text-slate-400">커밋 기록을 불러오는 중입니다.</p>
+                ) : !commits ? (
+                  <p className="text-xs text-red-500">커밋 기록을 불러오지 못했습니다.</p>
+                ) : commits.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    아직 커밋 기록이 없습니다. (master 브랜치 기준)
+                  </p>
+                ) : (
+                  <ol className="relative space-y-0.5 before:absolute before:bottom-3 before:left-[11px] before:top-3 before:w-px before:bg-slate-200">
+                    {commits.slice(0, 6).map((commit) => (
+                      <li
+                        key={`${commit.projectName}-${commit.hash}`}
+                        className="relative flex items-start gap-2.5 py-1.5"
+                      >
+                        <span className="relative z-10 mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-900 text-white">
+                          <GitCommitHorizontal size={12} />
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium text-slate-800">
+                            {commit.message}
+                          </span>
+
+                          <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                            {commit.author ? `${commit.author} · ` : ""}
+                            <span className="font-mono">
+                              {commit.projectName} · {commit.hash.slice(0, 7)}
+                            </span>
+                          </span>
+                        </span>
+
+                        <span className="shrink-0 pt-0.5 font-mono text-[10px] text-slate-400">
+                          {commit.time ? formatDate(new Date(commit.time).toISOString()) : commit.dateText || "-"}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </DevInfoSection>
+            </div>
+          </aside>
         </div>
-
       </main>
 
       {/* =================================================
-
           PROJECT INFO MODAL
-
       ================================================= */}
-
       {infoProject ? (
-
         <ProjectInfoModal
-
           project={infoProject}
-
           onClose={() => setInfoProject(null)}
-
         />
-
       ) : null}
 
       {/* =================================================
-
           DELETE MODAL
-
       ================================================= */}
-
       {deleteTarget ? (
-
         <DeleteProjectModal
-
           project={deleteTarget}
-
           deleting={deleting}
-
           onClose={() => {
-
             if (!deleting) {
-
               setDeleteTarget(null);
-
             }
-
           }}
-
           onConfirm={handleDeleteSubProject}
-
         />
-
       ) : null}
 
       {/* =================================================
-
           TOAST
-
       ================================================= */}
-
       {actionMessage ? (
-
         <div className="fixed right-5 top-[88px] z-[160] w-[340px] max-w-[calc(100vw-40px)]">
-
           <div
-
             className={cn(
-
-              "flex items-center gap-3 rounded-xl border bg-white px-4 py-3 shadow-xl",
-
+              "flex items-center gap-3 rounded-md border bg-white px-4 py-3",
               actionMessage.type === "success"
-
-                ? "border-emerald-200"
-
-                : "border-rose-200",
-
+                ? "border-emerald-300"
+                : "border-rose-300",
             )}
-
           >
-
             <div
-
               className={cn(
-
                 "h-2.5 w-2.5 shrink-0 rounded-full",
-
                 actionMessage.type === "success"
-
                   ? "bg-emerald-500"
-
                   : "bg-rose-500",
-
               )}
-
             />
 
-            <p className="min-w-0 flex-1 text-xs font-bold text-slate-700">
-
+            <p className="min-w-0 flex-1 text-xs font-medium text-slate-700">
               {actionMessage.text}
-
             </p>
 
             <button
-
               type="button"
-
               onClick={() => setActionMessage(null)}
-
-              className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-
+              className="grid h-7 w-7 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               aria-label="알림 닫기"
-
             >
-
               <X size={14} />
-
             </button>
-
           </div>
-
         </div>
-
       ) : null}
 
       {/* =================================================
-
           CREATE PROJECT
-
       ================================================= */}
-
       <CreateProjectModal
-
         redirectToIdeAfterCreate
-
         ideMode={currentMode}
-
       />
-
     </>
-
   );
+}
 
+/* =========================================================
+   최근 작업 이어하기
+========================================================= */
+function ContinueWorkPanel({
+  project,
+  source,
+  href,
+  onNavigate,
+}: {
+  project: SubProject;
+  source: "opened" | "updated";
+  href: string;
+  onNavigate: () => void;
+}) {
+  const status = normalizeStatus(project.status);
+
+  const progress = getProgress(project);
+
+  return (
+    <section className="flex flex-col gap-4 rounded-md border border-[#D9E1FF] bg-[#F7F9FF] p-4 md:flex-row md:items-center">
+      <div className="flex min-w-0 flex-1 items-center gap-3.5">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
+          <Code2 size={20} />
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-[#5873F9]">
+            {source === "opened"
+              ? "이 브라우저에서 마지막으로 연 작업 폴더"
+              : "가장 최근에 수정된 작업 폴더"}
+          </p>
+
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="truncate text-base font-semibold text-slate-900">
+              {project.name}
+            </h2>
+
+            <StatusPill status={status} />
+          </div>
+
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+            <span className="font-mono text-slate-600">
+              {project.language || "General"}
+            </span>
+            <span className="text-slate-300">·</span>
+            <span>
+              최근 수정{" "}
+              <span className="font-mono">{formatDate(project.updatedAt)}</span>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1">
+              <GitBranch
+                size={11}
+                className={project.gitUrl ? "text-emerald-600" : "text-slate-400"}
+              />
+              {project.gitUrl ? "원격 저장소 연결" : "원격 저장소 없음"}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-4">
+        <div className="w-40">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-slate-500">진행률</span>
+            <span className="font-semibold tabular-nums text-slate-900">
+              {progress}%
+            </span>
+          </div>
+
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                getProgressBarClassName(status),
+              )}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 기존 "열기"와 같은 IDE 주소. IDE 가 마지막으로 연 폴더를 이어서 연다 */}
+        <Link
+          href={href}
+          onClick={onNavigate}
+          className="inline-flex h-10 items-center gap-2 rounded-md bg-[#5873F9] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4863E8]"
+        >
+          {source === "opened" ? "작업 이어하기" : "AIVS에서 열기"}
+          <ArrowUpRight size={16} />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+/** 이어하기 영역이 없을 때 IDE 로 가는 링크. 예전 헤더 "작업하러 가기"와 같은 주소다. */
+function IdeEntryLink({
+  href,
+  onNavigate,
+}: {
+  href: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="mt-4 inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
+    >
+      IDE 열기
+      <ArrowUpRight size={14} />
+    </Link>
+  );
+}
+
+/* =========================================================
+   오른쪽 패널 조각
+========================================================= */
+function DevInfoSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="px-5 py-4">
+      <h2 className="mb-3 flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+        {title}
+
+        {typeof count === "number" ? (
+          <span className="rounded bg-slate-100 px-1.5 py-px text-[11px] font-semibold tabular-nums text-slate-500">
+            {count}
+          </span>
+        ) : null}
+      </h2>
+
+      {children}
+    </section>
+  );
+}
+
+function DevInfoStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-2">
+      <dd className="text-base font-semibold tabular-nums text-slate-900">
+        {value}
+      </dd>
+      <dt className="mt-0.5 text-[11px] text-slate-500">{label}</dt>
+    </div>
+  );
 }
 
 /* =========================================================

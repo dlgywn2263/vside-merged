@@ -151,7 +151,7 @@ async function loadSchedules(
   });
 }
 
-async function loadMembers(
+export async function loadMembers(
   workspaceId: string,
 ): Promise<OverviewMember[]> {
   const list = (await getWorkspaceMembersApi(workspaceId)) as unknown;
@@ -183,7 +183,7 @@ async function loadMembers(
     .sort((a, b) => Number(b.isOwner) - Number(a.isOwner));
 }
 
-async function loadCommits(
+export async function loadCommits(
   workspace: WorkspaceListResponse,
 ): Promise<OverviewCommit[]> {
   const projectNames = (workspace.projects ?? [])
