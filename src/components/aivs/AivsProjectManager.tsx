@@ -1704,6 +1704,37 @@ export function AivsProjectManager({
             </span>
           </nav>
 
+          {/* 헤더 배경(#F4F6FA) 위에서 묻히지 않도록 보조 버튼은 흰 바탕 + 진한 테두리 */}
+          <div className="flex shrink-0 items-center gap-2">
+            {currentWorkspaceId ? (
+              <Link
+                href={getIdeHref(String(currentWorkspaceId), currentMode)}
+                onClick={rememberWorkspace}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
+              >
+                작업하러 가기
+                <ArrowUpRight size={14} />
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-400"
+              >
+                작업하러 가기
+                <ArrowUpRight size={14} />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleOpenCreateProjectModal}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+            >
+              <Plus size={14} />
+              작업 폴더 추가
+            </button>
+          </div>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
@@ -1725,30 +1756,20 @@ export function AivsProjectManager({
               ) : null}
 
               {/* ===============================================
-                  작업 폴더 목록 제목 + 추가 (헤더에서 옮겨 옴)
+                  작업 폴더 목록 제목
               =============================================== */}
-              <div className="flex items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-                    작업 폴더
-                    <span className="rounded bg-slate-100 px-1.5 py-px text-xs font-semibold tabular-nums text-slate-500">
-                      {allSubProjectCount}
-                    </span>
-                  </h2>
+              <div className="min-w-0">
+                <h2 className="text-[15px] font-semibold text-slate-900">
+                  작업 폴더{" "}
+                  <span className="tabular-nums text-[#5873F9]">
+                    {allSubProjectCount}
+                  </span>
+                  개
+                </h2>
 
-                  <p className="mt-0.5 truncate text-xs text-slate-500">
-                    현재 선택된 상위 프로젝트에 속한 작업 폴더만 표시합니다.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenCreateProjectModal}
-                  className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
-                >
-                  <Plus size={14} />
-                  작업 폴더 추가
-                </button>
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  현재 선택된 상위 프로젝트에 속한 작업 폴더만 표시합니다.
+                </p>
               </div>
 
               {/* ===============================================
@@ -1853,13 +1874,6 @@ export function AivsProjectManager({
               {!loading && error ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-4 text-sm font-medium text-red-600">
                   {error}
-
-                  {currentWorkspaceId ? (
-                    <IdeEntryLink
-                      href={getIdeHref(String(currentWorkspaceId), currentMode)}
-                      onNavigate={rememberWorkspace}
-                    />
-                  ) : null}
                 </div>
               ) : null}
 
@@ -1878,13 +1892,6 @@ export function AivsProjectManager({
                     주세요.
                   </p>
 
-                  {/* 이어하기 영역은 폴더가 없으면 나오지 않는다. 헤더의 "작업하러 가기"를 뺐으니 같은 주소를 여기 남긴다 */}
-                  {projects.length === 0 && currentWorkspaceId ? (
-                    <IdeEntryLink
-                      href={getIdeHref(String(currentWorkspaceId), currentMode)}
-                      onNavigate={rememberWorkspace}
-                    />
-                  ) : null}
                 </div>
               ) : null}
 
@@ -1900,8 +1907,8 @@ export function AivsProjectManager({
                     </p>
                   ) : null}
 
-                  {/* 카드 폭을 300~360px 로 묶어, 폴더가 1개여도 커지지 않고 많아도 같은 크기로 줄 맞춰 놓인다 */}
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,360px))] gap-3">
+                  {/* 카드 폭을 350~380px 로 묶어, 폴더가 1개여도 커지지 않고 많아도 같은 크기로 줄 맞춰 놓인다 */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(350px,380px))] gap-3">
                     {filteredProjects.map((project) => (
                       <SubProjectCard
                         key={project.id}
@@ -1927,10 +1934,10 @@ export function AivsProjectManager({
           </section>
 
           {/* =================================================
-              DEV INFO PANEL (300~340px)
+              DEV INFO PANEL (360~400px, 보조 영역)
           ================================================= */}
-          <aside className="w-full shrink-0 border-t border-slate-200 bg-white lg:w-[300px] lg:overflow-y-auto lg:border-l lg:border-t-0 xl:w-[340px]">
-            <div className="divide-y divide-slate-200">
+          <aside className="w-full shrink-0 border-t border-slate-200 bg-[#F7F8FA] lg:w-[360px] lg:overflow-y-auto lg:border-l lg:border-t-0 2xl:w-[400px]">
+            <div className="space-y-3 p-4">
               {/* 작업 현황 */}
               <DevInfoSection title="작업 현황">
                 <div className="flex items-baseline justify-between">
@@ -2212,9 +2219,9 @@ function ContinueWorkPanel({
   const progress = getProgress(project);
 
   return (
-    <section className="flex flex-col gap-4 rounded-md border border-[#D9E1FF] bg-[#F7F9FF] p-4 md:flex-row md:items-center">
+    <section className="flex flex-col gap-3 rounded-md border border-[#D9E1FF] bg-[#F5F7FF] px-4 py-3 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
           <Code2 size={20} />
         </div>
 
@@ -2254,8 +2261,8 @@ function ContinueWorkPanel({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4">
-        <div className="w-40">
+      <div className="flex shrink-0 items-center gap-5">
+        <div className="w-44">
           <div className="flex items-center justify-between text-[11px]">
             <span className="text-slate-500">진행률</span>
             <span className="font-semibold tabular-nums text-slate-900">
@@ -2278,33 +2285,13 @@ function ContinueWorkPanel({
         <Link
           href={href}
           onClick={onNavigate}
-          className="inline-flex h-10 items-center gap-2 rounded-md bg-[#5873F9] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4863E8]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#5873F9] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#4863E8]"
         >
           {source === "opened" ? "작업 이어하기" : "AIVS에서 열기"}
-          <ArrowUpRight size={16} />
+          <ArrowUpRight size={15} />
         </Link>
       </div>
     </section>
-  );
-}
-
-/** 이어하기 영역이 없을 때 IDE 로 가는 링크. 예전 헤더 "작업하러 가기"와 같은 주소다. */
-function IdeEntryLink({
-  href,
-  onNavigate,
-}: {
-  href: string;
-  onNavigate: () => void;
-}) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      className="mt-4 inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
-    >
-      IDE 열기
-      <ArrowUpRight size={14} />
-    </Link>
   );
 }
 
@@ -2321,8 +2308,8 @@ function DevInfoSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="px-5 py-4">
-      <h2 className="mb-3 flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+    <section className="rounded-md border border-slate-200 bg-white px-4 py-3.5">
+      <h2 className="mb-3 flex items-center gap-1.5 text-[13px] font-semibold text-slate-800">
         {title}
 
         {typeof count === "number" ? (
