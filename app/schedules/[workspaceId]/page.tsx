@@ -2917,13 +2917,13 @@ export default function ScheduleManagementPage() {
     teamMemberLoading && !(smartFilter === "today" && todayScope === "all");
 
   return (
-    <main className="waivs-page min-h-[calc(100dvh-72px)] px-4 py-5 font-sans text-slate-900 md:px-6 md:py-6">
-      <div className="mx-auto flex min-h-[calc(100dvh-120px)] max-w-[1840px] flex-col rounded-md border border-slate-200 bg-white">
+    <main className="waivs-page flex flex-col bg-white font-sans text-slate-900 lg:h-[calc(100dvh-65px)] lg:min-h-0 lg:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* ===============================================
             TOP BAR: 대시보드 / 프로젝트(전환) / 일정
             사이드바 대신 프로젝트 이름을 눌러 다른 프로젝트로 이동한다.
            =============================================== */}
-        <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <header className="flex shrink-0 flex-col gap-3 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 lg:h-[62px] lg:flex-row lg:items-center lg:justify-between lg:px-5 lg:py-0">
           <nav
             aria-label="현재 위치"
             className="flex min-w-0 flex-wrap items-center gap-1 text-sm"
@@ -3014,13 +3014,13 @@ export default function ScheduleManagementPage() {
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 lg:overflow-hidden">
           {/* ===============================================
               LEFT RAIL (lg 이상)
               보기 · 빠른 필터 · 상태 · 담당자 · 진행률을 한 열에 모은다.
               좁은 화면에서는 본문 위 툴바가 같은 역할을 한다.
              =============================================== */}
-          <aside className="hidden w-[248px] shrink-0 flex-col gap-5 border-r border-slate-200 bg-[#FBFBFC] px-3 py-4 lg:flex">
+          <aside className="hidden w-[248px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-[#F7F8FA] px-3 py-4 lg:flex">
             <RailSection title="보기">
               {viewOptions.map((option) => (
                 <RailItem
@@ -3147,8 +3147,8 @@ export default function ScheduleManagementPage() {
           {/* ===============================================
               MAIN
              =============================================== */}
-          <section className="flex min-w-0 flex-1 flex-col">
-            <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-2.5 md:flex-row md:items-center md:justify-between">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+            <div className="flex shrink-0 flex-col gap-2 border-b border-slate-100 px-4 py-2 md:flex-row md:items-center md:justify-between lg:px-5">
               <div className="flex min-w-0 items-center gap-2">
                 <h1 className="text-sm font-semibold text-slate-900">
                   {currentViewLabel}
@@ -3204,7 +3204,7 @@ export default function ScheduleManagementPage() {
             </div>
 
             {/* 좁은 화면용 툴바: 왼쪽 패널과 같은 필터를 한 줄로 */}
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-5 py-2 lg:hidden">
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-slate-100 px-4 py-2 lg:hidden">
               {viewOptions.map((option) => {
                 const Icon = option.icon;
 
@@ -3282,7 +3282,8 @@ export default function ScheduleManagementPage() {
             {/* ===============================================
                 CONTENT
                =============================================== */}
-            <div className="flex min-h-[360px] flex-1 flex-col rounded-br-md bg-white p-4">
+            {/* 보기가 영역 높이에 맞춰 줄어들면 캘린더 아래가 잘린다. 줄이지 않고 이 영역이 스크롤한다. */}
+            <div className="flex min-h-[360px] flex-1 flex-col bg-white p-4 lg:min-h-0 lg:overflow-auto [&>*]:shrink-0">
               {loading ? (
                 <LoadingBox />
               ) : errorMessage ? (
