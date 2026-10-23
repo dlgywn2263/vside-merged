@@ -124,7 +124,8 @@ export function RequirementsTab({ model, mutations, findings }: RequirementsTabP
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-[var(--waivs-border)] text-left text-xs text-[var(--waivs-text-sub)]">
-                  <th className="w-16 px-6 py-2 font-medium">번호</th>
+                  {/* w-16 에 좌우 여백 px-6 이면 글자 자리가 16px 뿐이라 "번호"·"R-01" 이 두 줄로 꺾였다 */}
+                  <th className="w-24 whitespace-nowrap px-6 py-2 font-medium">번호</th>
                   <th className="w-32 px-3 py-2 font-medium">구분</th>
                   <th className="px-3 py-2 font-medium">기능명</th>
                   <th className="w-24 px-3 py-2 font-medium">중요도</th>
@@ -143,7 +144,7 @@ export function RequirementsTab({ model, mutations, findings }: RequirementsTabP
                       selectedId === item.id && "bg-[#EEF3FF] hover:bg-[#EEF3FF]",
                     )}
                   >
-                    <td className="px-6 py-2 text-xs tabular-nums text-[var(--waivs-text-muted)]">
+                    <td className="whitespace-nowrap px-6 py-2 text-xs tabular-nums text-[var(--waivs-text-muted)]">
                       {item.code}
                     </td>
 

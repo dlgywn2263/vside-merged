@@ -40,9 +40,8 @@ import {
 import { printHtmlDocument } from "../export/printDesign";
 import { isEmptyModel } from "../model/schema";
 
-import ProjectSidebar, {
-  type WorkspaceSidebarItem,
-} from "@/components/layout/ProjectSidebar";
+import type { WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
+import ProjectSwitcher from "@/components/main-dashboard/ProjectSwitcher";
 
 import { RequirementsTab } from "../tabs/requirements/RequirementsTab";
 import { ScreenFlowTab } from "../tabs/screens/ScreenFlowTab";
@@ -258,24 +257,46 @@ export function DesignWorkspace() {
     setPrinting(false);
   }, []);
 
+  // 사이드바 대신 헤더의 프로젝트 이름 자리에서 다른 프로젝트로 옮겨 간다(일정 관리와 같은 방식).
+  const switcher = (
+    <ProjectSwitcher
+      size="compact"
+      label={
+        currentWorkspace?.name ||
+        (workspaceId ? "설계 관리" : "프로젝트 선택")
+      }
+      workspaces={workspaces}
+      selectedWorkspaceId={workspaceId ?? ""}
+      loading={loadingWorkspaces}
+      errorMessage={workspaceError}
+      onSelectWorkspace={handleSelectWorkspace}
+    />
+  );
+
+  const roleLabel = currentWorkspace?.role
+    ? currentWorkspace.role.toLowerCase() === "owner"
+      ? "OWNER"
+      : "MEMBER"
+    : undefined;
+
   return (
     <ConfirmDialogProvider>
-      <div className="waivs-page flex min-h-0 flex-1 gap-4 p-5 text-[var(--waivs-text)]">
-        <ProjectSidebar
-          workspaces={workspaces}
-          selectedWorkspaceId={workspaceId ?? ""}
-          loading={loadingWorkspaces}
-          errorMessage={workspaceError}
-          onSelectWorkspace={handleSelectWorkspace}
-        />
-
-        <main className="waivs-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {/* 카드 없이 TopNav 아래 화면 전체를 쓰는 작업 공간. 넓은 화면에서는 높이를 고정하고 탭 본문이 스크롤한다. */}
+      <div className="waivs-page flex flex-col bg-white text-[var(--waivs-text)] lg:h-[calc(100dvh-65px)] lg:min-h-0 lg:overflow-hidden">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!workspaceId ? (
-            <NoWorkspace hasWorkspaces={workspaces.length > 0} />
+            <>
+              <header className="flex shrink-0 items-center gap-1 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 text-sm lg:h-[62px] lg:px-5 lg:py-0">
+                {switcher}
+              </header>
+
+              <NoWorkspace hasWorkspaces={workspaces.length > 0} />
+            </>
           ) : (
             <>
               <DesignHeader
-                workspaceName={currentWorkspace?.name ?? ""}
+                switcher={switcher}
+                roleLabel={roleLabel}
                 state={state}
                 errorCount={report.errorCount}
                 progressPercent={report.progress.percent}
@@ -297,7 +318,7 @@ export function DesignWorkspace() {
               />
 
               {printError ? (
-                <p className="mx-6 mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                <p className="mx-4 mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 lg:mx-5">
                   {printError}
                 </p>
               ) : null}
@@ -308,7 +329,7 @@ export function DesignWorkspace() {
                   설계 문서를 여는 중
                 </div>
               ) : state.status === "error" || !mutations ? null : (
-                <div className="flex min-h-0 flex-1">
+                <div className="flex min-h-[600px] flex-1 lg:min-h-0">
                   <div className="min-w-0 flex-1">
                     {documentEmpty && !blankStarted ? (
                       <EmptyDesign
@@ -520,7 +541,7 @@ function NoWorkspace({
 
       <p className="max-w-sm text-xs text-[var(--waivs-text-muted)]">
         {hasWorkspaces
-          ? "왼쪽 목록에서 설계를 작성할 워크스페이스를 고르면 시작됩니다."
+          ? "위쪽 프로젝트 이름을 눌러 설계를 작성할 워크스페이스를 고르면 시작됩니다."
           : "워크스페이스를 만들면 그 안에서 설계를 작성할 수 있습니다."}
       </p>
     </div>
