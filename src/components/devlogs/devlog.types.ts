@@ -26,6 +26,8 @@ export type DevlogItem = {
   scheduleTitle: string | null;
   status: ScheduleStatus | null;
   tags: string[];
+  /** 서버 응답의 authorName. 없으면 화면에 "-" 로 보인다. */
+  authorName?: string;
   createdAt?: string;
   updatedAt?: string;
 };
