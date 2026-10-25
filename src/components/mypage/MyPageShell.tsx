@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Code2,
   Database,
   Download,
@@ -18,7 +19,9 @@ import {
   Info,
   LayoutDashboard,
   LogOut,
+  Menu,
   MoreHorizontal,
+  RefreshCw,
   Search,
   Sparkles,
   Settings,
@@ -63,6 +66,13 @@ import {
   fetchMyCommunityActivityApi,
 } from "@/components/mypage/communityApi";
 
+import { cn } from "@/components/mypage/ui";
+
+import {
+  ArchiveDesignViewer,
+  type ArchiveDesignSection,
+} from "@/components/archive/ArchiveDesignViewer";
+
 import {
   getAivsHref,
   getDevlogHref,
@@ -89,7 +99,6 @@ type DevlogSortType = "latest" | "oldest";
 type ProjectTypeFilter = "all" | "personal" | "team";
 type ProjectStatusFilter = "all" | "active" | "completed";
 type ArchiveTabKey = "devlog" | "design" | "final";
-type DesignArchiveSectionKey = "requirements" | "api" | "erd" | "flow";
 
 type DesignRequirementItem = {
   id: string | number;
@@ -225,6 +234,28 @@ function openGithubAccountOAuth() {
 function getGithubAccountName(status: GithubAccountStatus | null) {
   return status?.username || status?.login || "";
 }
+
+/* =========================================================
+   공통 스타일
+   개발일지·자료실 페이지 헤더와 같은 버튼·입력칸 크기를 쓴다.
+   ========================================================= */
+const BUTTON_SECONDARY =
+  "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
+
+const BUTTON_PRIMARY =
+  "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50";
+
+const BUTTON_DANGER =
+  "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-red-200 bg-white px-3.5 text-xs font-semibold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50";
+
+const BUTTON_ICON =
+  "grid h-9 w-9 shrink-0 place-items-center rounded-md border border-slate-300 bg-white text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
+
+const INPUT_BASE =
+  "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF] disabled:bg-slate-50";
+
+// 패널 = 대시보드 패널과 같은 흰 바탕·회색 테두리. 그림자는 두지 않는다.
+const PANEL = "min-w-0 rounded-lg border border-slate-200 bg-white";
 
 const tabs: {
   key: TabKey;
@@ -625,6 +656,16 @@ function formatDateLabel(value?: string | null) {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+}
+
+// 작성일을 날짜 입력칸(<input type="date">)과 같은 YYYY-MM-DD 로. 읽을 수 없으면 빈 문자열
+function getDevlogDateKey(devlog: Devlog) {
+  const time = getDevlogSortTime(devlog);
+  if (!time) return "";
+  const date = new Date(time);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function getDevlogSortTime(devlog: Devlog) {
@@ -1307,6 +1348,16 @@ export default function MyPageDemo() {
     useState<ArchiveTabKey>("devlog");
   const [keyword, setKeyword] = useState("");
 
+  // 좁은 화면에서는 사이드바 메뉴를 접어 두고 헤더의 "메뉴" 버튼으로 연다
+  const [isNavOpen, setIsNavOpen] = useState(false);
+
+  // 오른쪽 내용 영역만 스크롤되므로, 메뉴를 바꾸면 그 영역을 맨 위로 되돌린다
+  const contentScrollRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    contentScrollRef.current?.scrollTo({ top: 0 });
+  }, [activeTab, activeArchiveTab]);
+
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [devlogs, setDevlogs] = useState<Devlog[]>([]);
@@ -1482,221 +1533,272 @@ const summary = useMemo(
   };
 }, []);
 
-if (loading) {
-  return (
-    <main className="waivs-page min-h-[calc(100dvh-72px)] p-5 text-slate-950">
-      <section className="waivs-panel flex min-h-[320px] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm font-bold text-slate-500">
+  if (loading) {
+    return (
+      <main className="waivs-page flex min-h-[calc(100dvh-65px)] items-center justify-center bg-white text-slate-900">
+        <div className="flex items-center gap-2.5 text-sm font-medium text-slate-500">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-[#5873F9]" />
           마이페이지 정보를 불러오는 중입니다.
         </div>
-      </section>
-    </main>
-  );
-}
+      </main>
+    );
+  }
 
-if (error || !user) {
+  if (error || !user) {
+    return (
+      <main className="waivs-page min-h-[calc(100dvh-65px)] bg-white p-5 text-slate-900">
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {error || "사용자 정보를 불러오지 못했습니다."}
+        </p>
+      </main>
+    );
+  }
+
+  const activeTabMeta = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
+  const ActiveTabIcon = activeTabMeta.icon;
+  const activeArchiveMeta =
+    activeTab === "devlogs"
+      ? activeTabMeta.children?.find((child) => child.key === activeArchiveTab)
+      : undefined;
+
+  const selectTab = (key: TabKey) => {
+    setActiveTab(key);
+    setIsNavOpen(false);
+  };
+
   return (
-    <main className="waivs-page min-h-[calc(100dvh-72px)] p-5 text-slate-950">
-      <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-700">
-        {error || "사용자 정보를 불러오지 못했습니다."}
-      </section>
-    </main>
-  );
-}
+    // 개발일지·자료실 페이지와 같은 틀: TopNav 아래 화면 전체를 쓰고, 사이드바와 내용 영역이 각자 스크롤한다
+    <main className="waivs-page flex flex-col bg-white font-sans text-slate-900 lg:h-[calc(100dvh-65px)] lg:min-h-0 lg:overflow-hidden">
+      {/* =================================================
+          PAGE HEADER (개발일지 페이지 헤더와 같은 높이·배경·구분선)
+          마이페이지는 특정 프로젝트에 속하지 않아 프로젝트 선택·권한 배지를 두지 않는다.
+      ================================================= */}
+      <header className="flex shrink-0 items-center justify-between gap-3 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 lg:h-[62px] lg:px-5 lg:py-0">
+        <nav
+          aria-label="현재 위치"
+          className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
+        >
+          <button
+            type="button"
+            onClick={() => selectTab("overview")}
+            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
+          >
+            <UserRound size={14} />
+            마이페이지
+          </button>
+          <ChevronRight size={14} className="text-slate-300" />
+          <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
+            <ActiveTabIcon size={14} className="text-[#5873F9]" />
+            {activeTabMeta.label}
+          </span>
+          {activeArchiveMeta ? (
+            <>
+              <ChevronRight size={14} className="text-slate-300" />
+              <span className="px-1.5 py-1 font-medium text-slate-600">
+                {activeArchiveMeta.label}
+              </span>
+            </>
+          ) : null}
+        </nav>
 
-return (
-  <main className="waivs-page min-h-[calc(100dvh-72px)] text-slate-950">
-    <div className="w-full p-4 md:p-5">
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[252px_minmax(0,1fr)]">
-        <aside className="self-start xl:sticky xl:top-5 xl:h-[calc(100dvh-112px)] xl:min-h-[620px]">
-          <section className="waivs-sidebar flex min-h-[620px] flex-col overflow-hidden xl:h-full xl:min-h-0">
-            <div className="shrink-0 border-b border-[var(--waivs-border-soft)] px-4 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#5873F9]">
-                My Page
-              </p>
-              <p className="mt-1 text-sm font-black text-slate-900">
-                나의 작업 공간
-              </p>
-            </div>
-            
-            <nav className="flex-1 p-3">
-              <div className="space-y-1.5">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.key;
-                  const hasChildren = Boolean(tab.children?.length);
-                  const isArchiveOpen = tab.key === "devlogs" && isActive;
+        <button
+          type="button"
+          onClick={() => setIsNavOpen((prev) => !prev)}
+          aria-expanded={isNavOpen}
+          aria-controls="mypage-nav"
+          className={cn(BUTTON_SECONDARY, "lg:hidden")}
+        >
+          {isNavOpen ? <X size={14} /> : <Menu size={14} />}
+          메뉴
+        </button>
+      </header>
 
-                  return (
-                    <div key={tab.key}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab(tab.key)}
-                        className={[
-                          "flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left transition",
-                          isActive
-                            ? "bg-[#EEF3FF] text-[#5873F9]"
-                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "grid h-8 w-8 shrink-0 place-items-center rounded-lg transition",
-                            isActive
-                              ? "bg-white text-[#5873F9] shadow-sm"
-                              : "bg-slate-50 text-slate-500",
-                          ].join(" ")}
-                        >
-                          <Icon size={15} />
-                        </span>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* =================================================
+            SIDEBAR: 넓은 화면에서는 항상 보이고, 좁은 화면에서는 "메뉴" 로 펼친다
+        ================================================= */}
+        <aside
+          id="mypage-nav"
+          className={cn(
+            "shrink-0 flex-col border-b border-slate-200 bg-white lg:flex lg:w-[248px] lg:border-b-0 lg:border-r",
+            isNavOpen ? "flex" : "hidden",
+          )}
+        >
+          {/* 메뉴가 많아지면 이 목록만 스크롤한다 */}
+          <nav
+            aria-label="마이페이지 메뉴"
+            className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+          >
+            <ul className="space-y-0.5">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.key;
+                const hasChildren = Boolean(tab.children?.length);
+                const isArchiveOpen = tab.key === "devlogs" && isActive;
 
-                        <span
-                          className={[
-                            "min-w-0 flex-1 truncate text-sm font-black",
-                            isActive ? "text-[#5873F9]" : "text-slate-800",
-                          ].join(" ")}
-                        >
-                          {tab.label}
-                        </span>
-
-                        {hasChildren && (
-                          <ChevronDown
-                            size={14}
-                            className={[
-                              "shrink-0 transition-transform",
-                              isArchiveOpen ? "rotate-0" : "-rotate-90",
-                              isActive ? "text-[#5873F9]" : "text-slate-400",
-                            ].join(" ")}
-                          />
+                return (
+                  <li key={tab.key}>
+                    <button
+                      type="button"
+                      onClick={() => selectTab(tab.key)}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "relative flex h-9 w-full items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors",
+                        isActive
+                          ? "bg-[#EEF3FF] font-semibold text-[#4058D6] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-[#5873F9]"
+                          : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                      )}
+                    >
+                      <Icon
+                        size={16}
+                        className={cn(
+                          "shrink-0",
+                          isActive ? "text-[#5873F9]" : "text-slate-400",
                         )}
-                      </button>
+                      />
+                      <span className="min-w-0 flex-1 truncate">{tab.label}</span>
+                      {hasChildren ? (
+                        <ChevronDown
+                          size={14}
+                          className={cn(
+                            "shrink-0 transition-transform",
+                            isArchiveOpen ? "rotate-0" : "-rotate-90",
+                            isActive ? "text-[#5873F9]" : "text-slate-400",
+                          )}
+                        />
+                      ) : null}
+                    </button>
 
-                      {hasChildren && isArchiveOpen && (
-                        <div className="ml-[28px] mt-1.5 space-y-1 border-l border-[var(--waivs-border-soft)] pl-3">
-                          {tab.children?.map((child) => {
-                            const ChildIcon = child.icon;
-                            const isChildActive = activeArchiveTab === child.key;
+                    {hasChildren && isArchiveOpen ? (
+                      <ul className="mb-1 ml-[21px] mt-0.5 space-y-0.5 border-l border-slate-200 pl-2">
+                        {tab.children?.map((child) => {
+                          const ChildIcon = child.icon;
+                          const isChildActive = activeArchiveTab === child.key;
 
-                            return (
+                          return (
+                            <li key={child.key}>
                               <button
-                                key={child.key}
                                 type="button"
                                 onClick={() => {
                                   setActiveTab("devlogs");
                                   setActiveArchiveTab(child.key);
+                                  setIsNavOpen(false);
                                 }}
-                                className={[
-                                  "flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left transition",
+                                aria-current={isChildActive ? "page" : undefined}
+                                className={cn(
+                                  "flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors",
                                   isChildActive
-                                    ? "bg-[#EEF3FF] text-[#5873F9]"
-                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800",
-                                ].join(" ")}
+                                    ? "bg-[#F5F7FF] font-semibold text-[#4058D6]"
+                                    : "font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800",
+                                )}
                               >
-                                <ChildIcon size={12} />
-                                <span className="truncate text-xs font-black">
-                                  {child.label}
-                                </span>
+                                <ChildIcon size={14} className="shrink-0" />
+                                <span className="truncate">{child.label}</span>
                               </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </nav>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
 
-            <div className="mt-auto shrink-0 border-t border-[var(--waivs-border-soft)] p-3">
-              <div className="mb-2 flex items-center gap-2.5 rounded-xl bg-slate-50 px-3 py-2.5">
-                <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#EEF3FF] text-xs font-black text-[#5873F9]">
-                  {user.profileImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={user.profileImageUrl}
-                      alt="profile"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    user.nickname.slice(0, 1)
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-black text-slate-800">
-                    {user.nickname}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
-                    {user.email}
-                  </p>
-                </div>
+          <div className="shrink-0 border-t border-slate-200 p-3">
+            <div className="mb-2.5 flex items-center gap-2.5 px-1">
+              <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md bg-[#EEF3FF] text-xs font-semibold text-[#5873F9]">
+                {user.profileImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.profileImageUrl}
+                    alt="profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  user.nickname.slice(0, 1)
+                )}
               </div>
 
-              <button
-                type="button"
-                onClick={logout}
-                className="flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-xs font-black text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-              >
-                <LogOut size={14} />
-                로그아웃
-              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-slate-800">
+                  {user.nickname}
+                </p>
+                <p className="truncate text-xs text-slate-500">{user.email}</p>
+              </div>
             </div>
-          </section>
+
+            <button
+              type="button"
+              onClick={logout}
+              className={cn(BUTTON_SECONDARY, "w-full")}
+            >
+              <LogOut size={14} />
+              로그아웃
+            </button>
+          </div>
         </aside>
 
-        <section className="min-w-0">
-          {activeTab === "overview" && (
-            <OverviewSection
-              user={user}
-              projects={projects}
-              summary={summary}
-              recentActivities={recentActivities}
-              heatmapValues={heatmapValues}
-              activityHeatmap={activityHeatmap}
-              onOpenProjects={() => setActiveTab("progress")}
-              onOpenAccount={() => setActiveTab("account")}
-            />
-          )}
+        {/* =================================================
+            CONTENT: 이 영역만 세로 스크롤
+        ================================================= */}
+        <section
+          ref={contentScrollRef}
+          className="min-w-0 flex-1 overflow-x-hidden lg:overflow-y-auto"
+        >
+          <div className="px-4 py-5 lg:px-6">
+            {activeTab === "overview" && (
+              <OverviewSection
+                user={user}
+                projects={projects}
+                summary={summary}
+                recentActivities={recentActivities}
+                heatmapValues={heatmapValues}
+                activityHeatmap={activityHeatmap}
+                onOpenProjects={() => setActiveTab("progress")}
+                onOpenAccount={() => setActiveTab("account")}
+              />
+            )}
 
-          {activeTab === "progress" && (
-            <MyProjectsSection
-              projects={projects}
-              keyword={keyword}
-              onKeywordChange={setKeyword}
-              onOpenArchive={(project) => {
-                rememberCurrentWorkspace(project);
-                setActiveArchiveTab("devlog");
-                setActiveTab("devlogs");
-              }}
-            />
-          )}
+            {activeTab === "progress" && (
+              <MyProjectsSection
+                projects={projects}
+                keyword={keyword}
+                onKeywordChange={setKeyword}
+                onOpenArchive={(project) => {
+                  rememberCurrentWorkspace(project);
+                  setActiveArchiveTab("devlog");
+                  setActiveTab("devlogs");
+                }}
+              />
+            )}
 
-          {activeTab === "devlogs" && (
-            <ProjectArchiveSection
-              devlogs={devlogs}
-              projects={projects}
-              keyword={keyword}
-              onKeywordChange={setKeyword}
-              activeArchiveTab={activeArchiveTab}
-              onActiveArchiveTabChange={setActiveArchiveTab}
-            />
-          )}
+            {activeTab === "devlogs" && (
+              <ProjectArchiveSection
+                devlogs={devlogs}
+                projects={projects}
+                keyword={keyword}
+                onKeywordChange={setKeyword}
+                activeArchiveTab={activeArchiveTab}
+                onActiveArchiveTabChange={setActiveArchiveTab}
+              />
+            )}
 
-          {activeTab === "github" && <GithubSection />}
+            {activeTab === "github" && <GithubSection />}
 
-          {activeTab === "community" && (
-            <CommunityActivitySection data={communityActivity} />
-          )}
+            {activeTab === "community" && (
+              <CommunityActivitySection data={communityActivity} />
+            )}
 
-          {activeTab === "account" && (
-            <AccountSection user={user} onUserChange={setUser} />
-          )}
+            {activeTab === "account" && (
+              <AccountSection user={user} onUserChange={setUser} />
+            )}
+          </div>
         </section>
       </div>
-    </div>
-  </main>
-);
+    </main>
+  );
 }
 
 function CommunityActivitySection({
@@ -1744,154 +1846,111 @@ function CommunityActivitySection({
           : [];
 
   return (
-    <div className="space-y-4">
-      <section className="waivs-panel overflow-hidden">
-        {/* HEADER */}
-        <div className="border-b border-[var(--waivs-border-soft)] px-5 py-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#5873F9]">
-            Community
-          </p>
+    <>
+      <MyPageSectionHeader
+        title="게시판 활동"
+        description="내가 작성하거나 저장한 게시판 활동을 확인합니다."
+      />
 
-          <h2 className="mt-1 text-lg font-black tracking-tight text-slate-950">
-            게시판 활동
-          </h2>
-
-          <p className="mt-1 text-xs font-medium text-slate-400">
-            내가 작성하거나 저장한 게시판 활동을 확인합니다.
-          </p>
-        </div>
-
-        {/* TAB */}
-        <div className="px-5 pt-4">
-        <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeCommunityTab === tab.key;
-
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveCommunityTab(tab.key)}
-                className={[
-                  "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-black transition-all",
-                  isActive
-                    ? "border border-slate-200 bg-white text-[#5873F9] shadow-sm"
-                    : "border border-transparent text-slate-500 hover:text-slate-700",
-                ].join(" ")}
-              >
-                <Icon
-                  size={15}
-                  strokeWidth={2}
-                  className={
-                    isActive
-                      ? "text-[#5873F9]"
-                      : "text-slate-500"
-                  }
-                />
-
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+      <section className={PANEL}>
+        {/* 개발일지 페이지와 같은 밑줄 탭 */}
+        <div className="-mb-px flex items-stretch gap-1 overflow-x-auto border-b border-slate-200 px-3">
+          {tabs.map((tab) => (
+            <UnderlineTab
+              key={tab.key}
+              active={activeCommunityTab === tab.key}
+              label={tab.label}
+              count={tab.count}
+              icon={tab.icon}
+              onClick={() => setActiveCommunityTab(tab.key)}
+            />
+          ))}
         </div>
 
         {/* 내가 쓴 댓글 */}
         {activeCommunityTab === "comments" ? (
-          <div className="divide-y divide-slate-100">
-            {data.comments.length === 0 ? (
-              <CommunityEmptyState
-                icon={MessageSquare}
-                text="작성한 댓글이 없습니다."
-              />
-            ) : (
-              data.comments.map((comment) => (
-                <button
-                  key={comment.id}
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      `/community/${comment.postId}`;
-                  }}
-                  className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
-                >
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#EEF3FF] text-[#5873F9]">
-                    <MessageSquare size={15} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-black text-slate-800">
-                      {comment.content}
-                    </p>
-
-                    <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-slate-400">
-                      <span className="truncate">
-                        {comment.postTitle}
-                      </span>
-
-                      <span>·</span>
-
-                      <span>
-                        {formatDateLabel(comment.createdAt)}
-                      </span>
+          data.comments.length === 0 ? (
+            <CommunityEmptyState
+              icon={MessageSquare}
+              text="작성한 댓글이 없습니다."
+            />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {data.comments.map((comment) => (
+                <li key={comment.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = `/community/${comment.postId}`;
+                    }}
+                    className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50/70"
+                  >
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+                      <MessageSquare size={14} />
                     </div>
-                  </div>
 
-                  <ArrowUpRight
-                    size={15}
-                    className="shrink-0 text-slate-300"
-                  />
-                </button>
-              ))
-            )}
-          </div>
-        ) : (
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-[#4058D6]">
+                        {comment.content}
+                      </p>
+
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                        <span className="truncate">{comment.postTitle}</span>
+                        <span className="shrink-0 text-slate-300">·</span>
+                        <span className="shrink-0 tabular-nums">
+                          {formatDateLabel(comment.createdAt)}
+                        </span>
+                      </p>
+                    </div>
+
+                    <ArrowUpRight size={15} className="shrink-0 text-slate-300" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : posts.length === 0 ? (
           /* 게시글 목록 */
-          <div className="divide-y divide-slate-100">
-            {posts.length === 0 ? (
-              <CommunityEmptyState
-                icon={
-                  activeCommunityTab === "likes"
-                    ? Heart
-                    : activeCommunityTab === "scraps"
-                      ? Bookmark
-                      : PenLine
-                }
-                text={
-                  activeCommunityTab === "likes"
-                    ? "좋아요한 게시글이 없습니다."
-                    : activeCommunityTab === "scraps"
-                      ? "스크랩한 게시글이 없습니다."
-                      : "작성한 게시글이 없습니다."
-                }
-              />
-            ) : (
-              posts.map((post) => (
+          <CommunityEmptyState
+            icon={
+              activeCommunityTab === "likes"
+                ? Heart
+                : activeCommunityTab === "scraps"
+                  ? Bookmark
+                  : PenLine
+            }
+            text={
+              activeCommunityTab === "likes"
+                ? "좋아요한 게시글이 없습니다."
+                : activeCommunityTab === "scraps"
+                  ? "스크랩한 게시글이 없습니다."
+                  : "작성한 게시글이 없습니다."
+            }
+          />
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {posts.map((post) => (
+              <li key={post.id}>
                 <button
-                  key={post.id}
                   type="button"
                   onClick={() => {
-                    window.location.href =
-                      `/community/${post.id}`;
+                    window.location.href = `/community/${post.id}`;
                   }}
-                  className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
+                  className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50/70"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 rounded-md bg-[#EEF3FF] px-2 py-1 text-[9px] font-black text-[#5873F9]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 rounded border border-[#D9E1FF] bg-[#F5F7FF] px-1.5 py-px text-[11px] font-semibold text-[#4058D6]">
                         {post.category}
                       </span>
 
-                      <p className="truncate text-sm font-black text-slate-800">
+                      <p className="truncate text-sm font-semibold text-slate-900 group-hover:text-[#4058D6]">
                         {post.title}
                       </p>
                     </div>
 
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold text-slate-400">
-                      <span>
-                        {formatDateLabel(post.createdAt)}
-                      </span>
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-slate-500">
+                      <span>{formatDateLabel(post.createdAt)}</span>
 
                       {post.viewCount !== undefined && (
                         <span>조회 {post.viewCount}</span>
@@ -1904,20 +1963,17 @@ function CommunityActivitySection({
                       {post.commentCount !== undefined && (
                         <span>댓글 {post.commentCount}</span>
                       )}
-                    </div>
+                    </p>
                   </div>
 
-                  <ArrowUpRight
-                    size={15}
-                    className="shrink-0 text-slate-300"
-                  />
+                  <ArrowUpRight size={15} className="shrink-0 text-slate-300" />
                 </button>
-              ))
-            )}
-          </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
-    </div>
+    </>
   );
 }
 function CommunityEmptyState({
@@ -1928,14 +1984,12 @@ function CommunityEmptyState({
   text: string;
 }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center px-5 py-12">
-      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-50 text-slate-300">
-        <Icon size={20} />
+    <div className="flex min-h-[220px] flex-col items-center justify-center px-5 py-10">
+      <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-50 text-slate-300">
+        <Icon size={18} />
       </div>
 
-      <p className="mt-3 text-xs font-bold text-slate-400">
-        {text}
-      </p>
+      <p className="mt-3 text-[13px] font-medium text-slate-500">{text}</p>
     </div>
   );
 }
@@ -1963,100 +2017,91 @@ function OverviewSection({
     summary.progressProjectCount + summary.completedProjectCount;
 
   return (
-    <div className="space-y-4">
-      <section className="waivs-panel overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-[var(--waivs-border-soft)] px-4 py-3.5 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#EEF3FF] text-sm font-black text-[#5873F9]">
-              {user.profileImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.profileImageUrl}
-                  alt="profile"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                user.nickname.slice(0, 1)
-              )}
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-base font-black text-slate-950">
-                  {user.nickname}
-                </p>
-                <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[9px] font-black text-[#5873F9]">
-                  MY WORKSPACE
-                </span>
-              </div>
-              <p className="mt-0.5 truncate text-xs font-medium text-slate-400">
-                {user.email}
-              </p>
-            </div>
+    <div className="space-y-5">
+      {/* 프로필 */}
+      <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#EEF3FF] text-base font-semibold text-[#5873F9]">
+            {user.profileImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.profileImageUrl}
+                alt="profile"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              user.nickname.slice(0, 1)
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[10px] font-bold text-slate-500">
-              참여 프로젝트 <strong className="text-slate-800">{totalProjectCount}개</strong>
-            </span>
-            <span className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[10px] font-bold text-slate-500">
-              가입일 <strong className="text-slate-800">{formatDateLabel(user.createdAt)}</strong>
-            </span>
-            <button
-              type="button"
-              onClick={onOpenAccount}
-              className="h-8 rounded-lg border border-[var(--waivs-border)] bg-white px-3 text-[10px] font-black text-slate-600 transition hover:bg-slate-50"
-            >
-              계정 설정
-            </button>
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold leading-tight text-slate-900">
+              {user.nickname}
+            </p>
+            <p className="mt-0.5 truncate text-[13px] text-slate-500">
+              {user.email}
+            </p>
           </div>
         </div>
 
-        <div className="px-4 py-3.5">
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#5873F9]">
-                Overview
-              </p>
-              <h2 className="mt-0.5 text-lg font-black tracking-tight text-slate-950">
-                개발 활동 요약
-              </h2>
-            </div>
-            <p className="hidden text-[11px] font-medium text-slate-400 md:block">
-              내 프로젝트와 개발 활동을 한눈에 확인합니다.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-            <ActivityCard
-              label="내 프로젝트"
-              value={`${totalProjectCount}개`}
-              icon={FolderKanban}
-              description="전체 참여 프로젝트"
-            />
-            <ActivityCard
-              label="완료 일정"
-              value={`${summary.doneScheduleCount}개`}
-              icon={CheckCircle2}
-              description="DONE 상태"
-            />
-            <ActivityCard
-              label="개발일지"
-              value={`${summary.devlogCount}개`}
-              icon={BookOpen}
-              description="작성 기록"
-            />
-            <ActivityCard
-              label="GitHub 커밋"
-              value={`${summary.commitCount}개`}
-              icon={Github}
-              description="연동 활동"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="text-xs text-slate-500">
+            참여 프로젝트{" "}
+            <strong className="font-semibold tabular-nums text-slate-800">
+              {totalProjectCount}개
+            </strong>
+          </p>
+          <p className="text-xs text-slate-500">
+            가입일{" "}
+            <strong className="font-semibold tabular-nums text-slate-800">
+              {formatDateLabel(user.createdAt)}
+            </strong>
+          </p>
+          <button
+            type="button"
+            onClick={onOpenAccount}
+            className={BUTTON_SECONDARY}
+          >
+            <Settings size={14} />
+            계정 설정
+          </button>
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.25fr_0.75fr]">
+      {/* 개발 활동 요약 */}
+      <section>
+        <h2 className="mb-2.5 text-[15px] font-semibold text-slate-900">
+          개발 활동 요약
+        </h2>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <ActivityCard
+            label="내 프로젝트"
+            value={`${totalProjectCount}개`}
+            icon={FolderKanban}
+            description="전체 참여 프로젝트"
+          />
+          <ActivityCard
+            label="완료 일정"
+            value={`${summary.doneScheduleCount}개`}
+            icon={CheckCircle2}
+            description="DONE 상태"
+          />
+          <ActivityCard
+            label="개발일지"
+            value={`${summary.devlogCount}개`}
+            icon={BookOpen}
+            description="작성 기록"
+          />
+          <ActivityCard
+            label="GitHub 커밋"
+            value={`${summary.commitCount}개`}
+            icon={Github}
+            description="연동 활동"
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <RecentProjectsPanel
           projects={projects}
           onOpenAll={onOpenProjects}
@@ -2093,83 +2138,71 @@ function RecentProjectsPanel({
 
   return (
     <>
-      <section className="waivs-panel overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--waivs-border-soft)] px-4 py-3.5">
-          <div>
-            <h3 className="text-sm font-black text-slate-950">최근 프로젝트</h3>
-            <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-              최근 수정한 프로젝트를 빠르게 이어서 작업합니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenAll}
-            className="inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[10px] font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
-          >
-            전체 보기
-            <ArrowUpRight size={12} />
-          </button>
-        </div>
+      <section className={PANEL}>
+        <MyPanelHeader
+          title="최근 프로젝트"
+          description="최근 수정한 프로젝트를 이어서 작업합니다."
+          action={
+            <button
+              type="button"
+              onClick={onOpenAll}
+              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-[#F2F5FF] hover:text-[#5873F9]"
+            >
+              전체 보기
+              <ChevronRight size={13} />
+            </button>
+          }
+        />
 
         {recentProjects.length === 0 ? (
-          <div className="p-4">
-            <EmptyState message="참여 중인 프로젝트가 없습니다." />
-          </div>
+          <p className="px-4 py-10 text-center text-[13px] text-slate-400">
+            참여 중인 프로젝트가 없습니다.
+          </p>
         ) : (
-          <div className="divide-y divide-[var(--waivs-border-soft)]">
+          <ul className="divide-y divide-slate-100">
             {recentProjects.map((project) => (
-              <div
+              <li
                 key={project.id}
-                className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-50/60 sm:flex-row sm:items-center"
+                className="flex flex-col gap-2.5 px-4 py-3 transition-colors hover:bg-slate-50/70 sm:flex-row sm:items-center"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#EEF3FF] text-[#5873F9]">
-                    <FolderKanban size={15} />
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+                    <FolderKanban size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-black text-slate-900">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">
                         {project.name}
                       </p>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500">
-                        {project.type} · {project.workspaceRole.toUpperCase()}
-                      </span>
+                      <ProjectTypeBadge type={project.type} />
+                      <ProjectRoleBadge role={project.workspaceRole} />
                     </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <div className="h-1.5 min-w-[90px] max-w-[180px] flex-1 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full bg-[#5873F9]"
-                          style={{ width: `${project.progress}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] font-black text-slate-500">
-                        {project.progress}%
-                      </span>
-                    </div>
+                    <ProjectProgress value={project.progress} className="mt-1.5 max-w-[240px]" />
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                   <button
                     type="button"
                     onClick={() => setDetailProject(project)}
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--waivs-border)] bg-white text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                    className={BUTTON_ICON}
                     aria-label="프로젝트 정보"
+                    title="프로젝트 정보"
                   >
                     <Info size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => openProjectDestination(project, "open")}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#5873F9] px-3 text-[10px] font-black text-white transition hover:bg-[#4863E8]"
+                    className={BUTTON_PRIMARY}
                   >
                     열기
-                    <ArrowUpRight size={11} />
+                    <ArrowUpRight size={14} />
                   </button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </section>
 
@@ -2180,6 +2213,53 @@ function RecentProjectsPanel({
         />
       )}
     </>
+  );
+}
+
+// 개인/팀·권한·진행률은 최근 프로젝트와 내 프로젝트 목록이 같은 표시를 쓴다
+function ProjectTypeBadge({ type }: { type: Project["type"] }) {
+  const isTeam = type === "팀";
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded border px-1.5 py-px text-[10px] font-semibold",
+        isTeam
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-blue-200 bg-blue-50 text-blue-700",
+      )}
+    >
+      {isTeam ? "Team" : "Personal"}
+    </span>
+  );
+}
+
+function ProjectRoleBadge({ role }: { role: Project["workspaceRole"] }) {
+  return (
+    <span className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-px text-[10px] font-semibold text-slate-500">
+      {role.toUpperCase()}
+    </span>
+  );
+}
+
+function ProjectProgress({
+  value,
+  className,
+}: {
+  value: number;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center gap-2", className)}>
+      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-[#5873F9]"
+          style={{ width: `${value}%` }}
+        />
+      </div>
+      <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-600">
+        {value}%
+      </span>
+    </div>
   );
 }
 
@@ -2218,51 +2298,152 @@ function RecentActivitySection({
   activities: RecentActivityResponse[];
 }) {
   return (
-    <section className="waivs-panel overflow-hidden">
-      <div className="border-b border-[var(--waivs-border-soft)] px-4 py-3.5">
-        <h3 className="text-sm font-black text-slate-950">최근 활동</h3>
-        <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-          개발일지, 일정 완료, GitHub 커밋 활동을 최신순으로 표시합니다.
-        </p>
-      </div>
+    <section className={PANEL}>
+      <MyPanelHeader
+        title="최근 활동"
+        description="개발일지, 일정 완료, GitHub 커밋을 최신순으로 표시합니다."
+      />
 
       {activities.length === 0 ? (
-        <div className="px-4 py-8 text-center text-xs font-bold text-slate-400">
+        <p className="px-4 py-10 text-center text-[13px] text-slate-400">
           아직 표시할 활동이 없습니다.
-        </div>
+        </p>
       ) : (
-        <div className="divide-y divide-[var(--waivs-border-soft)] px-4">
+        <ul className="divide-y divide-slate-100">
           {activities.map((activity) => {
             const Icon = getRecentActivityIcon(activity.type);
 
             return (
-              <div
+              <li
                 key={activity.id}
-                className="flex items-start gap-3 py-3"
+                className="flex items-center gap-3 px-4 py-2.5"
               >
-                <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
-                  <Icon size={12} />
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+                  <Icon size={14} />
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-slate-800">
+                  <p className="truncate text-[13px] font-semibold text-slate-800">
                     {activity.title}
                   </p>
-
-                  <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">
+                  {/* 프로젝트명(있을 때) · 내용 */}
+                  <p className="mt-0.5 truncate text-xs text-slate-500">
+                    {activity.workspaceName ? (
+                      <span className="font-medium text-slate-600">
+                        {activity.workspaceName}
+                        {activity.description ? " · " : ""}
+                      </span>
+                    ) : null}
                     {activity.description}
                   </p>
                 </div>
 
-                <span className="shrink-0 text-[9px] font-bold text-slate-400">
+                <span className="shrink-0 text-right text-xs tabular-nums text-slate-400">
                   {formatRecentActivityDate(activity.occurredAt)}
                 </span>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </section>
+  );
+}
+
+// 개발일지 페이지 필터 탭(DevlogSegmentButton)과 같은 밑줄 탭
+function UnderlineTab({
+  active,
+  label,
+  count,
+  icon: Icon,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count?: number;
+  icon?: React.ElementType;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-[13px] font-medium transition-colors",
+        active
+          ? "border-[#5873F9] text-[#4058D6]"
+          : "border-transparent text-slate-500 hover:text-slate-900",
+      )}
+    >
+      {Icon ? <Icon size={14} /> : null}
+      {label}
+      {typeof count === "number" ? (
+        <span
+          className={cn(
+            "rounded px-1.5 py-px text-[11px] font-semibold tabular-nums",
+            active ? "bg-[#EEF2FF] text-[#4058D6]" : "bg-slate-100 text-slate-500",
+          )}
+        >
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+// 검색창 · 정렬. 개발일지 페이지 도구 모음과 같은 높이(32px)와 글씨
+function ToolbarSearch({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative min-w-0", className)}>
+      <Search
+        size={13}
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-xs font-medium outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF]"
+      />
+    </div>
+  );
+}
+
+function ToolbarSortSelect({
+  value,
+  onChange,
+}: {
+  value: DevlogSortType;
+  onChange: (value: DevlogSortType) => void;
+}) {
+  return (
+    <div className="relative shrink-0">
+      <Filter
+        size={13}
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as DevlogSortType)}
+        aria-label="정렬"
+        className="h-8 w-[108px] rounded-md border border-slate-200 bg-white pl-7 pr-5 text-xs font-medium text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:border-[#AAB8FF]"
+      >
+        <option value="latest">최신순</option>
+        <option value="oldest">오래된순</option>
+      </select>
+    </div>
   );
 }
 
@@ -2286,24 +2467,36 @@ function MyProjectsSection({
   const filteredProjects = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
 
-    return projects.filter((project) => {
-      const matchesStatus =
-        statusFilter === "all" || project.status === statusFilter;
+    const getUpdatedTime = (project: Project) => {
+      const time = project.updatedAt ? new Date(project.updatedAt).getTime() : 0;
+      return Number.isNaN(time) ? 0 : time;
+    };
 
-      const matchesType =
-        typeFilter === "all" ||
-        (typeFilter === "team" && project.type === "팀") ||
-        (typeFilter === "personal" && project.type === "개인");
+    return projects
+      .filter((project) => {
+        const matchesStatus =
+          statusFilter === "all" || project.status === statusFilter;
 
-      const matchesKeyword =
-        !normalizedKeyword ||
-        project.name.toLowerCase().includes(normalizedKeyword) ||
-        (project.description || "").toLowerCase().includes(normalizedKeyword) ||
-        (project.language || "").toLowerCase().includes(normalizedKeyword);
+        const matchesType =
+          typeFilter === "all" ||
+          (typeFilter === "team" && project.type === "팀") ||
+          (typeFilter === "personal" && project.type === "개인");
 
-      return matchesStatus && matchesType && matchesKeyword;
-    });
-  }, [projects, keyword, statusFilter, typeFilter]);
+        const matchesKeyword =
+          !normalizedKeyword ||
+          project.name.toLowerCase().includes(normalizedKeyword) ||
+          (project.description || "").toLowerCase().includes(normalizedKeyword) ||
+          (project.language || "").toLowerCase().includes(normalizedKeyword);
+
+        return matchesStatus && matchesType && matchesKeyword;
+      })
+      // 정렬 선택이 화면에만 있고 목록에 적용되지 않던 것을 최근 수정일 기준으로 연결했다
+      .sort((a, b) =>
+        projectSortType === "latest"
+          ? getUpdatedTime(b) - getUpdatedTime(a)
+          : getUpdatedTime(a) - getUpdatedTime(b),
+      );
+  }, [projects, keyword, statusFilter, typeFilter, projectSortType]);
 
   const activeCount = projects.filter((project) => project.status === "active").length;
   const completedCount = projects.filter(
@@ -2312,159 +2505,108 @@ function MyProjectsSection({
 
   return (
     <>
-      <section className="waivs-panel overflow-visible">
-  <div className="flex flex-col gap-3 px-5 py-4 xl:flex-row xl:items-end xl:justify-between">
-    <div>
-      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#5873F9]">
-        My Projects
-      </p>
+      <MyPageSectionHeader
+        title="내 프로젝트"
+        count={projects.length}
+        description="참여 중인 프로젝트를 확인하고 필요한 작업 화면으로 바로 이동합니다."
+        actions={
+          <>
+            <ToolbarSortSelect value={projectSortType} onChange={setProjectSortType} />
+            <ToolbarSearch
+              value={keyword}
+              onChange={onKeywordChange}
+              placeholder="프로젝트 검색"
+              className="w-full sm:w-[260px]"
+            />
+          </>
+        }
+      />
 
-      <div className="mt-1 flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-black tracking-tight text-slate-950">
-          내 프로젝트
-        </h2>
-
-        <span className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
-          {projects.length}개
-        </span>
-      </div>
-
-      <p className="mt-1 text-xs font-medium text-slate-500">
-        참여 중인 프로젝트를 확인하고 필요한 작업 화면으로 바로 이동합니다.
-      </p>
-    </div>
-
-    <div className="flex w-full items-center gap-2 xl:w-auto">
-      <div className="relative w-full xl:w-[250px]">
-        <Search
-          size={15}
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-
-        <input
-          value={keyword}
-          onChange={(event) => onKeywordChange(event.target.value)}
-          placeholder="프로젝트 검색"
-          className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white pl-10 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-        />
-      </div>
-
-      <div className="relative shrink-0">
-        <Filter
-          size={13}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        />
-
-        <select
-          value={projectSortType}
-          onChange={(event) =>
-            setProjectSortType(event.target.value as DevlogSortType)
-          }
-          className="h-10 shrink-0 rounded-xl border border-[var(--waivs-border)] bg-white pl-8 pr-8 text-sm font-bold text-slate-600 outline-none focus:border-[#5873F9]"
-        >
-          <option value="latest">최신순</option>
-          <option value="oldest">오래된순</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-        <div className="flex flex-col gap-3 border-y border-[var(--waivs-border-soft)] bg-slate-50/50 px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
+      <section className={PANEL}>
+        {/* 상태 탭 | 구분 필터 */}
+        <div className="flex min-w-0 flex-col gap-2 border-b border-slate-200 px-3 pb-2 xl:flex-row xl:items-center xl:justify-between xl:pb-0">
+          <div className="-mb-px flex items-stretch gap-1 overflow-x-auto">
             {[
               { key: "all" as const, label: "전체", count: projects.length },
               { key: "active" as const, label: "진행 중", count: activeCount },
               { key: "completed" as const, label: "완료", count: completedCount },
-            ].map((filter) => {
-              const active = statusFilter === filter.key;
-              return (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() => setStatusFilter(filter.key)}
-                  className={[
-                    "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-black transition",
-                    active
-                      ? "bg-[#5873F9] text-white"
-                      : "bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-800",
-                  ].join(" ")}
-                >
-                  {filter.label}
-                  <span
-                    className={[
-                      "rounded-full px-1.5 py-0.5 text-[9px]",
-                      active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500",
-                    ].join(" ")}
-                  >
-                    {filter.count}
-                  </span>
-                </button>
-              );
-            })}
+            ].map((filter) => (
+              <UnderlineTab
+                key={filter.key}
+                active={statusFilter === filter.key}
+                label={filter.label}
+                count={filter.count}
+                onClick={() => setStatusFilter(filter.key)}
+              />
+            ))}
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {[
               { key: "all" as const, label: "전체 구분" },
               { key: "personal" as const, label: "개인" },
               { key: "team" as const, label: "팀" },
-            ].map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                onClick={() => setTypeFilter(filter.key)}
-                className={[
-                  "h-8 rounded-lg border px-3 text-[10px] font-black transition",
-                  typeFilter === filter.key
-                    ? "border-[#BFCBFF] bg-[#EEF3FF] text-[#5873F9]"
-                    : "border-[var(--waivs-border)] bg-white text-slate-500 hover:bg-slate-50",
-                ].join(" ")}
-              >
-                {filter.label}
-              </button>
-            ))}
+            ].map((filter) => {
+              const active = typeFilter === filter.key;
+              return (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setTypeFilter(filter.key)}
+                  aria-pressed={active}
+                  className={cn(
+                    "h-7 rounded-md border px-2.5 text-xs font-medium transition-colors",
+                    active
+                      ? "border-[#C9D2FF] bg-[#EEF3FF] text-[#4058D6]"
+                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800",
+                  )}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="p-5">
-          {filteredProjects.length === 0 ? (
+        {filteredProjects.length === 0 ? (
+          <div className="p-4">
             <EmptyState message="조건에 맞는 프로젝트가 없습니다." />
-          ) : (
-            <div className="overflow-visible rounded-xl border border-[var(--waivs-border)] bg-white">
-              <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_130px_150px_118px] border-b border-[var(--waivs-border-soft)] bg-slate-50 px-4 py-3 text-[10px] font-black text-slate-500 md:grid">
-                <span>프로젝트</span>
-                <span>구분 / 권한</span>
-                <span>진행률</span>
-                <span>활동</span>
-                <span className="text-right">작업</span>
-              </div>
-
-              <div className="divide-y divide-[var(--waivs-border-soft)]">
-                {filteredProjects.map((project) => (
-                  <ProjectListRow
-                    key={project.id}
-                    project={project}
-                    menuOpen={openMenuId === project.id}
-                    onToggleMenu={() =>
-                      setOpenMenuId((current) =>
-                        current === project.id ? null : project.id,
-                      )
-                    }
-                    onCloseMenu={() => setOpenMenuId(null)}
-                    onOpenInfo={() => {
-                      setOpenMenuId(null);
-                      setDetailProject(project);
-                    }}
-                    onOpenArchive={() => {
-                      setOpenMenuId(null);
-                      onOpenArchive(project);
-                    }}
-                  />
-                ))}
-              </div>
+          </div>
+        ) : (
+          <>
+            <div className="hidden grid-cols-[minmax(0,1.6fr)_120px_150px_130px_auto] gap-4 border-b border-slate-100 bg-slate-50/70 px-4 py-2 text-xs font-medium text-slate-500 lg:grid">
+              <span>프로젝트</span>
+              <span>구분 / 권한</span>
+              <span>진행률</span>
+              <span>활동</span>
+              <span className="w-[118px] text-right">작업</span>
             </div>
-          )}
-        </div>
+
+            <ul className="divide-y divide-slate-100">
+              {filteredProjects.map((project) => (
+                <ProjectListRow
+                  key={project.id}
+                  project={project}
+                  menuOpen={openMenuId === project.id}
+                  onToggleMenu={() =>
+                    setOpenMenuId((current) =>
+                      current === project.id ? null : project.id,
+                    )
+                  }
+                  onCloseMenu={() => setOpenMenuId(null)}
+                  onOpenInfo={() => {
+                    setOpenMenuId(null);
+                    setDetailProject(project);
+                  }}
+                  onOpenArchive={() => {
+                    setOpenMenuId(null);
+                    onOpenArchive(project);
+                  }}
+                />
+              ))}
+            </ul>
+          </>
+        )}
       </section>
 
       {detailProject && (
@@ -2493,98 +2635,81 @@ function ProjectListRow({
   onOpenArchive: () => void;
 }) {
   const isCompleted = project.status === "completed";
-  const isTeam = project.type === "팀";
-  const isTeamOwner = isTeam && project.workspaceRole === "owner";
+  const isTeamOwner = project.type === "팀" && project.workspaceRole === "owner";
 
   return (
-    <article className="grid grid-cols-1 gap-3 px-4 py-3.5 transition hover:bg-slate-50/60 md:grid-cols-[minmax(0,1.5fr)_110px_130px_150px_118px] md:items-center">
+    <li className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 lg:grid-cols-[minmax(0,1.6fr)_120px_150px_130px_auto] lg:items-center lg:gap-4">
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h4 className="truncate text-sm font-black text-slate-950">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-slate-900">
             {project.name}
-          </h4>
+          </h3>
           <span
-            className={[
-              "rounded-full px-2 py-0.5 text-[9px] font-black",
+            className={cn(
+              "shrink-0 rounded px-1.5 py-px text-[10px] font-semibold",
               isCompleted
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-[#EEF3FF] text-[#5873F9]",
-            ].join(" ")}
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-[#EEF3FF] text-[#4058D6]",
+            )}
           >
             {isCompleted ? "완료" : "진행 중"}
           </span>
         </div>
-        <p className="mt-1 truncate text-[11px] font-medium text-slate-500">
+        <p className="mt-0.5 truncate text-[13px] text-slate-500">
           {project.description || "설명이 없습니다."}
         </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500">
-            {project.language || "Unknown"}
-          </span>
-          <span className="text-[9px] font-bold text-slate-400">
-            최근 수정 {formatDateLabel(project.updatedAt)}
-          </span>
-        </div>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+          <span className="font-mono">{project.language || "Unknown"}</span>
+          <span>최근 수정 {formatDateLabel(project.updatedAt)}</span>
+        </p>
       </div>
 
-      <div className="flex items-center justify-between gap-2 md:block">
-        <span className="text-[10px] font-black text-slate-400 md:hidden">구분 / 권한</span>
+      <div className="flex items-center justify-between gap-2 lg:block">
+        <span className="text-xs text-slate-400 lg:hidden">구분 / 권한</span>
         <div className="flex flex-wrap gap-1">
-          <span
-            className={[
-              "rounded-full px-2 py-1 text-[9px] font-black",
-              isTeam
-                ? "bg-violet-50 text-violet-600"
-                : "bg-[#EEF3FF] text-[#5873F9]",
-            ].join(" ")}
-          >
-            {project.type}
-          </span>
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-500">
-            {project.workspaceRole.toUpperCase()}
-          </span>
+          <ProjectTypeBadge type={project.type} />
+          <ProjectRoleBadge role={project.workspaceRole} />
         </div>
       </div>
 
-      <div>
-        <div className="mb-1.5 flex items-center justify-between text-[10px] font-black">
-          <span className="text-slate-400 md:hidden">진행률</span>
-          <span className="text-slate-700">{project.progress}%</span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-[#5873F9]"
-            style={{ width: `${project.progress}%` }}
-          />
-        </div>
+      <div className="flex items-center justify-between gap-3 lg:block">
+        <span className="text-xs text-slate-400 lg:hidden">진행률</span>
+        <ProjectProgress value={project.progress} className="w-[180px] lg:w-auto" />
       </div>
 
-      <div className="flex items-center justify-between md:block">
-        <span className="text-[10px] font-black text-slate-400 md:hidden">활동</span>
-        <div className="space-y-1 text-[10px] font-bold text-slate-500">
+      <div className="flex items-center justify-between gap-2 lg:block">
+        <span className="text-xs text-slate-400 lg:hidden">활동</span>
+        <div className="space-y-0.5 text-xs text-slate-500">
           <p>
-            일정 <strong className="text-slate-800">{project.doneScheduleCount}/{project.scheduleTotalCount}</strong>
+            일정{" "}
+            <strong className="font-semibold tabular-nums text-slate-800">
+              {project.doneScheduleCount}/{project.scheduleTotalCount}
+            </strong>
           </p>
           <p>
-            개발일지 <strong className="text-slate-800">{project.devlogCount}개</strong>
+            개발일지{" "}
+            <strong className="font-semibold tabular-nums text-slate-800">
+              {project.devlogCount}개
+            </strong>
           </p>
         </div>
       </div>
 
-      <div className="relative flex items-center justify-end gap-1.5">
+      <div className="relative flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => openProjectDestination(project, "open")}
-          className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#5873F9] px-3 text-[10px] font-black text-white transition hover:bg-[#4863E8]"
+          className={BUTTON_PRIMARY}
         >
           열기
-          <ArrowUpRight size={11} />
+          <ArrowUpRight size={14} />
         </button>
 
         <button
           type="button"
           onClick={onToggleMenu}
-          className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--waivs-border)] bg-white text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+          aria-expanded={menuOpen}
+          className={BUTTON_ICON}
           aria-label="프로젝트 메뉴"
         >
           <MoreHorizontal size={15} />
@@ -2598,7 +2723,7 @@ function ProjectListRow({
               className="fixed inset-0 z-20 cursor-default"
               onClick={onCloseMenu}
             />
-            <div className="absolute right-0 top-9 z-30 w-44 overflow-hidden rounded-xl border border-[var(--waivs-border)] bg-white py-1 shadow-xl">
+            <div className="absolute right-0 top-10 z-30 w-44 overflow-hidden rounded-md border border-slate-300 bg-white py-1">
               <ProjectMenuButton icon={Info} label="프로젝트 정보" onClick={onOpenInfo} />
               <ProjectMenuButton
                 icon={LayoutDashboard}
@@ -2623,7 +2748,7 @@ function ProjectListRow({
                   <button
                     type="button"
                     disabled
-                    className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2 text-left text-xs font-bold text-slate-300"
+                    className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2 text-left text-xs font-medium text-slate-300"
                     title="팀원 관리 화면 연결 전"
                   >
                     <Users size={13} />
@@ -2635,7 +2760,7 @@ function ProjectListRow({
           </>
         )}
       </div>
-    </article>
+    </li>
   );
 }
 
@@ -2652,9 +2777,9 @@ function ProjectMenuButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
     >
-      <Icon size={13} className="text-slate-400" />
+      <Icon size={14} className="text-slate-400" />
       {label}
     </button>
   );
@@ -2671,41 +2796,43 @@ function ProjectInfoModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/40 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+      <div className="max-h-[calc(100dvh-32px)] w-full max-w-[600px] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#EEF3FF] text-[#5873F9]">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
               <FolderKanban size={16} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#5873F9]">
-                Project Info
-              </p>
-              <h3 className="mt-0.5 truncate text-base font-black text-slate-950">
+              <h3 className="truncate text-[17px] font-semibold text-slate-900">
                 {project.name}
               </h3>
+              <div className="mt-1 flex flex-wrap gap-1">
+                <ProjectTypeBadge type={project.type} />
+                <ProjectRoleBadge role={project.workspaceRole} />
+              </div>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="닫기"
           >
             <X size={16} />
           </button>
         </div>
 
         <div className="p-5">
-          <p className="text-sm font-medium leading-6 text-slate-500">
+          <p className="text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
             {project.description || "등록된 프로젝트 설명이 없습니다."}
           </p>
 
-          <div className="mt-4 grid overflow-hidden rounded-xl border border-[var(--waivs-border)] sm:grid-cols-2">
+          <div className="mt-4 grid overflow-hidden rounded-md border border-slate-200 sm:grid-cols-2">
             <ProjectInfoCell label="구분" value={project.type} />
             <ProjectInfoCell label="내 권한" value={project.workspaceRole.toUpperCase()} />
             <ProjectInfoCell label="진행 상태" value={project.status === "completed" ? "완료" : "진행 중"} />
@@ -2717,13 +2844,13 @@ function ProjectInfoModal({
           </div>
 
           {project.stack.length > 0 && (
-            <div className="mt-4 rounded-xl border border-[var(--waivs-border)] px-4 py-3">
-              <p className="text-[10px] font-black text-slate-400">기술 스택</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-4">
+              <p className="text-xs font-medium text-slate-500">기술 스택</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {project.stack.map((stack) => (
                   <span
                     key={stack}
-                    className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]"
+                    className="rounded border border-[#D9E1FF] bg-[#F5F7FF] px-1.5 py-px text-[11px] font-medium text-[#4058D6]"
                   >
                     {stack}
                   </span>
@@ -2733,51 +2860,41 @@ function ProjectInfoModal({
           )}
 
           {isTeamOwner && (
-            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-4 flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-white text-violet-600">
-                  <Users size={14} />
-                </div>
+                <Users size={15} className="shrink-0 text-slate-400" />
                 <div>
-                  <p className="text-xs font-black text-slate-800">팀 프로젝트 OWNER</p>
-                  <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                  <p className="text-[13px] font-semibold text-slate-800">팀 프로젝트 OWNER</p>
+                  <p className="mt-0.5 text-xs text-slate-500">
                     추후 팀원 초대·권한 관리 기능을 이 영역에 연결할 수 있습니다.
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                disabled
-                className="h-8 shrink-0 cursor-not-allowed rounded-lg border border-violet-100 bg-white px-3 text-[10px] font-black text-violet-300"
-              >
+              <button type="button" disabled className={BUTTON_SECONDARY}>
                 팀원 관리 준비 중
               </button>
             </div>
           )}
 
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-9 rounded-xl border border-[var(--waivs-border)] bg-white px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50"
-            >
+            <button type="button" onClick={onClose} className={BUTTON_SECONDARY}>
               닫기
             </button>
             <button
               type="button"
               onClick={() => openProjectDestination(project, "dashboard")}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#D9E1FF] bg-white px-4 text-xs font-black text-[#5873F9] transition hover:bg-[#F7F9FF]"
+              className={BUTTON_SECONDARY}
             >
               대시보드
-              <ExternalLink size={12} />
+              <ExternalLink size={14} />
             </button>
             <button
               type="button"
               onClick={() => openProjectDestination(project, "open")}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8]"
+              className={BUTTON_PRIMARY}
             >
               프로젝트 열기
-              <ArrowUpRight size={12} />
+              <ArrowUpRight size={14} />
             </button>
           </div>
         </div>
@@ -2794,9 +2911,9 @@ function ProjectInfoCell({
   value: string;
 }) {
   return (
-    <div className="flex min-h-[52px] items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5 sm:border-r">
-      <span className="text-[10px] font-bold text-slate-400">{label}</span>
-      <span className="truncate text-xs font-black text-slate-700">{value}</span>
+    <div className="flex min-h-[44px] items-center justify-between gap-3 border-b border-slate-100 px-4 py-2 sm:border-r">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="truncate text-[13px] font-semibold text-slate-800">{value}</span>
     </div>
   );
 }
@@ -2864,6 +2981,10 @@ function ProjectArchiveSection({
     useState<DesignDocumentItem | null>(null);
   const [designLoading, setDesignLoading] = useState(false);
   const [designError, setDesignError] = useState("");
+
+  // 설계 문서 탭 안의 요구사항 / API 명세 / ERD / 화면 흐름 선택
+  const [designSection, setDesignSection] =
+    useState<ArchiveDesignSection>("requirements");
 
   const projectOptions = useMemo(() => {
     return projects.map((project) => ({
@@ -3014,7 +3135,15 @@ function ProjectArchiveSection({
           devlog.summary.toLowerCase().includes(normalizedKeyword) ||
           devlog.projectName.toLowerCase().includes(normalizedKeyword);
 
-        return matchesProject && matchesKeyword;
+        // 날짜·기간 선택이 화면에만 있고 목록을 거르지 않던 것을 연결했다(작성일 기준, YYYY-MM-DD 비교)
+        const dateKey = getDevlogDateKey(devlog);
+        const matchesDate =
+          dateFilterMode === "single"
+            ? !selectedDate || dateKey === selectedDate
+            : (!startDate || (dateKey !== "" && dateKey >= startDate)) &&
+              (!endDate || (dateKey !== "" && dateKey <= endDate));
+
+        return matchesProject && matchesKeyword && matchesDate;
       })
       .sort((a, b) => {
         const aTime = getDevlogSortTime(a);
@@ -3022,7 +3151,25 @@ function ProjectArchiveSection({
 
         return sortType === "latest" ? bTime - aTime : aTime - bTime;
       });
-  }, [devlogs, keyword, selectedProjectId, sortType]);
+  }, [
+    devlogs,
+    keyword,
+    selectedProjectId,
+    sortType,
+    dateFilterMode,
+    selectedDate,
+    startDate,
+    endDate,
+  ]);
+
+  // 탭 옆 개수는 검색·날짜와 상관없이 이 프로젝트의 개발일지 수
+  const projectDevlogCount = devlogs.filter(
+    (devlog) =>
+      String(devlog.projectId ?? "") === selectedProjectId ||
+      String(devlog.workspaceId ?? "") === selectedProjectId,
+  ).length;
+
+  const hasDateFilter = Boolean(selectedDate || startDate || endDate);
 
   const archiveTabs: {
     key: ArchiveTabKey;
@@ -3739,600 +3886,301 @@ function ProjectArchiveSection({
   };
 
   return (
-    <section className="waivs-panel overflow-visible">
-      {/* 자료실 상단 */}
-      <div className="p-5">
-        {/* 제목 + PDF 저장 */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#5873F9]">
-              Project Archive
-            </p>
-
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-black tracking-tight text-slate-950">
-                {selectedProject?.name ?? "프로젝트 없음"}
-              </h2>
-
-              {selectedProject && (
-                <span className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
-                  {selectedProject.type}
-                </span>
-              )}
-
-              <span className="text-slate-300">/</span>
-
-              <span className="text-sm font-black text-slate-700">
-                {activeArchive?.label}
-              </span>
-            </div>
-
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              선택한 프로젝트의 개발 자료를 조회하고 문서화합니다.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handlePrintPdf}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-[#5873F9] px-4 text-sm font-black text-white transition hover:bg-[#4863E8]"
-          >
-            <Download size={16} />
+    <>
+      <MyPageSectionHeader
+        title="자료실"
+        description="참여한 프로젝트를 골라 개발 자료를 조회하고 문서화합니다."
+        actions={
+          <button type="button" onClick={handlePrintPdf} className={BUTTON_SECONDARY}>
+            <Download size={14} />
             PDF 저장
           </button>
-        </div>
+        }
+      />
 
-        <div className="mt-4 border-t border-[var(--waivs-border-soft)] pt-4">
-          {/* 프로젝트 선택 - 다른 컨트롤과 분리해서 강조 */}
-          <div className="rounded-2xl border border-[#DCE4FF] bg-[#F7F9FF] p-3.5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="flex shrink-0 items-center gap-2.5 lg:w-[170px]">
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[#5873F9] shadow-sm">
-                  <FolderKanban size={17} />
-                </span>
+      <section className={PANEL}>
+        {/* 프로젝트 선택: 한 줄로 작게. 조회 범위는 내 모든 프로젝트 그대로다 */}
+        <div className="flex min-w-0 flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center">
+          <label
+            htmlFor="mypage-archive-project"
+            className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-500"
+          >
+            <FolderKanban size={14} className="text-[#5873F9]" />
+            프로젝트
+          </label>
 
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#5873F9]">
-                    Project
-                  </p>
-                  <p className="text-xs font-black text-slate-800">
-                    프로젝트 선택
-                  </p>
-                </div>
-              </div>
+          <select
+            id="mypage-archive-project"
+            value={selectedProjectId}
+            onChange={(event) => {
+              const nextProjectId = event.target.value;
+              setSelectedProjectId(nextProjectId);
 
-              <div className="min-w-0 flex-1">
-                <select
-                  value={selectedProjectId}
-                  onChange={(event) => {
-                    const nextProjectId = event.target.value;
-                    setSelectedProjectId(nextProjectId);
+              const nextProject = projects.find(
+                (project) => project.id === nextProjectId,
+              );
 
-                    const nextProject = projects.find(
-                      (project) => project.id === nextProjectId,
-                    );
-
-                    if (nextProject) {
-                      rememberCurrentWorkspace(nextProject);
-                    }
-                  }}
-                  disabled={projectOptions.length === 0}
-                  className="h-11 w-full rounded-xl border border-[#C8D3FF] bg-white px-4 text-sm font-black text-slate-800 outline-none transition disabled:opacity-50 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-                >
-                  {projectOptions.length === 0 && (
-                    <option value="">프로젝트 없음</option>
-                  )}
-
-                  {projectOptions.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedProject && (
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-[#5873F9] shadow-sm">
-                    {selectedProject.type}
-                  </span>
-
-                  <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 shadow-sm">
-                    {selectedProject.workspaceRole.toUpperCase()}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 자료 종류 + 검색/정렬 */}
-          <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex w-fit shrink-0 items-center gap-1 rounded-xl bg-slate-100 p-1">
-              {archiveTabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeArchiveTab === tab.key;
-
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => onActiveArchiveTabChange(tab.key)}
-                    aria-current={isActive ? "page" : undefined}
-                    className={[
-                      "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[12px] font-black transition",
-                      isActive
-                        ? "bg-white text-[#5873F9] shadow-sm"
-                        : "text-slate-500 hover:text-slate-800",
-                    ].join(" ")}
-                  >
-                    <Icon size={14} />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row xl:justify-end">
-          {/* 검색 */}
-          <div className="relative min-w-0 sm:w-[300px] xl:w-[360px]">
-            <Search
-              size={16}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-
-            <input
-              value={keyword}
-              onChange={(event) => onKeywordChange(event.target.value)}
-              placeholder="자료실 검색"
-              className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white pl-10 pr-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-            />
-          </div>
-
-          {/* 정렬 */}
-          <div className="relative shrink-0">
-            <Filter
-              size={13}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-
-            <select
-              value={sortType}
-              onChange={(event) =>
-                setSortType(event.target.value as DevlogSortType)
+              if (nextProject) {
+                rememberCurrentWorkspace(nextProject);
               }
-              className="h-10 shrink-0 rounded-xl border border-[var(--waivs-border)] bg-white pl-7 pr-8 text-sm font-bold text-slate-600 outline-none focus:border-[#5873F9]"
-            >
-              <option value="latest">최신순</option>
-              <option value="oldest">오래된순</option>
-            </select>
-          </div>
+            }}
+            disabled={projectOptions.length === 0}
+            className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-800 outline-none transition-colors focus:border-[#AAB8FF] disabled:opacity-50 sm:w-[320px]"
+          >
+            {projectOptions.length === 0 && <option value="">프로젝트 없음</option>}
 
-          {/* 날짜 / 기간 선택 */}
-          <div className="relative shrink-0">
-            {/* 화면에 보이는 버튼 하나 */}
-            <button
-              type="button"
-              onClick={() => setDatePickerOpen((prev) => !prev)}
-              className="flex h-10 items-center gap-2 rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-600 outline-none transition hover:bg-slate-50 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-            >
-              <CalendarDays size={15} />
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
 
-              <span>
-                {dateFilterMode === "single" && selectedDate
-                  ? selectedDate
-                  : dateFilterMode === "range" && startDate && endDate
-                    ? `${startDate} ~ ${endDate}`
-                    : "날짜/기간"}
-              </span>
-
-              <ChevronDown
-                size={14}
-                className={`transition-transform ${
-                  datePickerOpen ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-
-            {/* 버튼 클릭 시 나오는 팝업 */}
-            {datePickerOpen && (
-              <div className="absolute right-0 top-12 z-50 w-[360px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-
-                {/* 날짜 / 기간 탭 */}
-                <div className="mb-4 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilterMode("single");
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className={[
-                      "h-9 rounded-lg text-sm font-bold transition",
-                      dateFilterMode === "single"
-                        ? "bg-white text-[#5873F9] shadow-sm"
-                        : "text-slate-500 hover:text-slate-700",
-                    ].join(" ")}
-                  >
-                    날짜
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilterMode("range");
-                      setSelectedDate("");
-                    }}
-                    className={[
-                      "h-9 rounded-lg text-sm font-bold transition",
-                      dateFilterMode === "range"
-                        ? "bg-white text-[#5873F9] shadow-sm"
-                        : "text-slate-500 hover:text-slate-700",
-                    ].join(" ")}
-                  >
-                    기간
-                  </button>
-                </div>
-
-                {/* 날짜 모드 */}
-                {dateFilterMode === "single" && (
-                  <div>
-                    <p className="mb-2 text-xs font-bold text-slate-500">
-                      조회할 날짜
-                    </p>
-
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(event) =>
-                        setSelectedDate(event.target.value)
-                      }
-                      className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-600 outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-                    />
-                  </div>
-                )}
-
-                {/* 기간 모드 */}
-                {dateFilterMode === "range" && (
-                  <div>
-                    <p className="mb-2 text-xs font-bold text-slate-500">
-                      조회할 기간
-                    </p>
-
-                    <div className="flex flex-col gap-3">
-                      {/* 시작일 */}
-                      <div>
-                        <p className="mb-1 text-[11px] font-bold text-slate-400">
-                          시작일
-                        </p>
-
-                        <input
-                          type="date"
-                          value={startDate}
-                          max={endDate || undefined}
-                          onChange={(event) =>
-                            setStartDate(event.target.value)
-                          }
-                          className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-600 outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-                        />
-                      </div>
-
-                      {/* 종료일 */}
-                      <div>
-                        <p className="mb-1 text-[11px] font-bold text-slate-400">
-                          종료일
-                        </p>
-
-                        <input
-                          type="date"
-                          value={endDate}
-                          min={startDate || undefined}
-                          onChange={(event) =>
-                            setEndDate(event.target.value)
-                          }
-                          className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-bold text-slate-600 outline-none transition focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 하단 */}
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate("");
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className="text-xs font-bold text-slate-400 transition hover:text-slate-700"
-                  >
-                    초기화
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDatePickerOpen(false)}
-                    className="h-8 rounded-lg bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8]"
-                  >
-                    적용
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-    {/* 콘텐츠 */}
-    <div className="border-t border-[var(--waivs-border-soft)] p-5">
-      {activeArchiveTab === "devlog" && (
-        <ArchiveDevlogContent devlogs={filteredDevlogs} />
-      )}
-
-      {activeArchiveTab === "design" && (
-        <ArchiveDesignContent
-          selectedProject={selectedProject}
-          requirements={designRequirements}
-          apiSpecs={designApiSpecs}
-          designDocument={parsedDesignDocument}
-          isLoading={designLoading}
-          errorMessage={designError}
-        />
-      )}
-
-      {activeArchiveTab === "final" && (
-        <ArchiveFinalReportContent
-          selectedProject={selectedProject}
-          devlogCount={filteredDevlogs.length}
-          draft={finalReportDraft}
-          onDraftChange={setFinalReportDraft}
-          onGenerate={handleGenerateFinalReport}
-          designDocument={parsedDesignDocument}
-          isGenerating={finalReportLoading}
-          errorMessage={finalReportError}
-        />
-      )}
-    </div>
-  </section>
-);}
-
-function ArchiveDevlogContent({ devlogs }: { devlogs: Devlog[] }) {
-  return (
-    <section>
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-black text-slate-950">
-            개발일지
-          </h3>
-
-          <p className="mt-1 text-sm font-medium text-slate-500">
-            일정 기반 일지와 일반 일지를 문서 형태로 확인합니다.
-          </p>
-        </div>
-
-        <span className="rounded-full bg-[#EEF3FF] px-3 py-1 text-[11px] font-black text-[#5873F9]">
-          {devlogs.length}개
-        </span>
-      </div>
-
-      {devlogs.length === 0 ? (
-        <EmptyState message="아직 작성된 개발일지가 없습니다." />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
-          {devlogs.map((devlog) => (
-            <DevlogCard key={devlog.id} devlog={devlog} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ArchiveDesignContent({
-  selectedProject,
-  requirements,
-  apiSpecs,
-  designDocument,
-  isLoading,
-  errorMessage,
-}: {
-  selectedProject: Project | null;
-  requirements: DesignRequirementItem[];
-  apiSpecs: DesignApiSpecItem[];
-  designDocument: ParsedDesignDocument;
-  isLoading: boolean;
-  errorMessage: string;
-}) {
-  const [activeDesignSection, setActiveDesignSection] =
-    useState<DesignArchiveSectionKey>("requirements");
-
-  const erdTables = designDocument.erdNodes;
-  const erdRelations = designDocument.erdEdges;
-  const flowNodes = designDocument.flowNodes;
-  const flowEdges = designDocument.flowEdges;
-
-  const designSectionTabs: {
-    key: DesignArchiveSectionKey;
-    label: string;
-    description: string;
-    count: number;
-    icon: React.ElementType;
-  }[] = [
-    {
-      key: "requirements",
-      label: "요구사항",
-      description: "구현 범위와 기능 조건",
-      count: requirements.length,
-      icon: CheckCircle2,
-    },
-    {
-      key: "api",
-      label: "API",
-      description: "요청/응답과 엔드포인트",
-      count: apiSpecs.length,
-      icon: Code2,
-    },
-    {
-      key: "erd",
-      label: "ERD",
-      description: "테이블·컬럼·관계",
-      count: erdTables.length,
-      icon: Database,
-    },
-    {
-      key: "flow",
-      label: "화면 흐름",
-      description: "화면 사이 이동",
-      count: flowNodes.length,
-      icon: GitBranch,
-    },
-  ];
-
-  const activeDesignTab = designSectionTabs.find(
-    (tab) => tab.key === activeDesignSection,
-  );
-  const ActiveDesignIcon = activeDesignTab?.icon;
-
-  const hasAnyDesignData =
-    requirements.length > 0 ||
-    apiSpecs.length > 0 ||
-    erdTables.length > 0 ||
-    flowNodes.length > 0;
-
-  return (
-    <div className="space-y-3">
-      {errorMessage && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
-          {errorMessage}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-      {/* 설계 문서 탭 */}
-      <div className="flex w-fit shrink-0 items-center gap-1 rounded-xl bg-slate-100 p-1">
-        {designSectionTabs.map((tab) => {
-          const isActive = activeDesignSection === tab.key;
-
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveDesignSection(tab.key)}
-              aria-current={isActive ? "page" : undefined}
-              className={[
-                "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-black transition",
-                isActive
-                  ? "bg-white text-[#5873F9] shadow-sm"
-                  : "text-slate-500 hover:text-slate-800",
-              ].join(" ")}
-            >
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 선택 프로젝트 */}
-      <span className="w-fit rounded-full border border-blue-100 bg-white px-3 py-1 text-[11px] font-black text-blue-700">
-        선택 프로젝트: {selectedProject?.name ?? "프로젝트 없음"}
-      </span>
-    </div>
-
-    {isLoading ? (
-      <div className="rounded-2xl border border-blue-100 bg-white px-4 py-10 text-center text-sm font-black text-slate-500">
-        설계 문서를 불러오는 중입니다.
-      </div>
-    ) : !hasAnyDesignData ? (
-      <EmptyState message="아직 문서화할 설계 데이터가 없습니다. 설계단계에서 요구사항, ERD 또는 화면 흐름을 먼저 작성해주세요." />
-    ) : (
-      <section className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex flex-col justify-between gap-2 border-b border-blue-50 pb-3 xl:flex-row xl:items-center">
-          <div className="flex min-w-0 items-center gap-2">
-            {ActiveDesignIcon && (
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                <ActiveDesignIcon size={16} />
-              </span>
-            )}
-
-            <div className="min-w-0">
-              <h4 className="truncate text-base font-black tracking-tight text-slate-950">
-                {activeDesignTab?.label}
-              </h4>
-
-              <p className="truncate text-xs font-semibold text-slate-500">
-                {activeDesignTab?.description}
-              </p>
+          {selectedProject && (
+            <div className="flex shrink-0 items-center gap-1">
+              <ProjectTypeBadge type={selectedProject.type} />
+              <ProjectRoleBadge role={selectedProject.workspaceRole} />
             </div>
-          </div>
+          )}
         </div>
 
-        {activeDesignSection === "requirements" && (
-          <DesignRequirementsPage requirements={requirements} />
+        {/* 자료 종류 탭 | 검색 · 정렬 · 날짜 */}
+        <div className="flex min-w-0 flex-col gap-2 border-b border-slate-200 px-3 pb-2 xl:flex-row xl:items-center xl:justify-between xl:pb-0">
+          <div className="-mb-px flex items-stretch gap-1 overflow-x-auto">
+            {archiveTabs.map((tab) => (
+              <UnderlineTab
+                key={tab.key}
+                active={activeArchiveTab === tab.key}
+                label={tab.label}
+                icon={tab.icon}
+                count={tab.key === "devlog" ? projectDevlogCount : undefined}
+                onClick={() => onActiveArchiveTabChange(tab.key)}
+              />
+            ))}
+          </div>
+
+          {activeArchiveTab !== "final" ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 xl:justify-end">
+              {activeArchiveTab === "devlog" ? (
+                <>
+                  <ToolbarSortSelect value={sortType} onChange={setSortType} />
+
+                  {/* 날짜 / 기간 선택 */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDatePickerOpen((prev) => !prev)}
+                      aria-expanded={datePickerOpen}
+                      className={cn(
+                        "inline-flex h-8 items-center gap-1.5 rounded-md border bg-white px-2.5 text-xs font-medium transition-colors hover:bg-slate-50",
+                        hasDateFilter
+                          ? "border-[#C9D2FF] text-[#4058D6]"
+                          : "border-slate-200 text-slate-700",
+                      )}
+                    >
+                      <CalendarDays size={13} />
+                      <span>
+                        {dateFilterMode === "single" && selectedDate
+                          ? selectedDate
+                          : dateFilterMode === "range" && (startDate || endDate)
+                            ? `${startDate || "처음"} ~ ${endDate || "오늘"}`
+                            : "날짜/기간"}
+                      </span>
+                      <ChevronDown
+                        size={13}
+                        className={cn(
+                          "text-slate-400 transition-transform",
+                          datePickerOpen && "rotate-180",
+                        )}
+                      />
+                    </button>
+
+                    {datePickerOpen && (
+                      <div className="absolute right-0 top-10 z-50 w-[min(300px,calc(100vw-32px))] rounded-md border border-slate-300 bg-white p-3">
+                        {/* 날짜 / 기간 */}
+                        <div className="mb-3 grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDateFilterMode("single");
+                              setStartDate("");
+                              setEndDate("");
+                            }}
+                            className={cn(
+                              "h-7 rounded text-xs font-semibold transition-colors",
+                              dateFilterMode === "single"
+                                ? "bg-white text-[#4058D6]"
+                                : "text-slate-500 hover:text-slate-800",
+                            )}
+                          >
+                            날짜
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDateFilterMode("range");
+                              setSelectedDate("");
+                            }}
+                            className={cn(
+                              "h-7 rounded text-xs font-semibold transition-colors",
+                              dateFilterMode === "range"
+                                ? "bg-white text-[#4058D6]"
+                                : "text-slate-500 hover:text-slate-800",
+                            )}
+                          >
+                            기간
+                          </button>
+                        </div>
+
+                        {dateFilterMode === "single" && (
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-medium text-slate-500">
+                              조회할 날짜
+                            </span>
+                            <input
+                              type="date"
+                              value={selectedDate}
+                              onChange={(event) => setSelectedDate(event.target.value)}
+                              className={INPUT_BASE}
+                            />
+                          </label>
+                        )}
+
+                        {dateFilterMode === "range" && (
+                          <div className="space-y-2">
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-medium text-slate-500">
+                                시작일
+                              </span>
+                              <input
+                                type="date"
+                                value={startDate}
+                                max={endDate || undefined}
+                                onChange={(event) => setStartDate(event.target.value)}
+                                className={INPUT_BASE}
+                              />
+                            </label>
+
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-medium text-slate-500">
+                                종료일
+                              </span>
+                              <input
+                                type="date"
+                                value={endDate}
+                                min={startDate || undefined}
+                                onChange={(event) => setEndDate(event.target.value)}
+                                className={INPUT_BASE}
+                              />
+                            </label>
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDate("");
+                              setStartDate("");
+                              setEndDate("");
+                            }}
+                            className="text-xs font-medium text-slate-500 transition-colors hover:text-slate-800"
+                          >
+                            초기화
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setDatePickerOpen(false)}
+                            className="h-8 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+                          >
+                            적용
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
+
+              <ToolbarSearch
+                value={keyword}
+                onChange={onKeywordChange}
+                placeholder={
+                  activeArchiveTab === "devlog"
+                    ? "제목, 내용 검색"
+                    : "요구사항·API 검색"
+                }
+                className="w-full sm:w-[240px]"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* 콘텐츠 */}
+        {activeArchiveTab === "devlog" && (
+          // 문서가 많으면 이 목록 안에서 스크롤한다
+          <div className="p-4 lg:max-h-[calc(100dvh-340px)] lg:min-h-[320px] lg:overflow-y-auto">
+            <ArchiveDevlogContent devlogs={filteredDevlogs} />
+          </div>
         )}
 
-        {activeDesignSection === "api" && (
-          <DesignApiSpecsPage apiSpecs={apiSpecs} />
+        {activeArchiveTab === "design" && (
+          // 공통 자료실과 같은 설계 문서 보기. 다이어그램이 채울 높이를 정해 준다.
+          <div className="flex h-[min(720px,calc(100dvh-340px))] min-h-[460px] flex-col overflow-y-auto lg:overflow-hidden">
+            <ArchiveDesignViewer
+              workspaceId={selectedDesignWorkspaceId}
+              section={designSection}
+              onSectionChange={(section) => {
+                setDesignSection(section);
+                onKeywordChange("");
+              }}
+              keyword={keyword}
+              legacyRequirements={designRequirements}
+              legacyApiSpecs={designApiSpecs}
+              legacyDocument={designDocument}
+              legacyLoading={designLoading}
+              legacyError={designError}
+            />
+          </div>
         )}
 
-        {activeDesignSection === "erd" && (
-          <DesignErdPage
-            tables={erdTables}
-            edges={erdRelations}
-            relationCount={erdRelations.length}
-          />
-        )}
-
-        {activeDesignSection === "flow" && (
-          <DesignFlowPage
-            nodes={flowNodes}
-            edges={flowEdges}
-            edgeCount={flowEdges.length}
-          />
+        {activeArchiveTab === "final" && (
+          <div className="p-4">
+            <ArchiveFinalReportContent
+              selectedProject={selectedProject}
+              devlogCount={filteredDevlogs.length}
+              draft={finalReportDraft}
+              onDraftChange={setFinalReportDraft}
+              onGenerate={handleGenerateFinalReport}
+              designDocument={parsedDesignDocument}
+              isGenerating={finalReportLoading}
+              errorMessage={finalReportError}
+            />
+          </div>
         )}
       </section>
-    )}
-    </div>
+    </>
   );
 }
 
-function DesignRequirementsPage({
-  requirements,
-}: {
-  requirements: DesignRequirementItem[];
-}) {
-  if (requirements.length === 0) {
-    return <DesignEmptyText text="작성된 요구사항이 없습니다." />;
+function ArchiveDevlogContent({ devlogs }: { devlogs: Devlog[] }) {
+  if (devlogs.length === 0) {
+    return <EmptyState message="조건에 맞는 개발일지가 없습니다." />;
   }
 
   return (
-    <div className="space-y-2.5">
-      {requirements.map((item, index) => (
-        <article
-          key={item.id}
-          className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4"
-        >
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-xs font-black text-white">
-              {index + 1}
-            </span>
-            <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-black text-blue-700">
-              {item.category || "기본"}
-            </span>
-            <h5 className="text-sm font-black text-slate-950">
-              {item.name || "이름 없는 요구사항"}
-            </h5>
-          </div>
-          <p className="text-sm font-semibold leading-6 text-slate-600">
-            {item.description || "설명이 없습니다."}
-          </p>
-        </article>
+    <ul className="min-w-0 space-y-2.5">
+      {devlogs.map((devlog) => (
+        <li key={devlog.id} className="min-w-0">
+          <DevlogCard devlog={devlog} />
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
+
 function formatApiPayload(value?: string | null) {
   if (!value || !value.trim()) return "-";
 
@@ -4341,590 +4189,6 @@ function formatApiPayload(value?: string | null) {
   } catch {
     return value;
   }
-}
-
-function DesignApiSpecsPage({ apiSpecs }: { apiSpecs: DesignApiSpecItem[] }) {
-  if (apiSpecs.length === 0) {
-    return <DesignEmptyText text="작성된 API 명세가 없습니다." />;
-  }
-
-  return (
-    <div className="space-y-3">
-      {apiSpecs.map((item) => (
-        <article
-          key={item.id}
-          className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm"
-        >
-          <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-black text-white">
-                {item.method || "GET"}
-              </span>
-
-              <code className="min-w-0 break-all rounded-lg bg-white px-3 py-1.5 text-sm font-black text-slate-900">
-                {item.endpoint || "/api/example"}
-              </code>
-            </div>
-
-            <span className="w-fit rounded-full bg-white px-3 py-1 text-[11px] font-black text-blue-700">
-              API 명세
-            </span>
-          </div>
-
-          <div className="space-y-4 p-4">
-            <div>
-              <p className="mb-1 text-xs font-black text-slate-400">설명</p>
-              <p className="whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-700">
-                {item.description || "설명이 없습니다."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                <p className="mb-2 text-xs font-black text-blue-700">
-                  요청 데이터
-                </p>
-                <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-blue-100 bg-white p-3 text-xs font-bold leading-6 text-slate-700">
-                  {formatApiPayload(item.request)}
-                </pre>
-              </div>
-
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                <p className="mb-2 text-xs font-black text-blue-700">
-                  응답 데이터
-                </p>
-                <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-blue-100 bg-white p-3 text-xs font-bold leading-6 text-slate-700">
-                  {formatApiPayload(item.response)}
-                </pre>
-              </div>
-            </div>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function DesignErdPage({
-  tables,
-  edges,
-  relationCount,
-}: {
-  tables: Record<string, unknown>[];
-  edges: Record<string, unknown>[];
-  relationCount: number;
-}) {
-  if (tables.length === 0) {
-    return <DesignEmptyText text="작성된 ERD 테이블이 없습니다." />;
-  }
-
-  return (
-    <div className="space-y-3">
-      <DesignDiagramPreview
-        nodes={tables}
-        edges={edges}
-        type="erd"
-        title="ERD 구조 미리보기"
-        description="설계단계에서 작성한 테이블 위치와 관계선을 시각화했습니다."
-      />
-
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-        <p className="text-sm font-black text-slate-700">
-          테이블 {tables.length}개 · 관계 {relationCount}개
-        </p>
-        <p className="text-xs font-semibold text-slate-500">
-          아래 목록에서는 각 테이블의 컬럼을 문서 형태로 확인합니다.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3">
-        {tables.map((node, index) => {
-          const columns = getNodeColumns(node);
-
-          return (
-            <article
-              key={String(node.id ?? index)}
-              className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm"
-            >
-              <div className="flex items-center justify-between gap-2 bg-slate-950 px-4 py-3 text-white">
-                <div className="min-w-0">
-                  <h5 className="truncate text-sm font-black">
-                    {getNodeLabel(node, `TABLE_${index + 1}`)}
-                  </h5>
-                  <p className="text-[11px] font-semibold text-slate-300">
-                    컬럼 {columns.length}개
-                  </p>
-                </div>
-                <Database size={16} />
-              </div>
-
-              <div className="max-h-[220px] divide-y divide-slate-100 overflow-y-auto">
-                {columns.length === 0 ? (
-                  <p className="px-4 py-4 text-xs font-bold text-slate-400">
-                    컬럼이 없습니다.
-                  </p>
-                ) : (
-                  columns.map((column, columnIndex) => (
-                    <div
-                      key={String(column.id ?? columnIndex)}
-                      className="flex items-center justify-between gap-2 px-4 py-2.5 text-xs"
-                    >
-                      <span className="min-w-0 truncate font-black text-slate-700">
-                        {typeof column.name === "string"
-                          ? column.name
-                          : "column"}
-                      </span>
-                      <span className="shrink-0 rounded-lg bg-blue-50 px-2 py-0.5 font-black text-blue-700">
-                        {typeof column.type === "string" ? column.type : "TYPE"}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function DesignFlowPage({
-  nodes,
-  edges,
-  edgeCount,
-}: {
-  nodes: Record<string, unknown>[];
-  edges: Record<string, unknown>[];
-  edgeCount: number;
-}) {
-  if (nodes.length === 0) {
-    return <DesignEmptyText text="작성된 화면 흐름이 없습니다." />;
-  }
-
-  return (
-    <div className="space-y-3">
-      <DesignDiagramPreview
-        nodes={nodes}
-        edges={edges}
-        type="flow"
-        title="화면 흐름 미리보기"
-        description="화면 사이의 이동 흐름을 시각화했습니다."
-      />
-
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-        <p className="text-sm font-black text-slate-700">
-          노드 {nodes.length}개 · 연결 {edgeCount}개
-        </p>
-        <p className="text-xs font-semibold text-slate-500">
-          아래 목록에서는 각 흐름 노드의 역할을 문서 형태로 확인합니다.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-        {nodes.map((node, index) => (
-          <div
-            key={String(node.id ?? index)}
-            className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700">
-              <GitBranch size={17} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-slate-950">
-                {getNodeLabel(node, `NODE_${index + 1}`)}
-              </p>
-              <p className="truncate text-xs font-semibold text-slate-500">
-                {getNodeSubText(node)}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * 화면 흐름 상자.
- *
- * 설계단계의 화면 카드(src/components/design/tabs/screens/ScreenNode.tsx)와
- * 같은 것을 보여 준다. 같은 데이터인데 그림이 다르면 다른 자료로 오해한다.
- */
-function ScreenFlowNodeShape({
-  node,
-  width,
-  height,
-}: {
-  node: NormalizedDiagramNode;
-  width: number;
-  height: number;
-}) {
-  const shownApis = node.apiLabels.slice(0, 3);
-  const restApis = node.apiLabels.length - shownApis.length;
-
-  return (
-    <g>
-      <rect
-        x={node.x}
-        y={node.y}
-        width={width}
-        height={height}
-        rx={16}
-        fill="#ffffff"
-        stroke={node.isEntry ? "#34d399" : "#e5e7eb"}
-        strokeWidth={node.isEntry ? 2 : 1}
-      />
-
-      {node.isEntry ? (
-        <>
-          <rect
-            x={node.x + 12}
-            y={node.y + 12}
-            width={34}
-            height={17}
-            rx={6}
-            fill="#ecfdf5"
-          />
-          <text
-            x={node.x + 29}
-            y={node.y + 24}
-            textAnchor="middle"
-            fill="#047857"
-            fontSize={9}
-            fontWeight={900}
-          >
-            시작
-          </text>
-        </>
-      ) : null}
-
-      <text
-        x={node.x + (node.isEntry ? 54 : 14)}
-        y={node.y + 25}
-        fill="#0f172a"
-        fontSize={13}
-        fontWeight={900}
-      >
-        {node.label}
-      </text>
-
-      {node.requiresAuth ? (
-        <text
-          x={node.x + width - 14}
-          y={node.y + 25}
-          textAnchor="end"
-          fill="#9ca3af"
-          fontSize={9}
-          fontWeight={900}
-        >
-          로그인
-        </text>
-      ) : null}
-
-      <line
-        x1={node.x}
-        y1={node.y + 38}
-        x2={node.x + width}
-        y2={node.y + 38}
-        stroke="#eef1f4"
-      />
-
-      <text
-        x={node.x + 14}
-        y={node.y + 56}
-        fill="#6b7280"
-        fontSize={10}
-        fontWeight={700}
-        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-      >
-        {node.route}
-      </text>
-
-      <rect
-        x={node.x + 14}
-        y={node.y + 64}
-        width={62}
-        height={17}
-        rx={5}
-        fill={node.requirementCount === 0 ? "#fef2f2" : "#f1f5f9"}
-      />
-      <text
-        x={node.x + 20}
-        y={node.y + 76}
-        fill={node.requirementCount === 0 ? "#dc2626" : "#475569"}
-        fontSize={9}
-        fontWeight={900}
-      >
-        요구사항 {node.requirementCount}
-      </text>
-
-      <rect
-        x={node.x + 82}
-        y={node.y + 64}
-        width={34}
-        height={17}
-        rx={5}
-        fill="#f1f5f9"
-      />
-      <text
-        x={node.x + 99}
-        y={node.y + 76}
-        textAnchor="middle"
-        fill="#475569"
-        fontSize={9}
-        fontWeight={900}
-      >
-        {node.roleLabel}
-      </text>
-
-      {shownApis.length === 0 ? (
-        <text
-          x={node.x + 14}
-          y={node.y + 100}
-          fill="#9ca3af"
-          fontSize={9}
-          fontWeight={700}
-        >
-          호출하는 API 없음
-        </text>
-      ) : (
-        shownApis.map((label, index) => (
-          <text
-            key={label}
-            x={node.x + 14}
-            y={node.y + 100 + index * 14}
-            fill="#6b7280"
-            fontSize={9}
-            fontWeight={700}
-            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          >
-            {label}
-          </text>
-        ))
-      )}
-
-      {restApis > 0 ? (
-        <text
-          x={node.x + 14}
-          y={node.y + 100 + shownApis.length * 14}
-          fill="#9ca3af"
-          fontSize={9}
-          fontWeight={700}
-        >
-          외 {restApis}개
-        </text>
-      ) : null}
-    </g>
-  );
-}
-
-function DesignDiagramPreview({
-  nodes,
-  edges,
-  type,
-  title,
-  description,
-}: {
-  nodes: Record<string, unknown>[];
-  edges: Record<string, unknown>[];
-  type: "erd" | "flow";
-  title: string;
-  description: string;
-}) {
-  const normalizedNodes = useMemo(
-    () => normalizeDiagramNodes(nodes, type),
-    [nodes, type],
-  );
-
-  const layout = useMemo(
-    () => getDiagramLayout(normalizedNodes, type),
-    [normalizedNodes, type],
-  );
-
-  const nodeMap = useMemo(
-    () => new Map(layout.nodes.map((node) => [node.id, node])),
-    [layout.nodes],
-  );
-
-  const strokeColor = type === "erd" ? "#2563eb" : "#7c3aed";
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
-      <div className="flex flex-col justify-between gap-2 border-b border-blue-100 bg-blue-50 px-4 py-3 md:flex-row md:items-center">
-        <div>
-          <p className="text-sm font-black text-slate-950">{title}</p>
-          <p className="mt-0.5 text-xs font-semibold text-slate-500">
-            {description}
-          </p>
-        </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1 text-[11px] font-black text-blue-700 shadow-sm">
-          노드 {nodes.length}개 · 연결 {edges.length}개
-        </span>
-      </div>
-
-      <div className="overflow-auto bg-[#f8fbff] p-3">
-        <svg
-          viewBox={`0 0 ${layout.width} ${layout.height}`}
-          className="h-[420px] min-w-[860px] w-full rounded-xl border border-blue-100 bg-white"
-          role="img"
-          aria-label={title}
-        >
-          <defs>
-            <marker
-              id={`archive-arrow-${type}`}
-              markerWidth="10"
-              markerHeight="10"
-              refX="8"
-              refY="3"
-              orient="auto"
-            >
-              <path d="M0,0 L0,6 L9,3 z" fill={strokeColor} />
-            </marker>
-            <pattern
-              id={`archive-dot-grid-${type}`}
-              width="18"
-              height="18"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="1" cy="1" r="1" fill="#dbeafe" />
-            </pattern>
-          </defs>
-
-          <rect width="100%" height="100%" fill="#f8fbff" />
-          <rect
-            width="100%"
-            height="100%"
-            fill={`url(#archive-dot-grid-${type})`}
-          />
-
-          {edges.map((edge, index) => {
-            const { source, target } = getEdgeSourceTarget(edge);
-            const sourceNode = nodeMap.get(source);
-            const targetNode = nodeMap.get(target);
-
-            if (!sourceNode || !targetNode) return null;
-
-            const sourceX = sourceNode.x + layout.nodeWidth;
-            const sourceY = sourceNode.y + layout.nodeHeight / 2;
-            const targetX = targetNode.x;
-            const targetY = targetNode.y + layout.nodeHeight / 2;
-
-            // 화면 흐름에서는 "무엇을 했을 때 넘어가는가" 가 핵심 정보다.
-            const edgeLabel =
-              typeof edge.label === "string" ? edge.label.trim() : "";
-
-            return (
-              <g key={String(edge.id ?? index)}>
-                <path
-                  d={buildSvgPath(sourceX, sourceY, targetX, targetY)}
-                  fill="none"
-                  stroke={strokeColor}
-                  strokeWidth={2}
-                  markerEnd={`url(#archive-arrow-${type})`}
-                />
-
-                {edgeLabel ? (
-                  <text
-                    x={(sourceX + targetX) / 2}
-                    y={(sourceY + targetY) / 2 - 8}
-                    textAnchor="middle"
-                    fill="#475569"
-                    fontSize={10}
-                    fontWeight={700}
-                    stroke="#ffffff"
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                  >
-                    {edgeLabel}
-                  </text>
-                ) : null}
-              </g>
-            );
-          })}
-
-          {layout.nodes.map((node) => {
-            if (type === "erd") {
-              return (
-                <g key={node.id}>
-                  <rect
-                    x={node.x}
-                    y={node.y}
-                    width={layout.nodeWidth}
-                    height={layout.nodeHeight}
-                    rx={14}
-                    fill="#ffffff"
-                    stroke="#bfdbfe"
-                  />
-                  <rect
-                    x={node.x}
-                    y={node.y}
-                    width={layout.nodeWidth}
-                    height={42}
-                    rx={14}
-                    fill="#5873F9"
-                  />
-                  <text
-                    x={node.x + 16}
-                    y={node.y + 27}
-                    fill="#ffffff"
-                    fontSize={13}
-                    fontWeight={900}
-                  >
-                    {node.label}
-                  </text>
-
-                  {node.columns.length === 0 ? (
-                    <text
-                      x={node.x + 16}
-                      y={node.y + 78}
-                      fill="#64748b"
-                      fontSize={11}
-                      fontWeight={700}
-                    >
-                      컬럼 없음
-                    </text>
-                  ) : (
-                    node.columns.slice(0, 4).map((column, columnIndex) => {
-                      const columnName =
-                        typeof column.name === "string"
-                          ? column.name
-                          : "column";
-                      const columnType =
-                        typeof column.type === "string" ? column.type : "TYPE";
-
-                      return (
-                        <text
-                          key={String(column.id ?? columnIndex)}
-                          x={node.x + 16}
-                          y={node.y + 74 + columnIndex * 18}
-                          fill="#334155"
-                          fontSize={11}
-                          fontWeight={700}
-                        >
-                          {column.isPk ? "PK " : column.isFk ? "FK " : ""}
-                          {columnName} · {columnType}
-                        </text>
-                      );
-                    })
-                  )}
-                </g>
-              );
-            }
-
-            return (
-              <ScreenFlowNodeShape
-                key={node.id}
-                node={node}
-                width={layout.nodeWidth}
-                height={layout.nodeHeight}
-              />
-            );
-          })}
-        </svg>
-      </div>
-    </section>
-  );
 }
 
 function DesignDocumentBlock({
@@ -4964,14 +4228,6 @@ function DesignDocumentBlock({
   );
 }
 
-function DesignEmptyText({ text }: { text: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-blue-100 bg-blue-50/70 px-4 py-8 text-center">
-      <p className="text-sm font-black text-slate-400">{text}</p>
-    </div>
-  );
-}
-
 function ArchiveFinalReportContent({
   selectedProject,
   devlogCount,
@@ -5003,81 +4259,79 @@ function ArchiveFinalReportContent({
   }, [draft]);
 
   return (
-    <div className="pb-20">
+    <div>
       {errorMessage && (
-        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+        <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-semibold text-red-700">
           {errorMessage}
-        </div>
+        </p>
       )}
 
-      <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-        {/* 보고서 헤더: 별도 AI 안내 박스를 없애고 액션을 한곳에 모음 */}
-        <div className="mb-4 flex flex-col justify-between gap-3 border-b border-blue-50 pb-4 md:flex-row md:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="truncate text-base font-black text-slate-950">
-                {selectedProject?.name
-                  ? `${selectedProject.name} 최종 보고서`
-                  : "프로젝트 최종 보고서"}
-              </p>
+      {/* 보고서 머리: 제목·바탕 자료 | AI 초안 생성 */}
+      <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-[15px] font-semibold text-slate-900">
+              {selectedProject?.name
+                ? `${selectedProject.name} 최종 보고서`
+                : "프로젝트 최종 보고서"}
+            </h3>
 
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
-                개발일지 {devlogCount}개
-              </span>
-            </div>
-
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              AI 초안을 생성한 뒤 직접 수정하고, ERD와 화면 흐름을 함께 확인할 수 있습니다.
-            </p>
+            <span className="rounded border border-slate-200 bg-white px-1.5 py-px text-[11px] font-medium text-slate-500">
+              개발일지 {devlogCount}개
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={isGenerating}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-4 text-xs font-black text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Sparkles size={15} />
-            {isGenerating ? "생성 중..." : draft.trim() ? "AI 초안 다시 생성" : "AI 초안 생성"}
-          </button>
+          <p className="mt-0.5 text-xs text-slate-500">
+            AI 초안을 생성한 뒤 직접 수정하고, ERD와 화면 흐름을 함께 확인할 수 있습니다.
+          </p>
         </div>
 
-        <div className="space-y-5">
-          <section>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h5 className="text-sm font-black text-slate-950">
-                1. AI 최종 보고서 초안
-              </h5>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={isGenerating}
+          className={BUTTON_PRIMARY}
+        >
+          <Sparkles size={14} />
+          {isGenerating ? "생성 중..." : draft.trim() ? "AI 초안 다시 생성" : "AI 초안 생성"}
+        </button>
+      </div>
 
-              {draft.trim() && (
-                <span className="text-[10px] font-bold text-emerald-600">
-                  직접 수정 가능
-                </span>
-              )}
-            </div>
+      <div className="space-y-5">
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-slate-900">
+              1. AI 최종 보고서 초안
+            </h4>
 
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(event) => onDraftChange(event.target.value)}
-              placeholder={
-                isGenerating
-                  ? "AI가 최종 보고서 초안을 생성하는 중입니다."
-                  : "AI 초안 생성 버튼을 누르면 최종 보고서 초안이 여기에 작성됩니다. 생성 후 직접 수정할 수 있습니다."
-              }
-              className="block min-h-[420px] w-full resize-none overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/30 p-4 text-sm font-semibold leading-7 text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-            />
-          </section>
+            {draft.trim() && (
+              <span className="text-xs font-medium text-emerald-600">
+                직접 수정 가능
+              </span>
+            )}
+          </div>
 
-          <section>
-            <h5 className="mb-2 text-sm font-black text-slate-950">
-              2. 설계 다이어그램
-            </h5>
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            placeholder={
+              isGenerating
+                ? "AI가 최종 보고서 초안을 생성하는 중입니다."
+                : "AI 초안 생성 버튼을 누르면 최종 보고서 초안이 여기에 작성됩니다. 생성 후 직접 수정할 수 있습니다."
+            }
+            className="block min-h-[420px] w-full resize-none overflow-hidden rounded-md border border-slate-200 bg-white p-4 text-sm leading-7 text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-[#AAB8FF]"
+          />
+        </section>
 
-            <FinalReportDesignVisuals designDocument={designDocument} />
-          </section>
-        </div>
-      </section>
+        <section>
+          <h4 className="mb-2 text-sm font-semibold text-slate-900">
+            2. 설계 다이어그램
+          </h4>
+
+          <FinalReportDesignVisuals designDocument={designDocument} />
+        </section>
+      </div>
     </div>
   );
 }
@@ -5097,7 +4351,7 @@ function FinalReportDesignVisuals({
 
   if (!hasErd && !hasFlow) {
     return (
-      <section className="rounded-2xl border border-dashed border-blue-100 bg-blue-50/70 px-4 py-10 text-center">
+      <section className="rounded-lg border border-dashed border-slate-200 bg-blue-50/70 px-4 py-10 text-center">
         <p className="text-sm font-black text-slate-400">
           최종 보고서에 표시할 ERD 또는 화면 흐름이 없습니다.
         </p>
@@ -5106,7 +4360,7 @@ function FinalReportDesignVisuals({
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
       <div className="border-b border-blue-50 pb-4">
         <p className="text-sm font-black text-slate-950">설계 다이어그램</p>
         <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -5134,7 +4388,7 @@ function FinalReportErdDiagram({
   const bounds = getDiagramBounds(nodes);
 
   return (
-    <section className="rounded-2xl border border-blue-100 bg-slate-50 p-4">
+    <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
         <div>
           <h5 className="text-sm font-black text-slate-950">ERD</h5>
@@ -5144,7 +4398,7 @@ function FinalReportErdDiagram({
         </div>
       </div>
 
-      <div className="overflow-auto rounded-2xl border border-blue-100 bg-white">
+      <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
         <div
           className="relative"
           style={{
@@ -5163,7 +4417,7 @@ function FinalReportErdDiagram({
             return (
               <article
                 key={String(node.id ?? index)}
-                className="absolute w-[230px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                className="absolute w-[230px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
                 style={{
                   left: position.x,
                   top: position.y,
@@ -5230,7 +4484,7 @@ function FinalReportFlowDiagram({
   const bounds = getDiagramBounds(nodes);
 
   return (
-    <section className="rounded-2xl border border-blue-100 bg-slate-50 p-4">
+    <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
         <div>
           <h5 className="text-sm font-black text-slate-950">화면 흐름</h5>
@@ -5240,7 +4494,7 @@ function FinalReportFlowDiagram({
         </div>
       </div>
 
-      <div className="overflow-auto rounded-2xl border border-blue-100 bg-white">
+      <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
         <div
           className="relative"
           style={{
@@ -5270,7 +4524,7 @@ function FinalReportFlowDiagram({
               <article
                 key={String(node.id ?? index)}
                 className={[
-                  "absolute flex w-[260px] items-center gap-3 rounded-2xl border p-4 shadow-sm",
+                  "absolute flex w-[260px] items-center gap-3 rounded-lg border p-4 shadow-sm",
                   colorClass,
                 ].join(" ")}
                 style={{
@@ -5445,31 +4699,65 @@ function ArchiveMetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+// 공통 자료실 문서 카드와 같은 모양(아이콘·제목·프로젝트 배지·작성일 / 미리보기 2줄).
+// 마이페이지에는 따로 여는 상세 화면이 없어, 누르면 카드 안에서 전체 내용을 펼친다.
 function DevlogCard({ devlog }: { devlog: Devlog }) {
-  return (
-    <article className="rounded-xl border border-[var(--waivs-border)] bg-white p-4 transition hover:border-[#5873F9]/30 hover:shadow-sm">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h4 className="line-clamp-1 text-sm font-black text-slate-950">
-              {devlog.title}
-            </h4>
+  const [expanded, setExpanded] = useState(false);
 
-            <span className="rounded-full bg-[#EEF3FF] px-2.5 py-0.5 text-[10px] font-black text-[#5873F9]">
+  return (
+    <button
+      type="button"
+      onClick={() => setExpanded((prev) => !prev)}
+      aria-expanded={expanded}
+      className={cn(
+        "group block w-full min-w-0 rounded-[10px] border bg-white px-4 py-3.5 text-left transition-colors sm:px-5",
+        expanded
+          ? "border-[#AAB8FF] bg-[#F8FAFF]"
+          : "border-slate-200 hover:border-[#C9D2FF] hover:bg-[#F8FAFF]",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
+          <BookOpen size={15} />
+        </span>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h4
+            className="min-w-0 truncate text-sm font-bold text-slate-950 group-hover:text-[#4058D6]"
+            title={devlog.title}
+          >
+            {devlog.title}
+          </h4>
+          {devlog.projectName ? (
+            <span
+              className="hidden max-w-[180px] shrink-0 truncate rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[10px] font-semibold text-[#4058D6] sm:inline"
+              title={devlog.projectName}
+            >
               {devlog.projectName}
             </span>
-          </div>
-
-          <p className="line-clamp-4 whitespace-pre-wrap text-sm font-medium leading-6 text-slate-600">
-            {devlog.summary}
-          </p>
+          ) : null}
         </div>
-
-        <span className="shrink-0 text-[11px] font-bold text-slate-400">
+        <span className="shrink-0 text-right text-[11px] font-medium tabular-nums text-slate-400">
           {devlog.date}
         </span>
+        <ChevronDown
+          size={14}
+          className={cn(
+            "shrink-0 text-slate-400 transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
       </div>
-    </article>
+
+      {/* 접힘: 2줄 말줄임 / 펼침: 전체. 띄어쓰기 없는 긴 문자열도 카드 안에서 줄바꿈 */}
+      <p
+        className={cn(
+          "mt-1.5 pl-[42px] text-[13px] leading-6 text-slate-500 [overflow-wrap:anywhere]",
+          expanded ? "whitespace-pre-wrap text-slate-700" : "line-clamp-2",
+        )}
+      >
+        {devlog.summary || "내용이 없습니다."}
+      </p>
+    </button>
   );
 }
 
@@ -5696,29 +4984,26 @@ function HeatmapSection({
   }, [heatmapValues]);
 
   return (
-    <section className="waivs-panel min-w-0 p-5">
+    <section className={PANEL}>
       {/* =====================================================
           제목
          ===================================================== */}
-      <div className="flex flex-col gap-3 border-b border-[var(--waivs-border-soft)] pb-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-black tracking-tight text-slate-950">
-              개발 활동 히트맵
-            </h3>
-
-            <span className="rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[11px] font-black text-[#5873F9]">
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <h3 className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-slate-900">
+            개발 활동 히트맵
+            <span className="rounded border border-[#D9E1FF] bg-[#F5F7FF] px-1.5 py-px text-[11px] font-semibold text-[#4058D6]">
               최근 {heatmapStats.totalDays}일
             </span>
-          </div>
+          </h3>
 
-          <p className="mt-1 text-sm font-medium text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-500">
             개발일지, 일정 완료, GitHub 커밋 활동을 날짜별로 확인합니다.
           </p>
         </div>
 
         {/* 활동 범례 */}
-        <div className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold text-slate-400">
+        <div className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-slate-400">
           <span className="mr-1">
             적음
           </span>
@@ -5738,7 +5023,7 @@ function HeatmapSection({
       {/* =====================================================
           상단 통계
          ===================================================== */}
-      <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 px-4 pt-3 lg:grid-cols-4">
         <HeatmapMetricCard
           label="총 활동"
           value={`${heatmapStats.totalScore}건`}
@@ -5771,8 +5056,9 @@ function HeatmapSection({
       {/* =====================================================
           GitHub 스타일 잔디 영역
          ===================================================== */}
-      <div className="mt-4 min-w-0 overflow-hidden rounded-xl border border-[var(--waivs-border)] bg-white">
-        <div className="w-full min-w-0 px-5 pb-5 pt-4">
+      {/* 53열을 부모 너비로 나눠 그리므로 화면 너비에 맞춰 줄어들고 가로로 잘리지 않는다 */}
+      <div className="mt-3 min-w-0 border-t border-slate-100">
+        <div className="w-full min-w-0 px-4 pb-4 pt-3">
           {/* ===============================================
               월
              =============================================== */}
@@ -5902,8 +5188,8 @@ function HeatmapSection({
         {/* =================================================
             하단 설명
            ================================================= */}
-        <div className="flex flex-col gap-3 border-t border-[var(--waivs-border-soft)] bg-slate-50/50 px-5 py-3 md:flex-row md:items-center md:justify-between">
-          <p className="text-xs font-medium text-slate-500">
+        <div className="flex flex-col gap-2 rounded-b-lg border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 md:flex-row md:items-center md:justify-between">
+          <p className="text-xs text-slate-500">
             하루의 개발 활동이 많을수록 더 진한 색으로 표시됩니다.
           </p>
 
@@ -5949,17 +5235,14 @@ function HeatmapMetricCard({
   description: string;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--waivs-border-soft)] bg-slate-50/70 px-4 py-3">
-      <p className="text-[10px] font-bold text-slate-400">
-        {label}
-      </p>
+    <div className="min-w-0 rounded-md border border-slate-100 bg-slate-50/70 px-3 py-2">
+      <p className="truncate text-xs font-medium text-slate-500">{label}</p>
 
-      <p className="mt-1 text-base font-black tracking-tight text-slate-950">
-        {value}
-      </p>
-
-      <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
-        {description}
+      <p className="mt-0.5 flex items-baseline gap-1.5">
+        <span className="text-base font-semibold tabular-nums text-slate-900">
+          {value}
+        </span>
+        <span className="truncate text-[11px] text-slate-400">{description}</span>
       </p>
     </div>
   );
@@ -5978,11 +5261,9 @@ function HeatmapActivitySummary({
 }) {
   return (
     <div className="flex items-center gap-1.5 whitespace-nowrap text-xs">
-      <span className="font-semibold text-slate-400">
-        {label}
-      </span>
+      <span className="text-slate-500">{label}</span>
 
-      <strong className="font-black text-slate-700">
+      <strong className="font-semibold tabular-nums text-slate-800">
         {value}건
       </strong>
     </div>
@@ -6259,45 +5540,34 @@ function GithubSection() {
   };
 
   return (
-    <section className="waivs-panel overflow-hidden">
-      {/* ==========================================
-          제목
-         ========================================== */}
-      <div className="p-5">
-        <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#5873F9]">
-          Connection
+    <>
+      <MyPageSectionHeader
+        title="GitHub 설정"
+        description="마이페이지에서는 GitHub 계정 인증 상태를 관리합니다. 프로젝트별 저장소 연결은 프로젝트 생성 또는 IDE에서 별도로 설정합니다."
+      />
+
+      {message && (
+        <p className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-[13px] font-semibold text-emerald-700">
+          {message}
         </p>
+      )}
 
-        <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-          GitHub 설정
-        </h2>
-
-        <p className="mt-1 max-w-[850px] text-sm font-medium leading-6 text-slate-500">
-          마이페이지에서는 GitHub 계정 인증 상태를 관리합니다.
-          프로젝트별 저장소 연결은 프로젝트 생성 또는 IDE에서 별도로
-          설정합니다.
+      {errorMessage && (
+        <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] font-semibold text-amber-700">
+          {errorMessage}
         </p>
+      )}
 
-        {message && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-            {message}
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-            {errorMessage}
-          </div>
-        )}
-      </div>
-
-      {/* ==========================================
-          GitHub 계정 연결 상태
-         ========================================== */}
-      <div className="border-y border-[var(--waivs-border-soft)] bg-slate-50/60 p-5">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-slate-900 text-white">
+      <section className={PANEL}>
+        {/* 연결 상태: 이 화면에서 가장 먼저 보여야 하는 정보 */}
+        <div className="flex flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div
+              className={cn(
+                "grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg",
+                isConnected ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-400",
+              )}
+            >
               {isConnected && status?.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -6306,13 +5576,13 @@ function GithubSection() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <Github size={21} />
+                <Github size={22} />
               )}
             </div>
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-black text-slate-950">
+                <p className="text-lg font-semibold text-slate-900">
                   {loading
                     ? "GitHub 연결 상태 확인 중"
                     : isConnected
@@ -6320,63 +5590,56 @@ function GithubSection() {
                       : "GitHub 계정 미연결"}
                 </p>
 
-                <span
-                  className={[
-                    "rounded-full px-2.5 py-0.5 text-[10px] font-black",
-                    isConnected
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-white text-slate-500",
-                  ].join(" ")}
-                >
-                  {isConnected
-                    ? "CONNECTED"
-                    : "NOT CONNECTED"}
-                </span>
+                {!loading ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded border px-1.5 py-px text-[11px] font-semibold",
+                      isConnected
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-slate-50 text-slate-500",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        isConnected ? "bg-emerald-500" : "bg-slate-400",
+                      )}
+                    />
+                    {isConnected ? "연결됨" : "연결되지 않음"}
+                  </span>
+                ) : null}
               </div>
 
-              <p className="mt-1 text-sm font-medium text-slate-500">
+              <p className="mt-0.5 text-[13px] text-slate-500">
                 {isConnected
                   ? `${githubName || "GitHub 계정"} 계정으로 인증되어 있습니다.`
                   : "GitHub 계정을 연결하면 IDE에서 Pull, Push, 커밋 연동 기능을 사용할 수 있습니다."}
               </p>
 
-              {isConnected && (
-                <div className="mt-2 flex flex-wrap gap-2">
+              {isConnected && (githubName || status?.email || status?.connectedAt) ? (
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
                   {githubName && (
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#5873F9]">
-                      @{githubName}
-                    </span>
+                    <span className="font-semibold text-[#4058D6]">@{githubName}</span>
                   )}
-
-                  {status?.email && (
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
-                      {status.email}
-                    </span>
-                  )}
-
+                  {status?.email && <span>{status.email}</span>}
                   {status?.connectedAt && (
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
-                      연결일{" "}
-                      {formatDateLabel(
-                        status.connectedAt,
-                      )}
+                    <span className="tabular-nums">
+                      연결일 {formatDateLabel(status.connectedAt)}
                     </span>
                   )}
-                </div>
-              )}
+                </p>
+              ) : null}
             </div>
           </div>
 
-          {/* ======================================
-              버튼
-             ====================================== */}
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
             <button
               type="button"
               onClick={loadGithubStatus}
               disabled={loading || actionLoading}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-[var(--waivs-border)] bg-white px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+              className={BUTTON_SECONDARY}
             >
+              <RefreshCw size={14} />
               새로고침
             </button>
 
@@ -6384,20 +5647,21 @@ function GithubSection() {
               <>
                 <button
                   type="button"
-                  onClick={handleConnectGithub}
+                  onClick={handleDisconnectGithub}
                   disabled={actionLoading}
-                  className="inline-flex h-9 items-center justify-center rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:opacity-60"
+                  className={BUTTON_DANGER}
                 >
-                  다시 인증
+                  연결 해제
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleDisconnectGithub}
+                  onClick={handleConnectGithub}
                   disabled={actionLoading}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-red-200 bg-white px-4 text-xs font-black text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                  className={BUTTON_PRIMARY}
                 >
-                  연결 해제
+                  <Github size={14} />
+                  다시 인증
                 </button>
               </>
             ) : (
@@ -6405,39 +5669,37 @@ function GithubSection() {
                 type="button"
                 onClick={handleConnectGithub}
                 disabled={loading || actionLoading}
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:opacity-60"
+                className={BUTTON_PRIMARY}
               >
-                <Github size={15} />
+                <Github size={14} />
                 GitHub 연결
               </button>
             )}
           </div>
         </div>
-      </div>
 
-      {/* ==========================================
-          기능 설명
-         ========================================== */}
-      <div className="grid grid-cols-1 divide-y divide-[var(--waivs-border-soft)] md:grid-cols-3 md:divide-x md:divide-y-0">
-        <GithubRoleItem
-          label="마이페이지"
-          title="GitHub 계정 인증"
-          description="사용자 계정과 GitHub 계정을 연결합니다."
-        />
+        {/* 역할 구분: 계정 인증(여기) / 저장소 연결(프로젝트) / Git 작업(IDE) */}
+        <div className="grid grid-cols-1 divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/50 md:grid-cols-3 md:divide-x md:divide-y-0">
+          <GithubRoleItem
+            label="마이페이지"
+            title="GitHub 계정 인증"
+            description="사용자 계정과 GitHub 계정을 연결합니다."
+          />
 
-        <GithubRoleItem
-          label="프로젝트"
-          title="저장소 URL 연결"
-          description="프로젝트마다 서로 다른 Repository를 연결합니다."
-        />
+          <GithubRoleItem
+            label="프로젝트"
+            title="저장소 URL 연결"
+            description="프로젝트마다 서로 다른 Repository를 연결합니다."
+          />
 
-        <GithubRoleItem
-          label="IDE"
-          title="Pull / Push 실행"
-          description="현재 프로젝트 저장소를 기준으로 Git 작업을 수행합니다."
-        />
-      </div>
-    </section>
+          <GithubRoleItem
+            label="IDE"
+            title="Pull / Push 실행"
+            description="현재 프로젝트 저장소를 기준으로 Git 작업을 수행합니다."
+          />
+        </div>
+      </section>
+    </>
   );
 }
 function GithubRoleItem({
@@ -6450,18 +5712,10 @@ function GithubRoleItem({
   description: string;
 }) {
   return (
-    <div className="p-5">
-      <p className="text-[10px] font-black uppercase tracking-wide text-[#5873F9]">
-        {label}
-      </p>
-
-      <p className="mt-1 text-sm font-black text-slate-900">
-        {title}
-      </p>
-
-      <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
-        {description}
-      </p>
+    <div className="px-4 py-3">
+      <p className="text-[11px] font-semibold text-[#5873F9]">{label}</p>
+      <p className="mt-0.5 text-[13px] font-semibold text-slate-800">{title}</p>
+      <p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p>
     </div>
   );
 }
@@ -6664,203 +5918,255 @@ function AccountSection({
   };
 
   return (
-    <section className="waivs-panel overflow-hidden">
-      <div className="p-4">
-        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#5873F9]">
-          Account
+    <>
+      <MyPageSectionHeader
+        title="계정 설정"
+        description="사용자 정보와 로그인 계정 정보를 확인하고 변경합니다."
+      />
+
+      {(message || errorMessage) && (
+        <p
+          role={errorMessage && !message ? "alert" : "status"}
+          className={cn(
+            "mb-3 rounded-md border px-4 py-2.5 text-[13px] font-semibold",
+            message
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700",
+          )}
+        >
+          {message || errorMessage}
         </p>
+      )}
 
-        <h2 className="mt-1 text-lg font-black tracking-tight text-slate-950">
-          계정 설정
-        </h2>
+      <section className={PANEL}>
+        <AccountSettingRow
+          title="사용자명 변경"
+          description="서비스 화면에 표시되는 사용자명을 변경합니다."
+        >
+          <div className="flex max-w-[560px] flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <label
+                htmlFor="mypage-nickname"
+                className="mb-1.5 block text-xs font-medium text-slate-500"
+              >
+                사용자명
+              </label>
+              <input
+                id="mypage-nickname"
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+                maxLength={20}
+                className={INPUT_BASE}
+                placeholder="사용자명을 입력하세요"
+              />
+            </div>
 
-        <p className="mt-0.5 text-xs font-medium text-slate-500">
-          사용자 정보와 로그인 계정 정보를 확인하고 변경합니다.
-        </p>
-
-        {(message || errorMessage) && (
-          <div
-            className={[
-              "mt-3 rounded-xl border px-4 py-3 text-sm font-bold",
-              message
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-red-200 bg-red-50 text-red-700",
-            ].join(" ")}
-          >
-            {message || errorMessage}
+            <button
+              type="button"
+              onClick={handleChangeNickname}
+              disabled={nicknameLoading}
+              className={BUTTON_PRIMARY}
+            >
+              {nicknameLoading ? "변경 중..." : "사용자명 변경"}
+            </button>
           </div>
-        )}
+        </AccountSettingRow>
+
+        <AccountSettingRow
+          title="계정 정보"
+          description="가입일과 현재 계정 정보를 확인합니다."
+        >
+          <div className="grid max-w-[560px] grid-cols-1 gap-3 sm:grid-cols-2">
+            <AccountRow
+              label="현재 사용자명"
+              value={user.nickname}
+              icon={UserRound}
+            />
+
+            <AccountRow
+              label="가입일"
+              value={formatDateLabel(user.createdAt)}
+              icon={CalendarDays}
+            />
+          </div>
+        </AccountSettingRow>
+
+        <AccountSettingRow
+          title="이메일 변경"
+          description="로그인 계정에 사용할 이메일을 변경합니다."
+        >
+          <div className="flex max-w-[560px] flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <label
+                htmlFor="mypage-email"
+                className="mb-1.5 block text-xs font-medium text-slate-500"
+              >
+                이메일
+              </label>
+              <input
+                id="mypage-email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className={INPUT_BASE}
+                placeholder="이메일을 입력하세요"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleChangeEmail}
+              disabled={emailLoading}
+              className={BUTTON_PRIMARY}
+            >
+              {emailLoading ? "변경 중..." : "이메일 변경"}
+            </button>
+          </div>
+        </AccountSettingRow>
+
+        <AccountSettingRow
+          title="비밀번호 변경"
+          description="현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다."
+        >
+          <div className="max-w-[720px]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <PasswordField
+                label="현재 비밀번호"
+                value={currentPassword}
+                onChange={setCurrentPassword}
+                placeholder="현재 비밀번호"
+              />
+
+              <PasswordField
+                label="새 비밀번호"
+                value={newPassword}
+                onChange={setNewPassword}
+                placeholder="8자 이상"
+              />
+
+              <PasswordField
+                label="새 비밀번호 확인"
+                value={newPasswordConfirm}
+                onChange={setNewPasswordConfirm}
+                placeholder="새 비밀번호 확인"
+              />
+            </div>
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={handleChangePassword}
+                disabled={passwordLoading}
+                className={BUTTON_PRIMARY}
+              >
+                {passwordLoading ? "변경 중..." : "비밀번호 변경"}
+              </button>
+            </div>
+          </div>
+        </AccountSettingRow>
+      </section>
+
+      <section className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-red-200 bg-red-50/40 px-4 py-4 md:flex-row md:items-center">
+        <div>
+          <h3 className="text-[15px] font-semibold text-red-600">회원 탈퇴</h3>
+          <p className="mt-0.5 text-[13px] text-slate-500">
+            계정을 삭제하면 복구할 수 없습니다. 필요한 데이터는 먼저 백업해주세요.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleDeleteAccount}
+          disabled={deleteLoading}
+          className={BUTTON_DANGER}
+        >
+          {deleteLoading ? "처리 중..." : "회원 탈퇴"}
+        </button>
+      </section>
+    </>
+  );
+}
+
+// 설정 한 항목: 왼쪽 제목·설명 | 오른쪽 입력. 항목 사이는 구분선으로 나눈다.
+function AccountSettingRow({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+      <div className="min-w-0">
+        <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>
+        <p className="mt-0.5 text-[13px] leading-5 text-slate-500">{description}</p>
       </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
-      <section className="border-t border-[var(--waivs-border-soft)] p-4">
-        <div className="mb-3">
-          <h3 className="text-sm font-black text-slate-900">
-            사용자명 변경
-          </h3>
+/* =========================================================
+   공통 조각
+   ========================================================= */
 
-          <p className="mt-0.5 text-xs font-medium text-slate-500">
-            서비스 화면에 표시되는 사용자명을 변경합니다.
-          </p>
+// 각 메뉴의 머리. 자료실 목록 제목처럼 제목·개수·설명을 한 줄로, 버튼은 오른쪽에 둔다.
+function MyPageSectionHeader({
+  title,
+  count,
+  description,
+  actions,
+}: {
+  title: string;
+  count?: number;
+  description?: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="min-w-0">
+        <h2 className="flex items-baseline gap-1.5 text-lg font-semibold text-slate-900">
+          {title}
+          {typeof count === "number" ? (
+            <span className="text-sm font-semibold tabular-nums text-[#5873F9]">
+              {count}
+            </span>
+          ) : null}
+        </h2>
+        {description ? (
+          <p className="mt-0.5 text-[13px] text-slate-500">{description}</p>
+        ) : null}
+      </div>
+      {actions ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
+          {actions}
         </div>
+      ) : null}
+    </div>
+  );
+}
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="min-w-0 flex-1">
-            <label className="mb-1.5 block text-[11px] font-black text-slate-500">
-              사용자명
-            </label>
-
-            <input
-              value={nickname}
-              onChange={(event) => setNickname(event.target.value)}
-              maxLength={20}
-              className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-              placeholder="사용자명을 입력하세요"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleChangeNickname}
-            disabled={nicknameLoading}
-            className="h-10 shrink-0 rounded-xl bg-[#5873F9] px-4 text-sm font-black text-white transition hover:bg-[#4863E8] disabled:opacity-50"
-          >
-            {nicknameLoading ? "변경 중..." : "사용자명 변경"}
-          </button>
-        </div>
-      </section>
-
-      <section className="border-t border-[var(--waivs-border-soft)] p-4">
-        <div className="mb-3">
-          <h3 className="text-sm font-black text-slate-900">
-            계정 정보
-          </h3>
-
-          <p className="mt-0.5 text-xs font-medium text-slate-500">
-            가입일과 현재 계정 정보를 확인합니다.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <AccountRow
-            label="현재 사용자명"
-            value={user.nickname}
-            icon={UserRound}
-          />
-
-          <AccountRow
-            label="가입일"
-            value={formatDateLabel(user.createdAt)}
-            icon={Settings}
-          />
-        </div>
-      </section>
-
-      <section className="border-t border-[var(--waivs-border-soft)] p-4">
-        <div className="mb-3">
-          <h3 className="text-sm font-black text-slate-900">
-            이메일 변경
-          </h3>
-
-          <p className="mt-0.5 text-xs font-medium text-slate-500">
-            로그인 계정에 사용할 이메일을 변경합니다.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="min-w-0 flex-1">
-            <label className="mb-1.5 block text-[11px] font-black text-slate-500">
-              이메일
-            </label>
-
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
-              placeholder="이메일을 입력하세요"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleChangeEmail}
-            disabled={emailLoading}
-            className="h-10 shrink-0 rounded-xl bg-[#5873F9] px-4 text-sm font-black text-white transition hover:bg-[#4863E8] disabled:opacity-50"
-          >
-            {emailLoading ? "변경 중..." : "이메일 변경"}
-          </button>
-        </div>
-      </section>
-
-      <section className="border-t border-[var(--waivs-border-soft)] p-4">
-        <div className="mb-3">
-          <h3 className="text-sm font-black text-slate-900">
-            비밀번호 변경
-          </h3>
-
-          <p className="mt-0.5 text-xs font-medium text-slate-500">
-            현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-          <PasswordField
-            label="현재 비밀번호"
-            value={currentPassword}
-            onChange={setCurrentPassword}
-            placeholder="현재 비밀번호"
-          />
-
-          <PasswordField
-            label="새 비밀번호"
-            value={newPassword}
-            onChange={setNewPassword}
-            placeholder="8자 이상"
-          />
-
-          <PasswordField
-            label="새 비밀번호 확인"
-            value={newPasswordConfirm}
-            onChange={setNewPasswordConfirm}
-            placeholder="새 비밀번호 확인"
-          />
-        </div>
-
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={handleChangePassword}
-            disabled={passwordLoading}
-            className="h-10 rounded-xl bg-[#5873F9] px-4 text-sm font-black text-white transition hover:bg-[#4863E8] disabled:opacity-50"
-          >
-            {passwordLoading ? "변경 중..." : "비밀번호 변경"}
-          </button>
-        </div>
-      </section>
-
-      <section className="border-t border-red-100 bg-red-50/30 p-4">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <h3 className="text-sm font-black text-red-600">
-              회원 탈퇴
-            </h3>
-
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              계정을 삭제하면 복구할 수 없습니다. 필요한 데이터는 먼저
-              백업해주세요.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleDeleteAccount}
-            disabled={deleteLoading}
-            className="h-9 shrink-0 rounded-xl border border-red-200 bg-white px-4 text-xs font-black text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleteLoading ? "처리 중..." : "회원 탈퇴"}
-          </button>
-        </div>
-      </section>
-    </section>
+// 패널 머리. 대시보드 PanelHeader 와 같은 짜임(제목·설명 | 오른쪽 동작).
+function MyPanelHeader({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+      <div className="min-w-0">
+        <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>
+        {description ? (
+          <p className="mt-0.5 truncate text-xs text-slate-500">{description}</p>
+        ) : null}
+      </div>
+      {action}
+    </div>
   );
 }
 
@@ -6876,25 +6182,21 @@ function ActivityCard({
   icon: React.ElementType;
 }) {
   return (
-    <article className="flex min-h-[66px] items-center gap-2.5 rounded-xl border border-[var(--waivs-border-soft)] bg-slate-50/70 px-3 py-2.5">
-      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
-        <Icon size={14} />
+    <article className="flex min-w-0 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+        <Icon size={16} />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-bold text-slate-400">
-          {label}
-        </p>
-
-        <div className="mt-0.5 flex items-end gap-1.5">
-          <p className="text-base font-black leading-none tracking-tight text-slate-950">
+        <p className="truncate text-xs font-medium text-slate-500">{label}</p>
+        <p className="mt-0.5 flex items-baseline gap-1.5">
+          <span className="text-lg font-semibold leading-tight tabular-nums text-slate-900">
             {value}
-          </p>
-
-          <p className="hidden truncate text-[9px] font-semibold text-slate-400 2xl:block">
+          </span>
+          <span className="hidden truncate text-xs text-slate-400 sm:inline">
             {description}
-          </p>
-        </div>
+          </span>
+        </p>
       </div>
     </article>
   );
@@ -6920,13 +6222,13 @@ function AccountRow({
   icon: React.ElementType;
 }) {
   return (
-    <div>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-black text-slate-500">
+    <div className="min-w-0">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
         <Icon size={13} />
         {label}
       </div>
 
-      <div className="flex h-10 items-center rounded-xl border border-[var(--waivs-border)] bg-slate-50 px-3 text-sm font-bold text-slate-800">
+      <div className="flex h-9 items-center truncate rounded-md border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-800">
         {value}
       </div>
     </div>
@@ -6945,8 +6247,8 @@ function PasswordField({
   placeholder: string;
 }) {
   return (
-    <div>
-      <label className="mb-1.5 block text-[11px] font-black text-slate-500">
+    <div className="min-w-0">
+      <label className="mb-1.5 block text-xs font-medium text-slate-500">
         {label}
       </label>
 
@@ -6955,7 +6257,7 @@ function PasswordField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-10 w-full rounded-xl border border-[var(--waivs-border)] bg-white px-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/10"
+        className={INPUT_BASE}
       />
     </div>
   );
@@ -6963,17 +6265,15 @@ function PasswordField({
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="grid min-h-[220px] place-items-center rounded-2xl border border-dashed border-[var(--waivs-border)] bg-slate-50/70 px-6 py-10 text-center">
+    <div className="grid min-h-[200px] place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center">
       <div className="max-w-[420px]">
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#EEF3FF] text-[#5873F9]">
-          <CheckCircle2 size={20} />
+        <div className="mx-auto grid h-10 w-10 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+          <CheckCircle2 size={18} />
         </div>
 
-        <p className="mt-4 text-sm font-black text-slate-800">
-          {message}
-        </p>
+        <p className="mt-3 text-sm font-semibold text-slate-800">{message}</p>
 
-        <p className="mt-1.5 text-xs font-medium leading-5 text-slate-400">
+        <p className="mt-1 text-xs leading-5 text-slate-500">
           새로운 데이터가 등록되면 이 영역에서 바로 확인할 수 있습니다.
         </p>
       </div>
