@@ -53,11 +53,12 @@ const TABS: { id: DesignTab; label: string; icon: LucideIcon }[] = [
 ];
 
 // 헤더 버튼은 일정 관리 헤더와 같은 크기·색을 쓴다(높이 32px, 얇은 테두리).
+// 개발일지 페이지 헤더 버튼(DevlogManagementMock)과 같은 높이·여백·글씨·테두리
 const HEADER_BUTTON =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
 
 const HEADER_ICON_BUTTON =
-  "grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
+  "grid h-9 w-9 place-items-center rounded-md border border-slate-300 bg-white text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
 
 function relativeTime(
   savedAt: number | null,

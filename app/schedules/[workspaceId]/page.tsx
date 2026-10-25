@@ -2979,7 +2979,7 @@ export default function ScheduleManagementPage() {
                 void loadTeamMembers();
                 void loadAllProjectTodaySchedules(workspaces);
               }}
-              className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+              className="grid h-9 w-9 place-items-center rounded-md border border-slate-300 bg-white text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900"
               title="새로고침"
               aria-label="새로고침"
             >
@@ -2996,7 +2996,7 @@ export default function ScheduleManagementPage() {
 
                 router.push(getIdeHref(workspaceId, currentMode));
               }}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               작업하러 가기
               <ArrowUpRight size={14} />
@@ -3006,7 +3006,7 @@ export default function ScheduleManagementPage() {
               type="button"
               disabled={!workspaceId}
               onClick={() => openCreateModal()}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus size={14} />
               새 일정
