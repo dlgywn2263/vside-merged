@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -36,6 +36,16 @@ const FILTERS: Array<[ProjectFilter, string]> = [
   ["team", "팀"],
 ];
 
+// 메뉴가 화면 가장자리에서 띄울 최소 간격(px)
+const VIEWPORT_GAP = 12;
+
+// 버튼과 메뉴 사이 간격(mt-2)
+const PANEL_OFFSET = 8;
+
+// 목록 영역 높이. 화면이 낮으면 이 범위 안에서 줄이고, 목록만 스크롤한다.
+const LIST_MAX_HEIGHT = 320;
+const LIST_MIN_HEIGHT = 140;
+
 // 대시보드에서 ProjectSidebar 대신 쓰는 프로젝트 전환 메뉴.
 // 사이드바가 하던 일(검색·개인/팀 필터·선택·설정·전체 프로젝트)을 그대로 옮겼다.
 export default function ProjectSwitcher({
@@ -61,6 +71,18 @@ export default function ProjectSwitcher({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // 메뉴를 버튼 왼쪽 끝에 맞추되, 오른쪽이 잘리면 그만큼 왼쪽으로 당긴다.
+  const [panelPosition, setPanelPosition] = useState({
+    left: 0,
+    listMaxHeight: LIST_MAX_HEIGHT,
+  });
 
   const selectedWorkspace = useMemo(
     () =>
@@ -92,17 +114,88 @@ export default function ProjectSwitcher({
     },
   ].filter((group) => filter === "all" || group.mode === filter);
 
+  const hasKeyword = search.trim().length > 0;
+
+  const closeMenu = () => {
+    setOpen(false);
+    // 다시 열 때는 전체 목록부터 보이도록 검색어만 비운다(필터는 유지)
+    setSearch("");
+  };
+
+  // 페인트 전에 위치를 잡아 메뉴가 잘린 채로 한 번 보였다가 움직이지 않게 한다.
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const updatePosition = () => {
+      const root = rootRef.current;
+      const panel = panelRef.current;
+
+      if (!root || !panel) return;
+
+      const rootRect = root.getBoundingClientRect();
+
+      // innerWidth 는 세로 스크롤바 폭까지 포함해 메뉴가 스크롤바 밑으로 들어간다
+      const viewportWidth = document.documentElement.clientWidth;
+
+      const maxLeft = viewportWidth - VIEWPORT_GAP - panel.offsetWidth;
+
+      const left =
+        Math.max(VIEWPORT_GAP, Math.min(rootRect.left, maxLeft)) -
+        rootRect.left;
+
+      // 검색·필터·하단 버튼을 뺀 나머지 높이만 목록에 준다
+      const fixedHeight = panel.offsetHeight - (listRef.current?.offsetHeight ?? 0);
+
+      const available =
+        window.innerHeight -
+        rootRect.bottom -
+        PANEL_OFFSET -
+        VIEWPORT_GAP -
+        fixedHeight;
+
+      const listMaxHeight = Math.max(
+        LIST_MIN_HEIGHT,
+        Math.min(LIST_MAX_HEIGHT, available),
+      );
+
+      setPanelPosition((prev) =>
+        prev.left === left && prev.listMaxHeight === listMaxHeight
+          ? prev
+          : { left, listMaxHeight },
+      );
+    };
+
+    updatePosition();
+
+    window.addEventListener("resize", updatePosition);
+    // 대시보드처럼 페이지 전체가 스크롤되는 화면에서도 위치를 다시 잡는다
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
+        setSearch("");
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+
+      // 자료실·개발일지 상세 패널도 window 에서 Esc 로 닫힌다.
+      // document 단계에서 막아 메뉴만 닫히게 한다.
+      event.stopPropagation();
+      setOpen(false);
+      setSearch("");
+      triggerRef.current?.focus();
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -117,14 +210,14 @@ export default function ProjectSwitcher({
   }, [open]);
 
   const handleSelect = (workspace: WorkspaceSidebarItem) => {
-    setOpen(false);
+    closeMenu();
     onSelectWorkspace(workspace);
   };
 
   const handleOpenSettings = () => {
     if (!selectedWorkspace) return;
 
-    setOpen(false);
+    closeMenu();
     router.push(
       `/dashboard/${encodeURIComponent(
         selectedWorkspace.id,
@@ -136,8 +229,9 @@ export default function ProjectSwitcher({
     <div ref={rootRef} className="relative min-w-0">
       <h1 className="min-w-0">
         <button
+          ref={triggerRef}
           type="button"
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={() => (open ? closeMenu() : setOpen(true))}
           aria-haspopup="dialog"
           aria-expanded={open}
           className={`group inline-flex max-w-full items-center rounded-md text-left transition-colors hover:bg-[#F2F5FF] ${
@@ -171,12 +265,16 @@ export default function ProjectSwitcher({
       </h1>
 
       {open ? (
+        // z-50: 자료실 상세 패널(z-40)처럼 헤더 뒤에 오는 겹침 요소보다 위에 그린다.
+        // absolute 라 열어도 헤더 아래 내용이 밀리지 않는다.
         <div
+          ref={panelRef}
           role="dialog"
           aria-label="프로젝트 전환"
-          className="absolute left-0 top-full z-40 mt-2 w-[min(360px,calc(100vw-32px))] overflow-hidden rounded-md border border-gray-300 bg-white"
+          style={{ left: panelPosition.left }}
+          className="absolute top-full z-50 mt-2 w-[min(320px,calc(100vw-40px))] overflow-hidden rounded-md border border-gray-300 bg-white"
         >
-          <div className="border-b border-gray-100 p-3">
+          <div className="border-b border-gray-100 p-2.5">
             <div className="relative">
               <Search
                 size={14}
@@ -198,7 +296,8 @@ export default function ProjectSwitcher({
                   key={value}
                   type="button"
                   onClick={() => setFilter(value)}
-                  className={`h-7 rounded text-[11px] font-semibold transition-colors ${
+                  aria-pressed={filter === value}
+                  className={`h-6 rounded text-[11px] font-semibold transition-colors ${
                     filter === value
                       ? "bg-white text-[#5873F9]"
                       : "text-gray-500 hover:text-gray-800"
@@ -210,7 +309,12 @@ export default function ProjectSwitcher({
             </div>
           </div>
 
-          <div className="max-h-[320px] overflow-y-auto p-2">
+          {/* 프로젝트가 많아도 이 영역만 스크롤한다 */}
+          <div
+            ref={listRef}
+            style={{ maxHeight: panelPosition.listMaxHeight }}
+            className="overflow-y-auto overscroll-contain p-2"
+          >
             {loading ? (
               <div className="grid h-24 place-items-center">
                 <Loader2 size={18} className="animate-spin text-[#5873F9]" />
@@ -229,7 +333,9 @@ export default function ProjectSwitcher({
 
                   {group.items.length === 0 ? (
                     <p className="px-2 py-1.5 text-[11px] text-gray-400">
-                      프로젝트가 없습니다.
+                      {hasKeyword
+                        ? "검색 결과가 없습니다."
+                        : "프로젝트가 없습니다."}
                     </p>
                   ) : (
                     group.items.map((workspace) => {
@@ -242,6 +348,7 @@ export default function ProjectSwitcher({
                           key={workspace.id}
                           type="button"
                           onClick={() => handleSelect(workspace)}
+                          aria-current={selected ? "true" : undefined}
                           className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                             selected ? "bg-[#F2F5FF]" : "hover:bg-gray-50"
                           }`}
@@ -310,12 +417,12 @@ export default function ProjectSwitcher({
             <button
               type="button"
               onClick={() => {
-                setOpen(false);
+                closeMenu();
                 router.push(allProjectsHref);
               }}
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border border-[#D9E1FF] bg-[#F7F9FF] text-xs font-semibold text-[#5873F9] transition-colors hover:bg-[#EEF3FF]"
             >
-              전체 프로젝트
+              전체 프로젝트 보기
               <ArrowRight size={14} />
             </button>
           </div>
