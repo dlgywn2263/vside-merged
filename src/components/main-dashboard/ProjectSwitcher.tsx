@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  FolderOpen,
   Loader2,
   Search,
   Settings2,
@@ -236,13 +237,19 @@ export default function ProjectSwitcher({
           aria-expanded={open}
           // 잘린 이름도 마우스를 올리면 전체를 볼 수 있게 한다(메뉴 안에서는 줄바꿈으로 전체 표시)
           title={label}
-          className={`group inline-flex max-w-full items-center rounded-md text-left transition-colors hover:bg-[#F2F5FF] ${
-            compact ? "gap-1 px-1.5 py-0.5" : "-ml-2 gap-2 px-2 py-1"
+          // compact: 경로(대시보드 › 프로젝트 › 페이지) 중 현재 프로젝트만 눈에 띄도록
+          // 연한 블루 버튼으로 감싼다. 높이 36px(여백 6px + 줄 높이 24px)이라 62px 헤더가 늘어나지 않는다.
+          className={`group inline-flex max-w-full items-center text-left transition-colors ${
+            compact
+              ? "gap-1.5 rounded-lg bg-[#EEF3FF] py-1.5 pl-2 pr-1.5 hover:bg-[#E1E8FF]"
+              : "-ml-2 gap-2 rounded-md px-2 py-1 hover:bg-[#F2F5FF]"
           }`}
         >
-          {/* compact: 경로(대시보드 › 프로젝트 › 페이지) 중 현재 프로젝트가 가장 먼저 보이도록
-              주변 14px 보다 크게(18px) 둔다. 줄 높이 24px 로 묶어 62px 헤더가 늘어나지 않는다.
-              화면이 좁을수록 최대 너비를 줄여 말줄임한다. */}
+          {compact ? (
+            <FolderOpen size={16} className="shrink-0 text-[#5873F9]" />
+          ) : null}
+
+          {/* 18px 로 주변 14·15px 보다 크게 둔다. 화면이 좁을수록 최대 너비를 줄여 말줄임한다. */}
           <span
             className={`truncate ${
               compact
@@ -254,10 +261,10 @@ export default function ProjectSwitcher({
           </span>
 
           <span
-            className={`grid shrink-0 place-items-center rounded text-gray-500 transition-colors group-hover:text-[#5873F9] ${
+            className={`grid shrink-0 place-items-center rounded transition-colors ${
               compact
-                ? "h-6 w-6"
-                : "h-6 w-6 border border-gray-200 bg-white group-hover:border-[#AAB8FF]"
+                ? "h-6 w-5 text-[#5873F9]/70 group-hover:text-[#4058D6]"
+                : "h-6 w-6 border border-gray-200 bg-white text-gray-500 group-hover:border-[#AAB8FF] group-hover:text-[#5873F9]"
             }`}
           >
             <ChevronDown

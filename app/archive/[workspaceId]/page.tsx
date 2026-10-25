@@ -3161,7 +3161,7 @@ export default function ArchivePage() {
         <header className="flex shrink-0 flex-col gap-3 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 lg:h-[62px] lg:flex-row lg:items-center lg:justify-between lg:px-5 lg:py-0">
           <nav
             aria-label="현재 위치"
-            className="flex min-w-0 flex-wrap items-center gap-1 text-sm"
+            className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
           >
             <Link
               href={dashboardHref}
@@ -3182,7 +3182,7 @@ export default function ArchivePage() {
               onSelectWorkspace={handleSelectWorkspace}
             />
             <ChevronRight size={14} className="text-slate-300" />
-            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-semibold text-slate-900">
+            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
               <Archive size={14} className="text-[#5873F9]" />
               자료실
             </span>
