@@ -234,15 +234,20 @@ export default function ProjectSwitcher({
           onClick={() => (open ? closeMenu() : setOpen(true))}
           aria-haspopup="dialog"
           aria-expanded={open}
+          // 잘린 이름도 마우스를 올리면 전체를 볼 수 있게 한다(메뉴 안에서는 줄바꿈으로 전체 표시)
+          title={label}
           className={`group inline-flex max-w-full items-center rounded-md text-left transition-colors hover:bg-[#F2F5FF] ${
-            compact ? "gap-1 px-1.5 py-1" : "-ml-2 gap-2 px-2 py-1"
+            compact ? "gap-1 px-1.5 py-0.5" : "-ml-2 gap-2 px-2 py-1"
           }`}
         >
+          {/* compact: 경로(대시보드 › 프로젝트 › 페이지) 중 현재 프로젝트가 가장 먼저 보이도록
+              주변 14px 보다 크게(18px) 둔다. 줄 높이 24px 로 묶어 62px 헤더가 늘어나지 않는다.
+              화면이 좁을수록 최대 너비를 줄여 말줄임한다. */}
           <span
-            className={`truncate text-gray-900 ${
+            className={`truncate ${
               compact
-                ? "text-sm font-semibold"
-                : "text-[26px] font-bold leading-tight tracking-tight"
+                ? "max-w-[200px] text-lg font-semibold leading-6 text-[#1B2559] sm:max-w-[320px] xl:max-w-[420px]"
+                : "text-[26px] font-bold leading-tight tracking-tight text-gray-900"
             }`}
           >
             {label}
@@ -251,12 +256,12 @@ export default function ProjectSwitcher({
           <span
             className={`grid shrink-0 place-items-center rounded text-gray-500 transition-colors group-hover:text-[#5873F9] ${
               compact
-                ? "h-5 w-5"
+                ? "h-6 w-6"
                 : "h-6 w-6 border border-gray-200 bg-white group-hover:border-[#AAB8FF]"
             }`}
           >
             <ChevronDown
-              size={compact ? 13 : 14}
+              size={compact ? 16 : 14}
               strokeWidth={2.4}
               className={`transition-transform ${open ? "rotate-180" : ""}`}
             />
@@ -368,8 +373,9 @@ export default function ProjectSwitcher({
                           </span>
 
                           <span className="min-w-0 flex-1">
+                            {/* 헤더에서는 잘리는 긴 이름을 여기서는 줄바꿈해 전체를 보여 준다 */}
                             <span
-                              className={`block truncate text-[13px] font-semibold ${
+                              className={`block text-[13px] font-semibold leading-5 [overflow-wrap:anywhere] ${
                                 selected ? "text-[#4058D6]" : "text-gray-900"
                               }`}
                             >
