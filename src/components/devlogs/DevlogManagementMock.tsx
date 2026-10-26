@@ -341,6 +341,8 @@ export default function DevlogManagementMock() {
   ===================================================== */
 
   const autoCreateHandledRef = useRef("");
+  // 프로젝트별 첫 데이터 로딩에서만 상세 패널을 자동으로 엽니다.
+  const autoOpenedWorkspaceRef = useRef("");
 
   const [isDetailModalOpen, setIsDetailModalOpen] =
     useState(false);
@@ -600,16 +602,24 @@ export default function DevlogManagementMock() {
         setWorkspaceName(currentProjectName);
       }
 
-      setSelectedDevlogId((prev) => {
-        if (
-          prev &&
-          mappedDevlogs.some((item) => item.id === prev)
-        ) {
-          return prev;
-        }
+      // 최초 진입 시 작업일 기준 최신 개발일지를 선택하고 상세 패널을 엽니다.
+      // 같은 프로젝트에서 다시 데이터를 조회할 때는 사용자가 닫은 상태를 유지합니다.
+      const newestDevlog = [...mappedDevlogs].sort(
+        (a, b) => getDevlogSortTime(b) - getDevlogSortTime(a),
+      )[0];
 
-        return mappedDevlogs[0]?.id ?? "";
-      });
+      if (newestDevlog && autoOpenedWorkspaceRef.current !== workspaceId) {
+        autoOpenedWorkspaceRef.current = workspaceId;
+        setSelectedDevlogId(newestDevlog.id);
+        setIsDetailModalOpen(true);
+      } else {
+        setSelectedDevlogId((prev) => {
+          if (prev && mappedDevlogs.some((item) => item.id === prev)) {
+            return prev;
+          }
+          return newestDevlog?.id ?? "";
+        });
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error
