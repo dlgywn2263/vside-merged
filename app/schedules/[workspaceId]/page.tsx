@@ -5024,154 +5024,190 @@ function ListView({
     },
   ];
 
+  // 제목만 flex-1 로 늘이던 예전 방식은 넓은 화면에서 일지·기간·담당자가 오른쪽 끝으로 밀려
+  // 제목과 멀리 떨어졌다. 헤더와 모든 행이 같은 grid 를 써서 열 위치를 고정한다(이름 40·일지 15·기간 25·담당자 20).
+  const gridClass = isTeam
+    ? "grid-cols-[minmax(0,4fr)_minmax(0,1.5fr)_minmax(0,2.5fr)_minmax(0,2fr)]"
+    : "grid-cols-[minmax(0,4fr)_minmax(0,1.5fr)_minmax(0,2.5fr)]";
+
   return (
-    <div className="-mx-4 -mt-4 flex-1">
-      {groups.map((group) => {
-        if (group.items.length === 0) {
-          return null;
-        }
+    // lg 이상은 부모 콘텐츠 영역이 스크롤을 맡는다. 그보다 좁으면 여기서 가로 스크롤해 페이지가 밀리지 않게 한다.
+    <div className="-mx-4 -mt-4 min-w-0 flex-1 max-lg:overflow-x-auto">
+      <div className={isTeam ? "min-w-[760px]" : "min-w-[600px]"}>
+        <div
+          className={cn(
+            "sticky top-0 z-20 grid h-9 items-center gap-4 border-b border-slate-200 bg-white px-5 text-xs font-medium text-slate-500",
+            gridClass,
+          )}
+        >
+          {/* 행의 상태 아이콘(24px) + 간격(12px) 만큼 들여 제목과 같은 위치에서 시작한다 */}
+          <span className="pl-9">일정 이름</span>
+          <span>개발일지</span>
+          <span>일정 기간</span>
+          {isTeam && <span>담당자</span>}
+        </div>
 
-        return (
-          <section key={group.key}>
-            <div className="sticky top-0 z-10 flex h-9 items-center gap-2 border-b border-slate-100 bg-slate-50 px-5">
-              <StatusIcon status={group.key} />
+        {groups.map((group) => {
+          if (group.items.length === 0) {
+            return null;
+          }
 
-              <h3 className="text-[13px] font-medium text-slate-800">
-                {group.label}
-              </h3>
+          return (
+            <section key={group.key}>
+              <div className="sticky top-9 z-10 flex h-9 items-center gap-3 border-b border-slate-100 bg-slate-50 px-5">
+                {/* 행의 상태 아이콘과 같은 24px 칸에 두어 세로로 줄을 맞춘다 */}
+                <span className="grid h-6 w-6 shrink-0 place-items-center">
+                  <StatusIcon status={group.key} />
+                </span>
 
-              <span className="text-xs tabular-nums text-slate-400">
-                {group.items.length}
-              </span>
-            </div>
+                <h3 className="text-[13px] font-medium text-slate-800">
+                  {group.label}
+                </h3>
 
-            <ul>
-              {group.items.map((schedule) => {
-                const member = teamMembers.find(
-                  (item) => item.userId === schedule.assigneeUserId,
-                );
+                <span className="-ml-1 text-xs tabular-nums text-slate-400">
+                  {group.items.length}
+                </span>
+              </div>
 
-                const assigneeName = member
-                  ? getMemberName(member)
-                  : schedule.assigneeName;
+              <ul>
+                {group.items.map((schedule) => {
+                  const member = teamMembers.find(
+                    (item) => item.userId === schedule.assigneeUserId,
+                  );
 
-                return (
-                  <li
-                    key={schedule.id}
-                    className="group flex h-11 items-center gap-3 border-b border-slate-100 px-5 transition-colors hover:bg-[#F7F9FF]"
-                  >
-                    {/* 상태 아이콘 위에 투명한 select 를 겹쳐, 아이콘을 눌러 바로 상태를 바꾼다 */}
-                    <label
-                      className="relative grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded transition-colors hover:bg-slate-100"
-                      title="상태 변경"
+                  const assigneeName = member
+                    ? getMemberName(member)
+                    : schedule.assigneeName;
+
+                  return (
+                    <li
+                      key={schedule.id}
+                      className={cn(
+                        "group grid h-12 items-center gap-4 border-b border-slate-100 bg-white px-5 transition-colors hover:bg-[#F7F9FF]",
+                        gridClass,
+                      )}
                     >
-                      <StatusIcon status={schedule.status} />
+                      <div className="flex min-w-0 items-center gap-3">
+                        {/* 상태 아이콘 위에 투명한 select 를 겹쳐, 아이콘을 눌러 바로 상태를 바꾼다 */}
+                        <label
+                          className="relative grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded transition-colors hover:bg-slate-100"
+                          title="상태 변경"
+                        >
+                          <StatusIcon status={schedule.status} />
 
-                      <select
-                        value={schedule.status}
-                        onChange={(event) =>
-                          void onStatusChange(
-                            schedule.id,
-                            event.target.value as ScheduleStatus,
-                          )
-                        }
-                        aria-label={`${schedule.title} 상태 변경`}
-                        className="absolute inset-0 cursor-pointer opacity-0"
-                      >
-                        <option value="todo">할 일</option>
-                        <option value="progress">진행 중</option>
-                        <option value="done">완료</option>
-                        <option value="delayed">지연</option>
-                      </select>
-                    </label>
+                          <select
+                            value={schedule.status}
+                            onChange={(event) =>
+                              void onStatusChange(
+                                schedule.id,
+                                event.target.value as ScheduleStatus,
+                              )
+                            }
+                            aria-label={`${schedule.title} 상태 변경`}
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                          >
+                            <option value="todo">할 일</option>
+                            <option value="progress">진행 중</option>
+                            <option value="done">완료</option>
+                            <option value="delayed">지연</option>
+                          </select>
+                        </label>
 
-                    <button
-                      type="button"
-                      onClick={() => onOpen(schedule)}
-                      className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
-                    >
+                        <button
+                          type="button"
+                          onClick={() => onOpen(schedule)}
+                          title={schedule.title}
+                          className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+                        >
+                          <span
+                            className={cn(
+                              "truncate text-sm font-medium group-hover:text-[#4058D6]",
+                              schedule.status === "done"
+                                ? "text-slate-500"
+                                : "text-slate-900",
+                            )}
+                          >
+                            {schedule.title}
+                          </span>
+
+                          {!isTeam && (
+                            <span className="hidden shrink-0 truncate text-xs text-slate-400 md:inline">
+                              {getProjectName(schedule)}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="min-w-0">
+                        {schedule.hasDevlog ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenDevlog(schedule)}
+                            className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 text-[11px] font-medium whitespace-nowrap text-emerald-700 transition-colors hover:bg-emerald-100"
+                          >
+                            <CheckCircle2 size={11} />
+                            일지
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onWriteDevlog(schedule)}
+                            className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 text-[11px] font-medium whitespace-nowrap text-amber-700 transition-colors hover:bg-amber-100"
+                          >
+                            <FilePenLine size={11} />
+                            일지 작성
+                          </button>
+                        )}
+                      </div>
+
                       <span
+                        title={isScheduleOverdue(schedule) ? "기한 지남" : undefined}
                         className={cn(
-                          "truncate text-[13px] font-medium group-hover:text-[#4058D6]",
-                          schedule.status === "done"
-                            ? "text-slate-500"
-                            : "text-slate-900",
+                          "truncate text-xs whitespace-nowrap tabular-nums",
+                          isScheduleOverdue(schedule)
+                            ? "font-semibold text-rose-600"
+                            : "text-slate-500",
                         )}
                       >
-                        {schedule.title}
+                        {getSchedulePeriodText(schedule)}
                       </span>
 
-                      {!isTeam && (
-                        <span className="hidden shrink-0 truncate text-xs text-slate-400 md:inline">
-                          {getProjectName(schedule)}
+                      {isTeam && (
+                        <span className="flex min-w-0 items-center gap-2">
+                          {assigneeName ? (
+                            <>
+                              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#4058D6]">
+                                {getInitial(assigneeName)}
+                              </span>
+
+                              <span
+                                title={assigneeName}
+                                className="truncate text-xs text-slate-600"
+                              >
+                                {assigneeName}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-slate-300 text-slate-300">
+                                <UserRound size={11} />
+                              </span>
+
+                              <span className="truncate text-xs text-slate-400">
+                                미지정
+                              </span>
+                            </>
+                          )}
                         </span>
                       )}
-                    </button>
-
-                    {schedule.hasDevlog ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenDevlog(schedule)}
-                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-                      >
-                        <CheckCircle2 size={11} />
-                        일지
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onWriteDevlog(schedule)}
-                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-100"
-                      >
-                        <FilePenLine size={11} />
-                        일지 작성
-                      </button>
-                    )}
-
-                    <span
-                      title={isScheduleOverdue(schedule) ? "기한 지남" : undefined}
-                      className={cn(
-                        "hidden w-[132px] shrink-0 text-right font-mono text-[11px] md:block",
-                        isScheduleOverdue(schedule)
-                          ? "font-semibold text-rose-600"
-                          : "text-slate-500",
-                      )}
-                    >
-                      {getSchedulePeriodText(schedule)}
-                    </span>
-
-                    {isTeam && (
-                      <span className="flex w-[120px] shrink-0 items-center justify-end gap-1.5">
-                        {assigneeName ? (
-                          <>
-                            <span className="hidden truncate text-xs text-slate-600 lg:inline">
-                              {assigneeName}
-                            </span>
-
-                            <span
-                              title={assigneeName}
-                              className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#4058D6]"
-                            >
-                              {getInitial(assigneeName)}
-                            </span>
-                          </>
-                        ) : (
-                          <span
-                            title="담당자 미지정"
-                            className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-slate-300 text-slate-300"
-                          >
-                            <UserRound size={11} />
-                          </span>
-                        )}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        );
-      })}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
