@@ -5,9 +5,7 @@ import {
   useRef,
   useState,
   type ElementType,
-  type ReactNode,
 } from "react";
-import Link from "next/link";
 import {
   useParams,
   useRouter,
@@ -15,13 +13,20 @@ import {
 } from "next/navigation";
 import {
   Archive,
-  ArrowLeft,
+  ArrowUpRight,
   BookOpen,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Code2,
+  FilePenLine,
   FolderOpen,
-  LayoutDashboard,
+  GitBranch,
+  Link2,
+  Minus,
+  Plus,
+  UserRound,
   X,
   Database,
   Download,
@@ -50,7 +55,11 @@ import {
 } from "@/lib/design/api";
 import { type WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
 import ProjectSwitcher from "@/components/main-dashboard/ProjectSwitcher";
-import { ArchiveDesignViewer } from "@/components/archive/ArchiveDesignViewer";
+import type { ScheduleStatus } from "@/components/devlogs/devlog.types";
+import {
+  scheduleStatusLabel,
+  statusStyle,
+} from "@/components/devlogs/devlog.utils";
 /* =========================================================
    TYPE
    ========================================================= */
@@ -96,6 +105,14 @@ type Devlog = {
   date: string;
   rawDate: string;
   summary: string;
+  // 아래는 상세 패널용. 개발일지 페이지와 같은 API 응답에서 그대로 읽는다(없으면 비워 둔다).
+  content: string;
+  workedDate: string;
+  authorName: string;
+  isLinked: boolean;
+  scheduleTitle: string;
+  status: ScheduleStatus | null;
+  tags: string[];
 };
 type DesignRequirementItem = {
   id: string | number;
@@ -170,6 +187,37 @@ const archiveTabs: {
     label: "최종 보고서",
     description: "AI 초안과 PDF 문서화",
     icon: Sparkles,
+  },
+];
+const designSectionTabs: {
+  key: DesignArchiveSectionKey;
+  label: string;
+  description: string;
+  icon: ElementType;
+}[] = [
+  {
+    key: "requirements",
+    label: "요구사항",
+    description: "구현 범위와 기능 조건",
+    icon: CheckCircle2,
+  },
+  {
+    key: "api",
+    label: "API 명세",
+    description: "요청/응답과 엔드포인트",
+    icon: Code2,
+  },
+  {
+    key: "erd",
+    label: "ERD",
+    description: "테이블·컬럼·관계",
+    icon: Database,
+  },
+  {
+    key: "flow",
+    label: "화면 흐름",
+    description: "화면 사이 이동",
+    icon: GitBranch,
   },
 ];
 const archivePdfSectionItems: {
@@ -517,6 +565,22 @@ function mapDevlogItem(
       devlog,
       workspace,
     );
+  // 개발일지 페이지(mapDevlogFromApi)와 같은 필드 이름을 쓴다
+  const scheduleId = getStringValue(devlog, ["scheduleId"]);
+  const rawStatus = getStringValue(devlog, [
+    "scheduleStatus",
+    "status",
+  ]).toLowerCase();
+  const status =
+    rawStatus in scheduleStatusLabel
+      ? (rawStatus as ScheduleStatus)
+      : null;
+  const typeValue = getStringValue(devlog, ["type"]).toLowerCase();
+  const tags = Array.isArray(devlog.tags)
+    ? devlog.tags.filter(
+        (tag): tag is string => typeof tag === "string" && Boolean(tag.trim()),
+      )
+    : [];
   return {
     id,
     projectId,
@@ -530,6 +594,13 @@ function mapDevlogItem(
     date: formatDateLabel(rawDate),
     rawDate,
     summary,
+    content: getStringValue(devlog, ["content"]),
+    workedDate: getStringValue(devlog, ["workedDate"]),
+    authorName: getStringValue(devlog, ["authorName"]),
+    isLinked: typeValue ? typeValue === "linked" : Boolean(scheduleId),
+    scheduleTitle: getStringValue(devlog, ["scheduleTitle"]),
+    status,
+    tags,
   };
 }
 function mapDevlogsFromWorkspaceResponse(
@@ -1001,15 +1072,24 @@ function normalizeDiagramNodes(
     },
   );
 }
+// options 는 자료실 설계 문서 화면용. 그림 주변 빈 여백과 최소 크기를 줄여 노드가 크게 보이게 한다.
+// 인쇄(PDF)·최종 보고서는 넘기지 않으므로 예전 크기 그대로다.
 function getDiagramLayout(
   nodes: NormalizedDiagramNode[],
   type: "erd" | "flow",
+  options?: {
+    padding?: number;
+    minWidth?: number;
+    minHeight?: number;
+  },
 ) {
   const nodeWidth =
     type === "erd" ? 248 : 236;
   const nodeHeight =
     type === "erd" ? 138 : 152;
-  const padding = 80;
+  const padding = options?.padding ?? 80;
+  const minWidth = options?.minWidth ?? 860;
+  const minHeight = options?.minHeight ?? 460;
   if (nodes.length === 0) {
     return {
       nodes:
@@ -1051,14 +1131,14 @@ function getDiagramLayout(
       y: node.y + offsetY,
     })),
     width: Math.max(
-      860,
+      minWidth,
       maxX -
         minX +
         nodeWidth +
         padding * 2,
     ),
     height: Math.max(
-      460,
+      minHeight,
       maxY -
         minY +
         nodeHeight +
@@ -1613,14 +1693,14 @@ export default function ArchivePage() {
   ] = useState("");
 
   // 자료실 개발일지 상세 패널에 띄울 일지. 화면 상태일 뿐 조회 로직과는 무관하다.
+  // 다른 유형 탭에 다녀와도 지우지 않는다. 비어 있거나 목록에 없으면 최신 일지를 보여 준다.
   const [
     selectedArchiveDevlogId,
     setSelectedArchiveDevlogId,
   ] = useState<string | null>(null);
+  // 좁은 화면(xl 미만)에서는 상세가 목록을 덮으므로, 사용자가 일지를 눌렀을 때만 연다
+  const [isDevlogOverlayOpen, setIsDevlogOverlayOpen] = useState(false);
 
-  // 설계 문서·최종 보고서는 목록에서 문서를 고르면 그 자리에서 문서 본문으로 바뀐다.
-  // 설계 문서는 activeDesignSection 이 어떤 문서를 열었는지 가리킨다.
-  const [isArchiveDocOpen, setIsArchiveDocOpen] = useState(false);
   /* =========================
      프로젝트
      ========================= */
@@ -3044,7 +3124,6 @@ export default function ArchivePage() {
       workspace.id,
     );
     setKeyword("");
-    setIsArchiveDocOpen(false);
     setIsPdfMenuOpen(false);
     if (
       typeof window !==
@@ -3119,8 +3198,12 @@ export default function ArchivePage() {
     setActiveArchiveTab(key);
     // 유형마다 검색 대상이 달라 검색어를 이어 쓰지 않는다
     setKeyword("");
-    setIsArchiveDocOpen(false);
-    setSelectedArchiveDevlogId(null);
+    setIsDevlogOverlayOpen(false);
+  };
+
+  const handleSelectArchiveDevlog = (devlogId: string) => {
+    setSelectedArchiveDevlogId(devlogId);
+    setIsDevlogOverlayOpen(true);
   };
 
   const handleDesignSectionChange = (key: DesignArchiveSectionKey) => {
@@ -3129,18 +3212,28 @@ export default function ArchivePage() {
     setKeyword("");
   };
 
-  const currentMode =
-    selectedProject?.type === "팀" ? "team" : "personal";
-  const dashboardHref = selectedProjectId
-    ? `/dashboard/${encodeURIComponent(selectedProjectId)}?mode=${currentMode}`
-    : "/dashboard";
-
-  // 상세 패널은 개발일지 탭에서만 연다. 검색·프로젝트 변경으로 목록에서 빠지면 저절로 닫힌다.
-  const selectedArchiveDevlog =
-    activeArchiveTab === "devlog" && selectedArchiveDevlogId
-      ? filteredDevlogs.find((devlog) => devlog.id === selectedArchiveDevlogId) ??
-        null
-      : null;
+  // 개발일지 탭은 개발일지 페이지처럼 처음부터 최신 일지를 펼쳐 둔다.
+  // 고른 일지가 검색·프로젝트 변경·삭제로 목록에서 빠지면 최신 일지로 넘어간다.
+  // 정렬을 오래된순으로 바꿔도 기본값은 최신 일지다(목록 첫 행이 아니라 작성일로 고른다).
+  const isDevlogTab = activeArchiveTab === "devlog";
+  const newestArchiveDevlog = filteredDevlogs.reduce<Devlog | null>(
+    (newest, devlog) =>
+      !newest || getDevlogSortTime(devlog) > getDevlogSortTime(newest)
+        ? devlog
+        : newest,
+    null,
+  );
+  const selectedArchiveDevlog = isDevlogTab
+    ? (selectedArchiveDevlogId
+        ? filteredDevlogs.find((devlog) => devlog.id === selectedArchiveDevlogId)
+        : undefined) ?? newestArchiveDevlog
+    : null;
+  const devlogPageHref =
+    selectedProjectId
+      ? `/devlogs/${encodeURIComponent(selectedProjectId)}?mode=${
+          selectedProject?.type === "팀" ? "team" : "personal"
+        }`
+      : "";
 
   // 검색·정렬은 검색할 목록이 있는 화면에서만 보인다.
   // 설계 문서는 요구사항·API 목록만 검색하고(설계관리 검색과 같은 기준), ERD·화면 흐름은 그림이라 숨긴다.
@@ -3153,12 +3246,9 @@ export default function ArchivePage() {
   // 설계 문서 탭은 자체 문서 선택 줄을 쓰므로 목록 제목 줄은 개발일지·최종 보고서에만 둔다
   const listHeading =
     activeArchiveTab === "devlog"
-      ? { count: filteredDevlogs.length, hint: "개발일지를 작성일 기준으로 모아 봅니다." }
+      ? { count: filteredDevlogs.length, hint: "일지를 선택하면 오른쪽에서 내용을 확인할 수 있습니다." }
       : { count: 1, hint: "개발일지와 설계 문서를 바탕으로 최종 보고서 초안을 작성합니다." };
 
-  // 열린 문서 이름. 목록 제목 자리에 "← 자료실 목록 › 문서 이름"으로 보인다.
-  const openedDocLabel =
-    isArchiveDocOpen && activeArchiveTab === "final" ? "최종 보고서 초안" : null;
 
   return (
     <>
@@ -3172,14 +3262,6 @@ export default function ArchivePage() {
             aria-label="현재 위치"
             className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
           >
-            <Link
-              href={dashboardHref}
-              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
-            >
-              <LayoutDashboard size={14} />
-              대시보드
-            </Link>
-            <ChevronRight size={14} className="text-slate-300" />
             {/* 예전 왼쪽 프로젝트 사이드바(검색·개인/팀 필터·목록·설정·전체 프로젝트)를 이 메뉴가 대신한다 */}
             <ProjectSwitcher
               size="compact"
@@ -3191,7 +3273,7 @@ export default function ArchivePage() {
               onSelectWorkspace={handleSelectWorkspace}
             />
             <ChevronRight size={14} className="text-slate-300" />
-            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
+            <span className="inline-flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold text-slate-800">
               <Archive size={14} className="text-[#5873F9]" />
               자료실
             </span>
@@ -3341,9 +3423,23 @@ export default function ArchivePage() {
             1행 = [탭 · 검색 | 패널 머리], 2행 = [목록 | 패널 본문].
             패널은 subgrid 로 두 행을 그대로 써서 구분선이 같은 행 경계에 놓인다.
         ================================================= */}
-        <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_auto]">
+        {/* 개발일지 탭은 [목록 40 | 상세 60]. 도구 모음은 두 칸을 다 써서 다른 탭과 같은 모양을 유지하고,
+            상세 패널은 2행에만 놓인다. */}
+        <div
+          className={cn(
+            "relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]",
+            isDevlogTab
+              ? "xl:grid-cols-[minmax(0,37fr)_minmax(0,63fr)]"
+              : "xl:grid-cols-[minmax(0,1fr)_auto]",
+          )}
+        >
           {/* TOOLBAR: 문서 유형 탭 | 검색 · 정렬 */}
-          <div className="col-start-1 row-start-1 min-w-0 border-b border-slate-200 px-4 lg:px-5">
+          <div
+            className={cn(
+              "col-start-1 row-start-1 min-w-0 border-b border-slate-200 px-4 lg:px-5",
+              isDevlogTab && "xl:col-span-2",
+            )}
+          >
             <div className="flex min-w-0 flex-col gap-2 py-2 xl:min-h-12 xl:flex-row xl:items-center xl:justify-between xl:py-0">
               <nav
                 aria-label="문서 유형"
@@ -3431,41 +3527,31 @@ export default function ArchivePage() {
           </div>
 
           {/* LIST: 이 영역만 세로 스크롤.
-              설계 문서 탭은 문서 선택 줄을 고정하고 그 아래 내용 영역만 스크롤하므로 따로 그린다. */}
+              설계 문서 탭은 main 의 문서형 화면(내용을 바로 펼치고 상세 패널 없음)을 그대로 쓴다. */}
           {activeArchiveTab === "design" ? (
-            <section className="col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col overflow-x-hidden">
-              <ArchiveDesignViewer
-                workspaceId={selectedProjectId}
-                section={activeDesignSection}
-                onSectionChange={handleDesignSectionChange}
-                keyword={keyword}
-                legacyRequirements={designRequirements}
-                legacyApiSpecs={designApiSpecs}
-                legacyDocument={designDocument}
-                legacyLoading={designLoading}
-                legacyError={designError}
-              />
+            <section className="col-start-1 row-start-2 min-h-0 min-w-0 overflow-x-hidden lg:overflow-y-auto">
+              <div className="px-4 py-4 lg:px-5">
+                <ArchiveDesignContent
+                  activeDesignSection={activeDesignSection}
+                  onActiveDesignSectionChange={handleDesignSectionChange}
+                  keyword={keyword}
+                  requirements={designRequirements}
+                  apiSpecs={designApiSpecs}
+                  designDocument={parsedDesignDocument}
+                  isLoading={designLoading}
+                  errorMessage={designError}
+                />
+              </div>
             </section>
           ) : (
           <section className="col-start-1 row-start-2 min-h-0 min-w-0 overflow-x-hidden lg:overflow-y-auto">
             <div className="px-4 py-4 lg:px-5">
-              {/* 목록 제목 줄. 문서를 열면 그 자리가 목록으로 돌아가는 경로가 된다 */}
+              {/* 최종 보고서는 카드 목록 없이 초안 편집 화면을 바로 표시한다. */}
               <div className="mb-3 flex min-w-0 items-baseline justify-between gap-3">
-                {openedDocLabel ? (
-                  <div className="flex min-w-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsArchiveDocOpen(false)}
-                      className="-ml-1.5 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      <ArrowLeft size={14} />
-                      자료실 목록
-                    </button>
-                    <ChevronRight size={13} className="shrink-0 text-slate-300" />
-                    <h2 className="truncate text-[15px] font-semibold text-slate-900">
-                      {openedDocLabel}
-                    </h2>
-                  </div>
+                {activeArchiveTab === "final" ? (
+                  <h2 className="truncate text-[15px] font-semibold text-slate-900">
+                    최종 보고서 초안
+                  </h2>
                 ) : (
                   <h2 className="shrink-0 text-[15px] font-semibold text-slate-900">
                     자료실 목록
@@ -3485,39 +3571,34 @@ export default function ArchivePage() {
                   devlogs={filteredDevlogs}
                   hasSearchKeyword={Boolean(keyword.trim())}
                   selectedDevlogId={selectedArchiveDevlog?.id ?? null}
-                  onSelectDevlog={setSelectedArchiveDevlogId}
+                  onSelectDevlog={handleSelectArchiveDevlog}
                 />
               )}
 
-              {activeArchiveTab === "final" &&
-                (isArchiveDocOpen ? (
-                  <ArchiveFinalReportContent
-                    selectedProject={selectedProject}
-                    devlogCount={filteredDevlogs.length}
-                    draft={finalReportDraft}
-                    onDraftChange={setFinalReportDraft}
-                    onGenerate={handleGenerateFinalReport}
-                    designDocument={parsedDesignDocument}
-                    isGenerating={finalReportLoading}
-                    errorMessage={finalReportError}
-                  />
-                ) : (
-                  <ArchiveFinalReportList
-                    draft={finalReportDraft}
-                    projectName={selectedProject?.name ?? ""}
-                    devlogCount={projectDevlogTotal}
-                    designDocumentCount={designDocumentTotal}
-                    onOpen={() => setIsArchiveDocOpen(true)}
-                  />
-                ))}
+              {activeArchiveTab === "final" && (
+                <ArchiveFinalReportContent
+                  selectedProject={selectedProject}
+                  devlogCount={filteredDevlogs.length}
+                  draft={finalReportDraft}
+                  onDraftChange={setFinalReportDraft}
+                  onGenerate={handleGenerateFinalReport}
+                  designDocument={parsedDesignDocument}
+                  isGenerating={finalReportLoading}
+                  errorMessage={finalReportError}
+                />
+              )}
             </div>
           </section>
           )}
 
-          {selectedArchiveDevlog ? (
+          {isDevlogTab ? (
             <ArchiveDevlogDetailPanel
-              devlog={selectedArchiveDevlog}
-              onClose={() => setSelectedArchiveDevlogId(null)}
+              devlog={loading ? null : selectedArchiveDevlog}
+              hasSearchKeyword={Boolean(keyword.trim())}
+              overlayOpen={isDevlogOverlayOpen}
+              devlogPageHref={devlogPageHref}
+              onOpenDevlogPage={(href) => router.push(href)}
+              onCloseOverlay={() => setIsDevlogOverlayOpen(false)}
             />
           ) : null}
         </div>
@@ -3526,93 +3607,8 @@ export default function ArchivePage() {
   );
 }
 
-/* =========================================================
-   DOCUMENT CARD LIST
-   예전 자료실의 문서 카드(DevlogCard)를 되살린 목록. 바깥 컨테이너 없이 카드끼리 10px.
-   세 탭이 같은 카드를 쓴다.
-   1줄: 유형 아이콘 · 제목 · 프로젝트 배지 · 작성일(오른쪽) / 2줄: 미리보기(최대 2줄)
-   ========================================================= */
-function ArchiveDocumentCard({
-  icon: Icon,
-  title,
-  projectName,
-  date,
-  preview,
-  selected = false,
-  muted = false,
-  onClick,
-}: {
-  icon: ElementType;
-  title: string;
-  projectName?: string;
-  date?: string;
-  preview: string;
-  selected?: boolean;
-  muted?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <li className="min-w-0">
-      <button
-        type="button"
-        onClick={onClick}
-        aria-current={selected ? "true" : undefined}
-        className={cn(
-          "group block w-full min-w-0 rounded-[10px] border bg-white px-4 py-3.5 text-left transition-colors sm:px-5",
-          selected
-            ? "border-[#AAB8FF] bg-[#F5F7FF]"
-            : "border-slate-200 hover:border-[#C9D2FF] hover:bg-[#F8FAFF]",
-        )}
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className={cn(
-              "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-              muted ? "bg-slate-100 text-slate-400" : "bg-[#EEF3FF] text-[#5873F9]",
-            )}
-          >
-            <Icon size={15} />
-          </span>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <h3
-              className={cn(
-                "min-w-0 truncate text-sm font-bold",
-                selected
-                  ? "text-[#4058D6]"
-                  : muted
-                    ? "text-slate-500"
-                    : "text-slate-950 group-hover:text-[#4058D6]",
-              )}
-              title={title}
-            >
-              {title}
-            </h3>
-            {projectName ? (
-              <span
-                className="hidden max-w-[180px] shrink-0 truncate rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[10px] font-semibold text-[#4058D6] sm:inline"
-                title={projectName}
-              >
-                {projectName}
-              </span>
-            ) : null}
-          </div>
-          {date ? (
-            <span className="shrink-0 text-right text-[11px] font-medium tabular-nums text-slate-400">
-              {date}
-            </span>
-          ) : null}
-        </div>
-
-        {/* 띄어쓰기 없는 긴 문자열·URL 도 카드 안에서 줄바꿈되고 2줄을 넘으면 말줄임 */}
-        <p className="mt-1.5 line-clamp-2 pl-[42px] text-[13px] leading-6 text-slate-500 [overflow-wrap:anywhere]">
-          {preview}
-        </p>
-      </button>
-    </li>
-  );
-}
-
-/* 개발일지: 누르면 오른쪽 상세 패널이 열린다. */
+/* 개발일지: 누르면 오른쪽 상세 내용만 바뀐다.
+   목록 칸이 좁아(40%) 프로젝트 배지는 빼고 제목에 자리를 준다. 프로젝트는 상세에 보인다. */
 function ArchiveDevlogList({
   devlogs,
   hasSearchKeyword,
@@ -3643,175 +3639,781 @@ function ArchiveDevlogList({
   }
 
   return (
-    <ul className="min-w-0 space-y-2.5">
-      {devlogs.map((devlog) => (
-        <ArchiveDocumentCard
-          key={devlog.id}
-          icon={BookOpen}
-          title={devlog.title}
-          projectName={devlog.projectName}
-          date={devlog.date}
-          preview={devlog.summary || "내용이 없습니다."}
-          selected={selectedDevlogId === devlog.id}
-          onClick={() => onSelectDevlog(devlog.id)}
-        />
-      ))}
-    </ul>
-  );
-}
-
-/* 최종 보고서: 초안 문서 한 장. 누르면 초안 생성·수정 화면이 열린다. */
-function ArchiveFinalReportList({
-  draft,
-  projectName,
-  devlogCount,
-  designDocumentCount,
-  onOpen,
-}: {
-  draft: string;
-  projectName: string;
-  devlogCount: number;
-  designDocumentCount: number;
-  onOpen: () => void;
-}) {
-  const hasDraft = Boolean(draft.trim());
-  return (
-    <ul className="min-w-0 space-y-2.5">
-      <ArchiveDocumentCard
-        icon={Sparkles}
-        title="최종 보고서 초안"
-        projectName={projectName}
-        // 초안은 화면에서만 만들어 저장 시각이 없다. 대신 바탕 자료 수를 둔다
-        date={`개발일지 ${devlogCount}개 · 설계 문서 ${designDocumentCount}개`}
-        preview={
-          hasDraft
-            ? draft
-            : "아직 초안이 없습니다. 열어서 개발일지와 설계 문서로 AI 초안을 만들 수 있습니다."
-        }
-        muted={!hasDraft}
-        onClick={onOpen}
-      />
+    <ul className="min-w-0 space-y-2" aria-label="개발일지 목록">
+      {devlogs.map((devlog) => {
+        const selected = selectedDevlogId === devlog.id;
+        // 마크다운/줄바꿈이 목록 미리보기에 그대로 드러나지 않도록 정리한다.
+        const preview = (devlog.summary || devlog.content || "내용이 없습니다.")
+          .replace(/[#*_`>\[\]]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return (
+          <li key={devlog.id} className="min-w-0">
+            <button
+              type="button"
+              onClick={() => onSelectDevlog(devlog.id)}
+              aria-current={selected ? "true" : undefined}
+              className={cn(
+                "group relative flex w-full min-w-0 flex-col gap-1.5 overflow-hidden rounded-md border px-4 py-3 text-left transition-colors",
+                selected
+                  ? "border-[#B7C5FF] bg-[#EEF2FF]"
+                  : "border-slate-200 bg-white hover:border-[#C9D2FF] hover:bg-[#F8FAFF]",
+              )}
+            >
+              {selected && <span className="absolute inset-y-0 left-0 w-[3px] bg-[#5873F9]" />}
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <h3 className={cn(
+                  "min-w-0 flex-1 truncate text-[13px] font-semibold",
+                  selected ? "text-[#4058D6]" : "text-slate-900",
+                )} title={devlog.title}>
+                  {devlog.title}
+                </h3>
+                <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">
+                  {devlog.date}
+                </span>
+              </div>
+              <p className="min-w-0 truncate text-xs leading-5 text-slate-500" title={preview}>
+                {preview}
+              </p>
+              <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-400">
+                <span className="truncate">{devlog.authorName || "작성자 정보 없음"}</span>
+                {devlog.isLinked && (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[#5873F9]">
+                    <Link2 size={11} /> 일정 연결
+                  </span>
+                )}
+              </div>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
 /* =========================================================
-   DEVLOG DETAIL PANEL
-   개발일지 페이지 상세 패널(DevlogDetailPanel)과 같은 틀.
-   넓은 화면(xl)에서는 목록 옆에 붙고, 좁은 화면에서는 이 격자 안에서 오른쪽부터 덮는다.
-   자료실 일지 데이터에는 제목·프로젝트·작성일·내용만 있어 그것만 보여 준다.
+   READ-ONLY MARKDOWN DOCUMENT
+   Parse common authoring syntax into safe React elements.
+   No HTML injection, external libraries or API changes.
    ========================================================= */
-function ArchiveDevlogDetailPanel({
-  devlog,
-  onClose,
-}: {
-  devlog: Devlog;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
+function ArchiveMarkdownInline({ text }: { text: string }) {
+  const tokens = text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g);
   return (
     <>
-      {/* 좁은 화면: 뒤 배경 */}
-      <div
-        className="absolute inset-0 z-30 bg-slate-950/25 xl:hidden"
-        onMouseDown={onClose}
-      />
-
-      <aside
-        aria-label="개발일지 상세"
-        className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[480px] flex-col border-l border-slate-200 bg-white xl:static xl:z-auto xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:grid xl:w-[440px] xl:max-w-none xl:grid-cols-[minmax(0,1fr)] xl:grid-rows-subgrid 2xl:w-[480px]"
-      >
-        {/* HEADER: 1줄 = 문서 유형 … 작성일 · 닫기, 2줄 = 제목(최대 2줄) */}
-        <header className="flex min-w-0 shrink-0 flex-col justify-center gap-2 border-b border-slate-200 px-5 py-2">
-          <div className="flex h-5 min-w-0 items-center gap-1">
-            <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded border border-[#D9E1FF] bg-[#F5F7FF] px-1.5 text-[10px] font-medium text-[#4058D6]">
-              <BookOpen size={10} />
-              개발일지
-            </span>
-            <p className="ml-auto flex shrink-0 items-center pl-2 text-[11px] text-slate-400">
-              <span className="font-mono">{devlog.date}</span>
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="-my-1 -mr-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              aria-label="개발일지 상세 닫기"
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <h2
-            className="line-clamp-2 text-base font-bold leading-tight text-slate-900 [overflow-wrap:anywhere]"
-            title={devlog.title}
-          >
-            {devlog.title}
-          </h2>
-        </header>
-
-        {/* CONTENT: 여기서만 세로 스크롤 */}
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          <section className="border-b border-slate-100 px-5 py-1">
-            <ArchiveDetailMetaRow icon={<FolderOpen size={14} />} label="프로젝트">
-              <span className="min-w-0 text-xs font-medium text-slate-800 [overflow-wrap:anywhere]">
-                {devlog.projectName}
-              </span>
-            </ArchiveDetailMetaRow>
-            <ArchiveDetailMetaRow icon={<CalendarDays size={14} />} label="작성일" last>
-              <span className="font-mono text-xs text-slate-700">{devlog.date}</span>
-            </ArchiveDetailMetaRow>
-          </section>
-
-          <section className="px-5 py-4">
-            <h3 className="mb-2 text-[11px] font-medium text-slate-500">
-              작성 내용
-            </h3>
-            <p className="whitespace-pre-wrap text-sm leading-7 text-slate-800 [overflow-wrap:anywhere]">
-              {devlog.summary}
-            </p>
-          </section>
-        </div>
-      </aside>
+      {tokens.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={index} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return <code key={index} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em] text-[#4058D6]">{part.slice(1, -1)}</code>;
+        }
+        const link = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(part);
+        if (link) {
+          return <a key={index} href={link[2]} target="_blank" rel="noopener noreferrer" className="text-[#4058D6] underline underline-offset-2 hover:text-[#3046B8]">{link[1]}</a>;
+        }
+        return <span key={index}>{part}</span>;
+      })}
     </>
   );
 }
 
-function ArchiveDetailMetaRow({
-  icon,
-  label,
-  children,
-  last,
-}: {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-  last?: boolean;
-}) {
+function ArchiveMarkdownDocument({ content }: { content: string }) {
+  const blocks = useMemo(() => {
+    const lines = content.replace(/\r\n?/g, "\n").split("\n");
+    const output: Array<{ type: "heading" | "paragraph" | "list" | "code" | "quote" | "rule"; level?: number; text?: string; items?: string[] }> = [];
+    let index = 0;
+    while (index < lines.length) {
+      const line = lines[index];
+      if (!line.trim()) { index++; continue; }
+      const fence = /^\s*```/.exec(line);
+      if (fence) {
+        index++;
+        const code: string[] = [];
+        while (index < lines.length && !/^\s*```/.test(lines[index])) code.push(lines[index++]);
+        if (index < lines.length) index++;
+        output.push({ type: "code", text: code.join("\n") });
+        continue;
+      }
+      const heading = /^\s{0,3}(#{1,6})\s+(.+)$/.exec(line);
+      if (heading) { output.push({ type: "heading", level: heading[1].length, text: heading[2] }); index++; continue; }
+      if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { output.push({ type: "rule" }); index++; continue; }
+      if (/^\s*>\s?/.test(line)) {
+        const quote: string[] = [];
+        while (index < lines.length && /^\s*>\s?/.test(lines[index])) quote.push(lines[index++].replace(/^\s*>\s?/, ""));
+        output.push({ type: "quote", text: quote.join(" ") });
+        continue;
+      }
+      const listPattern = /^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$/;
+      if (listPattern.test(line)) {
+        const items: string[] = [];
+        while (index < lines.length) {
+          const found = listPattern.exec(lines[index]);
+          if (!found) break;
+          items.push(found[1]); index++;
+        }
+        output.push({ type: "list", items });
+        continue;
+      }
+      const paragraph: string[] = [];
+      while (index < lines.length && lines[index].trim() && !/^\s*```/.test(lines[index]) && !/^\s{0,3}#{1,6}\s+/.test(lines[index]) && !listPattern.test(lines[index]) && !/^\s*>\s?/.test(lines[index]) && !/^\s*(---+|\*\*\*+)\s*$/.test(lines[index])) {
+        paragraph.push(lines[index++]);
+      }
+      output.push({ type: "paragraph", text: paragraph.join("\n") });
+    }
+    return output;
+  }, [content]);
+  if (!content.trim()) return <p className="text-sm text-slate-400">작성된 내용이 없습니다.</p>;
   return (
-    <div
-      className={cn(
-        "grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3 py-2.5",
-        !last && "border-b border-slate-100",
-      )}
-    >
-      <div className="flex items-center gap-1.5 text-slate-400">
-        {icon}
-        <span className="text-[11px] font-medium text-slate-500">{label}</span>
-      </div>
-      <div className="flex min-w-0 items-center">{children}</div>
+    <div className="space-y-4 text-[14px] leading-[1.85] text-slate-700 [overflow-wrap:anywhere]">
+      {blocks.map((block, i) => {
+        if (block.type === "heading") {
+          const className = block.level === 1 ? "text-[21px] font-bold text-slate-900" : block.level === 2 ? "text-[18px] font-bold text-slate-900" : "text-[15px] font-semibold text-slate-900";
+          return <h3 key={i} className={cn("mt-7 first:mt-0 leading-snug", className)}><ArchiveMarkdownInline text={block.text ?? ""} /></h3>;
+        }
+        if (block.type === "list") return <ul key={i} className="list-disc space-y-1.5 pl-5 marker:text-slate-400">{(block.items ?? []).map((item, j) => <li key={j} className="pl-0.5"><ArchiveMarkdownInline text={item} /></li>)}</ul>;
+        if (block.type === "code") return <pre key={i} className="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-6 text-slate-700"><code>{block.text}</code></pre>;
+        if (block.type === "quote") return <blockquote key={i} className="border-l-[3px] border-[#A9B8FF] bg-[#F8FAFF] px-4 py-2 text-slate-600"><ArchiveMarkdownInline text={block.text ?? ""} /></blockquote>;
+        if (block.type === "rule") return <hr key={i} className="border-slate-200" />;
+        return <p key={i} className="whitespace-pre-line"><ArchiveMarkdownInline text={block.text ?? ""} /></p>;
+      })}
     </div>
   );
 }
 
 /* =========================================================
-   DESIGN
+   DEVLOG DOCUMENT VIEW
    ========================================================= */
+function ArchiveDevlogDetailPanel({
+  devlog,
+  hasSearchKeyword,
+  overlayOpen,
+  devlogPageHref,
+  onOpenDevlogPage,
+  onCloseOverlay,
+}: {
+  devlog: Devlog | null;
+  hasSearchKeyword: boolean;
+  overlayOpen: boolean;
+  devlogPageHref: string;
+  onOpenDevlogPage: (href: string) => void;
+  onCloseOverlay: () => void;
+}) {
+  useEffect(() => {
+    if (!overlayOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseOverlay();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [overlayOpen, onCloseOverlay]);
+
+  const workedDate = devlog?.workedDate ? formatDateLabel(devlog.workedDate) : "";
+  return (
+    <>
+      {overlayOpen && devlog ? (
+        <div className="absolute inset-0 z-30 bg-slate-950/25 xl:hidden" onMouseDown={onCloseOverlay} />
+      ) : null}
+      <aside
+        aria-label="개발일지 상세"
+        className={cn(
+          "absolute inset-y-0 right-0 z-40 w-full max-w-[480px] flex-col border-l border-slate-200 bg-white xl:static xl:z-auto xl:col-start-2 xl:row-start-2 xl:flex xl:min-h-0 xl:w-auto xl:max-w-none",
+          overlayOpen && devlog ? "flex" : "hidden",
+        )}
+      >
+        {devlog ? (
+          <>
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <article className="mx-auto w-full max-w-[860px] px-6 pb-14 pt-8 lg:px-10 lg:pt-10">
+                <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-semibold tracking-[0.04em] text-slate-400">개발일지</span>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-[11px] text-slate-500">{devlog.date}</span>
+                  <button type="button" onClick={onCloseOverlay} className="ml-auto grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 xl:hidden" aria-label="개발일지 상세 닫기"><X size={16} /></button>
+                </div>
+
+                <h1 className="text-[23px] font-bold leading-[1.4] tracking-[-0.025em] text-slate-950 [overflow-wrap:anywhere] lg:text-[26px]">
+                  {devlog.title}
+                </h1>
+
+                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500">
+                  <span className="inline-flex min-w-0 items-center gap-1.5"><FolderOpen size={13} className="shrink-0 text-slate-400" />{devlog.projectName}</span>
+                  {devlog.authorName ? <span className="inline-flex items-center gap-1.5"><UserRound size={13} className="text-slate-400" />{devlog.authorName}</span> : null}
+                  <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} className="text-slate-400" />{devlog.date}</span>
+                  {workedDate && workedDate !== devlog.date ? <span>작업일 {workedDate}</span> : null}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className={cn("inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] font-medium", devlog.isLinked ? "border-[#D9E1FF] bg-[#F5F7FF] text-[#4058D6]" : "border-slate-200 bg-slate-50 text-slate-600")}>
+                    {devlog.isLinked ? <Link2 size={12} /> : <FilePenLine size={12} />}
+                    {devlog.isLinked ? "일정 연결" : "일반 일지"}
+                  </span>
+                  {devlog.status ? <span className={cn("inline-flex h-6 items-center rounded-md border px-2 text-[11px] font-medium", statusStyle[devlog.status])}>{scheduleStatusLabel[devlog.status]}</span> : null}
+                  {devlog.scheduleTitle ? <span className="min-w-0 text-xs font-medium text-slate-600 [overflow-wrap:anywhere]">{devlog.scheduleTitle}</span> : null}
+                </div>
+
+                <div className="my-7 h-px bg-slate-200" />
+
+                <section aria-label="작성 내용" className="min-w-0">
+                  <ArchiveMarkdownDocument content={devlog.content || devlog.summary} />
+                </section>
+
+                {devlog.tags.length > 0 ? (
+                  <div className="mt-10 border-t border-slate-100 pt-5">
+                    <div className="flex flex-wrap gap-2">
+                      {devlog.tags.map((tag) => <span key={tag} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500 [overflow-wrap:anywhere]">#{tag}</span>)}
+                    </div>
+                  </div>
+                ) : null}
+              </article>
+            </div>
+            {devlogPageHref ? (
+              <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-3 lg:px-7">
+                <p className="hidden truncate text-[11px] text-slate-400 sm:block">자료실에서는 열람만 할 수 있습니다.</p>
+                <button type="button" onClick={() => onOpenDevlogPage(devlogPageHref)} className="ml-auto inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900">
+                  개발일지에서 수정하기 <ArrowUpRight size={14} />
+                </button>
+              </footer>
+            ) : null}
+          </>
+        ) : (
+          <div className="grid min-h-0 flex-1 place-items-center px-6 text-center">
+            <div>
+              <span className="mx-auto grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-400"><BookOpen size={18} /></span>
+              <p className="mt-3 text-sm font-semibold text-slate-700">{hasSearchKeyword ? "검색 결과에 해당하는 개발일지가 없습니다." : "표시할 개발일지가 없습니다."}</p>
+              <p className="mt-1 text-xs text-slate-500">개발일지를 작성하면 최신 일지가 이곳에 바로 펼쳐집니다.</p>
+            </div>
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+/* =========================================================
+   DESIGN DOCUMENT (main 브랜치의 문서형 설계 화면)
+   요구사항·API 명세는 카드로, ERD·화면 흐름은 그림과 카드로 바로 펼친다. 상세 패널은 없다.
+   ========================================================= */
+function ArchiveDesignContent({
+  activeDesignSection,
+  onActiveDesignSectionChange,
+  keyword,
+  requirements,
+  apiSpecs,
+  designDocument,
+  isLoading,
+  errorMessage,
+}: {
+  activeDesignSection: DesignArchiveSectionKey;
+  onActiveDesignSectionChange: (
+    value: DesignArchiveSectionKey,
+  ) => void;
+  // 상단 툴바 검색어. 요구사항(기능명·구분·설명)과 API(경로·메서드·설명)만 거른다.
+  keyword: string;
+  requirements: DesignRequirementItem[];
+  apiSpecs: DesignApiSpecItem[];
+  designDocument: ParsedDesignDocument;
+  isLoading: boolean;
+  errorMessage: string;
+}) {
+  const erdTables =
+    designDocument.erdNodes;
+  const erdRelations =
+    designDocument.erdEdges;
+  const flowNodes =
+    designDocument.flowNodes;
+  const flowEdges =
+    designDocument.flowEdges;
+  const hasAnyDesignData =
+    requirements.length > 0 ||
+    apiSpecs.length > 0 ||
+    erdTables.length > 0 ||
+    flowNodes.length > 0;
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const matchesKeyword = (values: (string | undefined)[]) =>
+    !normalizedKeyword ||
+    values.some((value) =>
+      String(value ?? "").toLowerCase().includes(normalizedKeyword),
+    );
+  const visibleRequirements = requirements.filter((item) =>
+    matchesKeyword([item.name, item.category, item.description]),
+  );
+  const visibleApiSpecs = apiSpecs.filter((item) =>
+    matchesKeyword([item.endpoint, item.method, item.description]),
+  );
+  return (
+    <section>
+      {errorMessage && (
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+          {errorMessage}
+        </div>
+      )}
+      <div className="mb-3">
+        <div className="flex w-fit max-w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-md bg-slate-100 p-0.5">
+        {designSectionTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeDesignSection === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => onActiveDesignSectionChange(tab.key)}
+              aria-current={isActive ? "page" : undefined}
+              className={cn(
+                "inline-flex h-7 shrink-0 items-center gap-1.5 rounded px-3 text-xs font-semibold transition",
+                isActive
+                  ? "bg-white text-[#5873F9] shadow-sm"
+                  : "text-slate-500 hover:text-slate-800",
+              )}
+            >
+              <Icon size={14} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      </div>
+      {isLoading ? (
+        <div className="grid min-h-[360px] place-items-center rounded-2xl bg-slate-50">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
+            <Loader2
+              size={17}
+              className="animate-spin"
+            />
+            설계 문서를 불러오는
+            중입니다.
+          </div>
+        </div>
+      ) : !hasAnyDesignData ? (
+        <EmptyState
+          icon={FileText}
+          title="아직 저장된 설계 문서가 없습니다."
+          message="설계관리에서 요구사항, API 명세, ERD 또는 화면 흐름을 작성하면 이곳에서 문서 형태로 확인할 수 있습니다."
+        />
+      ) : (
+        <>
+          {activeDesignSection ===
+            "requirements" && (
+            <DesignRequirementsPage
+              requirements={
+                visibleRequirements
+              }
+              isSearchMiss={
+                requirements.length > 0
+              }
+            />
+          )}
+          {activeDesignSection ===
+            "api" && (
+            <DesignApiSpecsPage
+              apiSpecs={visibleApiSpecs}
+              isSearchMiss={
+                apiSpecs.length > 0
+              }
+            />
+          )}
+          {activeDesignSection ===
+            "erd" && (
+            <DesignErdPage
+              tables={erdTables}
+              edges={erdRelations}
+              relationCount={
+                erdRelations.length
+              }
+            />
+          )}
+          {activeDesignSection ===
+            "flow" && (
+            <DesignFlowPage
+              nodes={flowNodes}
+              edges={flowEdges}
+              edgeCount={
+                flowEdges.length
+              }
+            />
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+function DesignRequirementsPage({
+  requirements,
+  isSearchMiss = false,
+}: {
+  requirements: DesignRequirementItem[];
+  // 요구사항은 있는데 검색어에 걸린 것이 없을 때
+  isSearchMiss?: boolean;
+}) {
+  if (
+    requirements.length === 0
+  ) {
+    return isSearchMiss ? (
+      <DesignEmptyText
+        icon={Search}
+        title="검색 결과가 없습니다."
+        text="검색어를 바꿔 다시 확인해보세요."
+      />
+    ) : (
+      <DesignEmptyText
+        icon={CheckCircle2}
+        title="작성된 요구사항이 없습니다."
+        text="설계관리에서 요구사항을 작성하면 이곳에 표시됩니다."
+      />
+    );
+  }
+  return (
+    <div>
+      <SectionTitle
+        title="요구사항 정의"
+        description="설계단계에서 작성한 요구사항을 문서 형태로 확인합니다."
+        count={`${requirements.length}개`}
+      />
+      {/* 문서형 목록: 한 항목 = [번호 | 구분·기능명 / 설명(최대 2줄)]. 전체 설명은 마우스를 올리면 보인다 */}
+      <ol className="mt-2.5 space-y-1.5">
+        {requirements.map(
+          (item, index) => (
+            <li
+              key={item.id}
+              className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 rounded-md border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-[#C9D2FF]"
+            >
+              <span className="mt-px grid h-6 w-6 place-items-center rounded-md bg-[#5873F9] text-[11px] font-semibold tabular-nums text-white">
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="shrink-0 rounded bg-[#EEF3FF] px-1.5 py-px text-[10px] font-semibold text-[#4058D6]">
+                    {item.category ||
+                      "기본"}
+                  </span>
+                  <h5 className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                    {item.name ||
+                      "이름 없는 요구사항"}
+                  </h5>
+                </div>
+                <p
+                  className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-[13px] leading-5 text-slate-600 [overflow-wrap:anywhere]"
+                  title={item.description || undefined}
+                >
+                  {item.description ||
+                    "설명이 없습니다."}
+                </p>
+              </div>
+            </li>
+          ),
+        )}
+      </ol>
+    </div>
+  );
+}
+function DesignApiSpecsPage({
+  apiSpecs,
+  isSearchMiss = false,
+}: {
+  apiSpecs: DesignApiSpecItem[];
+  // API 명세는 있는데 검색어에 걸린 것이 없을 때
+  isSearchMiss?: boolean;
+}) {
+  if (apiSpecs.length === 0) {
+    return isSearchMiss ? (
+      <DesignEmptyText
+        icon={Search}
+        title="검색 결과가 없습니다."
+        text="검색어를 바꿔 다시 확인해보세요."
+      />
+    ) : (
+      <DesignEmptyText
+        icon={Code2}
+        title="작성된 API 명세가 없습니다."
+        text="설계관리에서 API 명세를 작성하면 이곳에 표시됩니다."
+      />
+    );
+  }
+  return (
+    <div>
+      <SectionTitle
+        title="API 명세"
+        description="엔드포인트, 설명, 요청 데이터, 응답 데이터를 확인합니다."
+        count={`${apiSpecs.length}개`}
+      />
+      {/* 카드 대신 얇은 구분선으로 API 를 나눈다. 한 항목 = 메서드·경로 / 설명 / 요청·응답 2열 */}
+      <div className="mt-2.5 divide-y divide-slate-200 border-y border-slate-200">
+        {apiSpecs.map((item) => (
+          <article
+            key={item.id}
+            className="py-3"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 rounded bg-[#5873F9] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                {item.method ||
+                  "GET"}
+              </span>
+              <code className="min-w-0 break-all font-mono text-sm font-semibold text-slate-900">
+                {item.endpoint ||
+                  "/api/example"}
+              </code>
+            </div>
+            <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-600">
+              {item.description ||
+                "설명이 없습니다."}
+            </p>
+            <div className="mt-2 grid grid-cols-1 gap-2 xl:grid-cols-2">
+              <PayloadBox
+                title="요청 데이터"
+                value={
+                  item.request
+                }
+              />
+              <PayloadBox
+                title="응답 데이터"
+                value={
+                  item.response
+                }
+              />
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+function PayloadBox({
+  title,
+  value,
+}: {
+  title: string;
+  value?: string | null;
+}) {
+  // 테두리 상자 두 겹 대신 라벨 + 옅은 배경 코드 블록 하나. 짧은 데이터는 내용 높이만큼만 차지한다.
+  return (
+    <div className="min-w-0">
+      <p className="mb-1 text-[11px] font-medium text-slate-500">
+        {title}
+      </p>
+      <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-50 px-3 py-2 font-mono text-xs leading-5 text-slate-700">
+        {formatApiPayload(value)}
+      </pre>
+    </div>
+  );
+}
+function DesignErdPage({
+  tables,
+  edges,
+  relationCount,
+}: {
+  tables: Record<
+    string,
+    unknown
+  >[];
+  edges: Record<
+    string,
+    unknown
+  >[];
+  relationCount: number;
+}) {
+  if (tables.length === 0) {
+    return (
+      <DesignEmptyText
+        icon={Database}
+        title="작성된 ERD가 없습니다."
+        text="설계관리에서 ERD를 작성하면 테이블과 관계를 이곳에서 확인할 수 있습니다."
+      />
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <SectionTitle
+        title="ERD"
+        description="설계단계에서 작성한 테이블 위치와 관계선을 시각화했습니다."
+        count={`테이블 ${tables.length}개 · 관계 ${relationCount}개`}
+      />
+      <DesignDiagramPreview
+        nodes={tables}
+        edges={edges}
+        type="erd"
+        title="ERD 구조"
+        description="테이블과 관계선을 그대로 표시합니다."
+        variant="document"
+      />
+      {/* 테이블별 전체 컬럼. 그림에는 컬럼이 4개까지만 보여서 여기서 전부 보여 준다 */}
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2 2xl:grid-cols-3">
+        {tables.map(
+          (node, index) => {
+            const columns =
+              getNodeColumns(node);
+            return (
+              <article
+                key={String(
+                  node.id ??
+                    index,
+                )}
+                className="min-w-0 overflow-hidden rounded-md border border-slate-200 bg-white"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+                  <h5 className="flex min-w-0 items-center gap-1.5 truncate text-[13px] font-semibold text-slate-900">
+                    <Database
+                      size={13}
+                      className="shrink-0 text-[#5873F9]"
+                    />
+                    <span className="truncate">
+                      {getNodeLabel(
+                        node,
+                        `TABLE_${
+                          index + 1
+                        }`,
+                      )}
+                    </span>
+                  </h5>
+                  <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                    컬럼{" "}
+                    {
+                      columns.length
+                    }
+                    개
+                  </span>
+                </div>
+                <div className="max-h-[220px] divide-y divide-slate-100 overflow-y-auto">
+                  {columns.length ===
+                  0 ? (
+                    <p className="px-3 py-2 text-xs text-slate-400">
+                      컬럼이 없습니다.
+                    </p>
+                  ) : (
+                    columns.map(
+                      (
+                        column,
+                        columnIndex,
+                      ) => (
+                        <div
+                          key={String(
+                            column.id ??
+                              columnIndex,
+                          )}
+                          className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs"
+                        >
+                          <span className="min-w-0 truncate font-medium text-slate-700">
+                            {typeof column.name ===
+                            "string"
+                              ? column.name
+                              : "column"}
+                          </span>
+                          <span className="shrink-0 font-mono text-[11px] text-[#4058D6]">
+                            {typeof column.type ===
+                            "string"
+                              ? column.type
+                              : "TYPE"}
+                          </span>
+                        </div>
+                      ),
+                    )
+                  )}
+                </div>
+              </article>
+            );
+          },
+        )}
+      </div>
+    </div>
+  );
+}
+function DesignFlowPage({
+  nodes,
+  edges,
+  edgeCount,
+}: {
+  nodes: Record<
+    string,
+    unknown
+  >[];
+  edges: Record<
+    string,
+    unknown
+  >[];
+  edgeCount: number;
+}) {
+  if (nodes.length === 0) {
+    return (
+      <DesignEmptyText
+        icon={GitBranch}
+        title="작성된 화면 흐름이 없습니다."
+        text="설계관리에서 화면 흐름을 작성하면 이곳에서 확인할 수 있습니다."
+      />
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <SectionTitle
+        title="화면 흐름"
+        description="화면 사이의 이동 흐름을 시각화했습니다."
+        count={`노드 ${nodes.length}개 · 연결 ${edgeCount}개`}
+      />
+      <DesignDiagramPreview
+        nodes={nodes}
+        edges={edges}
+        type="flow"
+        title="화면 흐름"
+        description="설계단계에서 작성한 흐름도를 그대로 표시합니다."
+        variant="document"
+      />
+      {/* 화면 목록: 카드 대신 한 줄짜리 행 */}
+      <ul className="grid grid-cols-1 gap-x-6 border-t border-slate-200 xl:grid-cols-2">
+        {nodes.map(
+          (node, index) => (
+            <li
+              key={String(
+                node.id ??
+                  index,
+              )}
+              className="flex min-w-0 items-center gap-2.5 border-b border-slate-100 py-2"
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
+                <GitBranch
+                  size={13}
+                />
+              </span>
+              <p className="min-w-0 shrink-0 truncate text-[13px] font-semibold text-slate-900 sm:max-w-[45%]">
+                {getNodeLabel(
+                  node,
+                  `NODE_${
+                    index + 1
+                  }`,
+                )}
+              </p>
+              <p className="min-w-0 flex-1 truncate text-xs text-slate-500">
+                {getNodeSubText(
+                  node,
+                )}
+              </p>
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
+  );
+}
+function SectionTitle({
+  title,
+  description,
+  count,
+}: {
+  title: string;
+  description: string;
+  count: string;
+}) {
+  // 제목·개수·설명을 한 줄에 둔다(좁으면 설명만 아래로)
+  return (
+    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <h3 className="text-[15px] font-semibold text-slate-900">
+        {title}
+      </h3>
+      <span className="text-xs font-semibold tabular-nums text-[#5873F9]">
+        {count}
+      </span>
+      <p className="min-w-0 text-xs text-slate-400 sm:ml-auto">
+        {description}
+      </p>
+    </div>
+  );
+}
 /* =========================================================
    DIAGRAM PREVIEW
    ========================================================= */
@@ -4018,6 +4620,7 @@ function DesignDiagramPreview({
   type,
   title,
   description,
+  variant = "card",
 }: {
   nodes: Record<
     string,
@@ -4030,7 +4633,11 @@ function DesignDiagramPreview({
   type: "erd" | "flow";
   title: string;
   description: string;
+  // card = 머리글이 있는 미리보기 카드(최종 보고서). document = 자료실 설계 문서 본문용
+  // (머리글·바깥 카드 없이 그림 컨테이너 하나, 콘텐츠 너비에 맞춰 크게 보여 준다)
+  variant?: "card" | "document";
 }) {
+  const isDocument = variant === "document";
   const normalizedNodes =
     useMemo(
       () =>
@@ -4046,11 +4653,38 @@ function DesignDiagramPreview({
         getDiagramLayout(
           normalizedNodes,
           type,
+          isDocument
+            ? { padding: 32, minWidth: 0, minHeight: 0 }
+            : undefined,
         ),
       [
         normalizedNodes,
         type,
+        isDocument,
       ],
+    );
+  // 문서용 확대·축소. null 이면 컨테이너 너비에 맞춘다(작은 그림은 최대 1.25배까지 키우고,
+  // 큰 그림은 0.6배 아래로 줄이지 않고 내부 스크롤로 본다).
+  const diagramScrollRef = useRef<HTMLDivElement | null>(null);
+  const [manualZoom, setManualZoom] = useState<number | null>(null);
+  const [fitZoom, setFitZoom] = useState(1);
+  useEffect(() => {
+    const container = diagramScrollRef.current;
+    if (!isDocument || !container) return;
+    const updateFit = () => {
+      const available = container.clientWidth;
+      if (available <= 0 || layout.width <= 0) return;
+      setFitZoom(Math.min(1.25, Math.max(0.6, available / layout.width)));
+    };
+    updateFit();
+    const observer = new ResizeObserver(updateFit);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isDocument, layout.width]);
+  const zoom = manualZoom ?? fitZoom;
+  const changeZoom = (delta: number) =>
+    setManualZoom(
+      Math.min(2, Math.max(0.4, Math.round((zoom + delta) * 10) / 10)),
     );
   const nodeMap =
     useMemo(
@@ -4069,26 +4703,20 @@ function DesignDiagramPreview({
     type === "erd"
       ? "#5873F9"
       : "#7c3aed";
-  return (
-    <section className="overflow-hidden rounded-md border border-[var(--waivs-border)] bg-white">
-      <div className="flex flex-col justify-between gap-2 border-b border-[var(--waivs-border-soft)] bg-slate-50 px-4 py-3 md:flex-row md:items-center">
-        <div>
-          <p className="text-sm font-semibold text-slate-950">
-            {title}
-          </p>
-          <p className="mt-0.5 text-xs font-medium text-slate-500">
-            {description}
-          </p>
-        </div>
-        <span className="w-fit rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#5873F9]">
-          노드 {nodes.length}개 ·
-          연결 {edges.length}개
-        </span>
-      </div>
-      <div className="overflow-auto bg-slate-50 p-3">
+  const diagramSvg = (
         <svg
           viewBox={`0 0 ${layout.width} ${layout.height}`}
-          className="h-[420px] w-full min-w-[860px] rounded-md border border-[var(--waivs-border)] bg-white"
+          {...(isDocument
+            ? {
+                // 그림 크기 그대로(× 확대 배율) 그려서 viewBox 와 표시 비율이 같다. 위아래 빈 띠가 생기지 않는다.
+                width: layout.width * zoom,
+                height: layout.height * zoom,
+                className: "block",
+              }
+            : {
+                className:
+                  "h-[420px] w-full min-w-[860px] rounded-md border border-[var(--waivs-border)] bg-white",
+              })}
           role="img"
           aria-label={title}
         >
@@ -4371,6 +4999,64 @@ function DesignDiagramPreview({
             },
           )}
         </svg>
+  );
+  if (isDocument) {
+    return (
+      <div className="relative rounded-md border border-slate-200 bg-[#f8fafc]">
+        {/* 노드가 많으면 이 안에서만 가로·세로 스크롤 */}
+        <div
+          ref={diagramScrollRef}
+          className="max-h-[70vh] overflow-auto"
+        >
+          {diagramSvg}
+        </div>
+        <div className="absolute right-2 top-2 flex items-center rounded-md border border-slate-200 bg-white/95 text-[11px] font-medium text-slate-600 shadow-sm">
+          <button
+            type="button"
+            onClick={() => changeZoom(-0.1)}
+            className="grid h-7 w-7 place-items-center rounded-l-md hover:bg-slate-50"
+            aria-label="축소"
+          >
+            <Minus size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setManualZoom(null)}
+            className="h-7 min-w-[52px] border-x border-slate-200 px-1.5 tabular-nums hover:bg-slate-50"
+            title="화면에 맞추기"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => changeZoom(0.1)}
+            className="grid h-7 w-7 place-items-center rounded-r-md hover:bg-slate-50"
+            aria-label="확대"
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <section className="overflow-hidden rounded-md border border-[var(--waivs-border)] bg-white">
+      <div className="flex flex-col justify-between gap-2 border-b border-[var(--waivs-border-soft)] bg-slate-50 px-4 py-3 md:flex-row md:items-center">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">
+            {title}
+          </p>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">
+            {description}
+          </p>
+        </div>
+        <span className="w-fit rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#5873F9]">
+          노드 {nodes.length}개 ·
+          연결 {edges.length}개
+        </span>
+      </div>
+      <div className="overflow-auto bg-slate-50 p-3">
+        {diagramSvg}
       </div>
     </section>
   );
