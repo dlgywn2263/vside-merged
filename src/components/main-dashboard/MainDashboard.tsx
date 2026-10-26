@@ -11,8 +11,8 @@ import {
   ArrowRight,
   BookOpenText,
   CalendarDays,
-  CheckCircle2,
   Code2,
+  Compass,
   Database,
   FileCode2,
   FolderTree,
@@ -932,10 +932,20 @@ export default function MainDashboard({
 
         {isProjectMode ? (
           <>
-            {/* ===================== 중단 1: 확인할 작업 · 팀원 · 바로 가기 ===================== */}
-            <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-12">
-              <TaskFocusPanel
-                className="lg:col-span-2 xl:col-span-6"
+            {/* ===================== 중단 1: 팀원(25%) · 오늘의 작업(50%) · 바로가기(25%) =====================
+                데스크톱에서는 가운데 오늘의 작업이 가장 넓다. 중간 폭에서는 오늘의 작업이 맨 위 한 줄을 다 쓰고,
+                팀원·바로가기가 그 아래 두 칸으로 놓인다(order 로 순서만 바꾼다). */}
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+              <TeamPanel
+                className="order-2 xl:order-1"
+                loading={sectionLoading}
+                members={overview?.members}
+                workspaceId={currentWorkspaceId}
+                mode={currentMode}
+              />
+
+              <TodayWorkPanel
+                className="order-1 lg:col-span-2 xl:order-2 xl:col-span-1"
                 loading={sectionLoading}
                 errorMessage={errorMessage}
                 schedules={overview?.schedules}
@@ -944,23 +954,16 @@ export default function MainDashboard({
                 mode={currentMode}
               />
 
-              <TeamPanel
-                className="xl:col-span-3"
-                loading={sectionLoading}
-                members={overview?.members}
-                workspaceId={currentWorkspaceId}
-                mode={currentMode}
-              />
-
               <QuickLinksPanel
-                className="xl:col-span-3"
+                className="order-3"
                 workspaceId={currentWorkspaceId}
                 mode={currentMode}
               />
             </div>
 
-            {/* ===================== 중단 2: 최근 활동 · 자료실 ===================== */}
-            <div className="grid items-start gap-4 xl:grid-cols-12">
+            {/* ===================== 중단 2: 최근 활동 · 자료실 =====================
+                같은 줄일 때는 기본 stretch 로 더 긴 카드 높이에 맞춘다. 세로로 쌓이면 각자 내용 높이다. */}
+            <div className="grid gap-4 xl:grid-cols-12">
               <ActivityPanel
                 className="xl:col-span-7"
                 loading={sectionLoading}
@@ -1037,22 +1040,17 @@ export default function MainDashboard({
 ========================================================= */
 const DAY_MS = 86_400_000;
 
+// 자료실을 "최종 보고서" 탭으로 연다(자료실이 ?tab=final 을 읽는다).
+function getFinalReportHref(workspaceId: string, mode: WorkspaceMode) {
+  return `${getArchiveHref(workspaceId, mode)}&tab=final`;
+}
+
 function formatShortDate(dateKey: string) {
   const [, month, day] = dateKey.split("-");
 
   return month && day
     ? `${Number(month)}/${Number(day)}`
     : dateKey;
-}
-
-function daysBetween(fromKey: string, toKey: string) {
-  const diff = Math.round(
-    (new Date(`${toKey}T00:00:00`).getTime() -
-      new Date(`${fromKey}T00:00:00`).getTime()) /
-      DAY_MS,
-  );
-
-  return Number.isNaN(diff) ? null : diff;
 }
 
 function formatRelativeTime(time: number) {
@@ -1185,7 +1183,7 @@ function DashboardHero({
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
             <LayoutDashboard size={12} strokeWidth={2.4} />
             {isProjectMode
-              ? `${isTeam ? "Team" : "Personal"} workspace`
+              ? `${isTeam ? "Team" : "Personal"} project`
               : "Dashboard"}
           </p>
 
@@ -1300,34 +1298,33 @@ function DashboardHero({
 }
 
 /* =========================================================
-   확인할 작업: 이 프로젝트의 미완료 일정 (기간 제한 없음)
+   오늘의 작업: 오늘 일정(미완료) + 오늘이 아니어도 진행 중인 미완료 일정
+   - 오늘 일정: 오늘이 시작일~종료일 안에 드는 일정. 완료는 뺀다(해야 할 일 중심).
+   - 진행 중 작업: 오늘 일정이 아니면서 상태가 "진행 중"인 일정.
+   일정 API 는 날짜(YYYY-MM-DD)만 주므로 시간은 표시하지 않는다.
+   날짜는 문자열 키끼리 비교한다. Date 로 바꾸면 UTC 해석 때문에 하루가 밀릴 수 있다.
 ========================================================= */
-const VISIBLE_TASK_COUNT = 6;
+const VISIBLE_TODAY_WORK_COUNT = 4;
 
-type TaskUrgency = "overdue" | "soon" | "progress" | "todo";
-
-const TASK_URGENCY_ORDER: Record<TaskUrgency, number> = {
-  overdue: 0,
-  soon: 1,
-  progress: 2,
-  todo: 3,
+// 바로 이어서 할 일이 위로: 오늘·진행 중 → 오늘·할 일 → 오늘·지연 → 오늘 아님·진행 중
+const TODAY_WORK_ORDER: Record<"progress" | "todo" | "delayed", number> = {
+  progress: 0,
+  todo: 1,
+  delayed: 2,
 };
 
-// 지연 상태이거나 마감이 지난 일정 → 3일 안에 마감 → 진행 중 → 할 일 순.
-function getTaskUrgency(
-  schedule: OverviewSchedule,
-  daysLeft: number | null,
-): TaskUrgency {
-  if (schedule.status === "delayed" || (daysLeft !== null && daysLeft < 0)) {
-    return "overdue";
-  }
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
-  if (daysLeft !== null && daysLeft <= 3) return "soon";
+function isScheduleOnDate(schedule: OverviewSchedule, dateKey: string) {
+  const start = schedule.startKey || schedule.endKey;
+  const end = schedule.endKey || schedule.startKey;
 
-  return schedule.status === "progress" ? "progress" : "todo";
+  if (!start || !end) return false;
+
+  return start <= dateKey && dateKey <= end;
 }
 
-function TaskFocusPanel({
+function TodayWorkPanel({
   className,
   loading,
   errorMessage,
@@ -1344,7 +1341,13 @@ function TaskFocusPanel({
   workspaceId: string;
   mode: WorkspaceMode;
 }) {
-  const todayKey = formatDateKey(new Date());
+  const now = new Date();
+
+  const todayKey = formatDateKey(now);
+
+  const todayLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 ${
+    WEEKDAY_LABELS[now.getDay()]
+  }요일`;
 
   // 일정에 이름 없이 담당자 번호만 온 경우 팀원 목록에서 이름을 찾는다(일정 관리 화면과 같은 방식).
   const getAssigneeName = (schedule: OverviewSchedule) =>
@@ -1355,194 +1358,195 @@ function TaskFocusPanel({
       : "") ||
     "";
 
-  const tasks = (schedules ?? [])
+  const works = (schedules ?? [])
     .filter((schedule) => schedule.status !== "done")
-    .map((schedule) => {
-      const daysLeft = schedule.endKey
-        ? daysBetween(todayKey, schedule.endKey)
-        : null;
-
-      return {
-        schedule,
-        daysLeft,
-        urgency: getTaskUrgency(schedule, daysLeft),
-      };
-    })
+    .map((schedule) => ({
+      schedule,
+      isToday: isScheduleOnDate(schedule, todayKey),
+    }))
+    .filter(({ schedule, isToday }) => isToday || schedule.status === "progress")
     .sort(
       (a, b) =>
-        TASK_URGENCY_ORDER[a.urgency] - TASK_URGENCY_ORDER[b.urgency] ||
+        Number(b.isToday) - Number(a.isToday) ||
+        TODAY_WORK_ORDER[a.schedule.status as keyof typeof TODAY_WORK_ORDER] -
+          TODAY_WORK_ORDER[b.schedule.status as keyof typeof TODAY_WORK_ORDER] ||
         (a.schedule.endKey || "9999").localeCompare(
           b.schedule.endKey || "9999",
-        ),
+        ) ||
+        a.schedule.title.localeCompare(b.schedule.title, "ko"),
     );
 
-  const counts = tasks.reduce<Record<TaskUrgency, number>>(
-    (acc, task) => {
-      acc[task.urgency] += 1;
+  const todayCount = works.filter((work) => work.isToday).length;
 
-      return acc;
-    },
-    { overdue: 0, soon: 0, progress: 0, todo: 0 },
-  );
+  const progressCount = works.length - todayCount;
 
-  const visibleTasks = tasks.slice(0, VISIBLE_TASK_COUNT);
+  const visibleWorks = works.slice(0, VISIBLE_TODAY_WORK_COUNT);
 
   const scheduleHref = getScheduleHref(workspaceId, mode);
 
-  const summaryChips: Array<{ key: TaskUrgency; label: string; tone: string }> =
-    [
-      {
-        key: "overdue",
-        label: "지연·기한 지남",
-        tone: "border-rose-200 bg-rose-50 text-rose-700",
-      },
-      {
-        key: "soon",
-        label: "3일 내 마감",
-        tone: "border-amber-200 bg-amber-50 text-amber-700",
-      },
-      {
-        key: "progress",
-        label: "진행 중",
-        tone: SCHEDULE_STATUS_META.progress.badge,
-      },
-    ];
-
   return (
+    // 대시보드의 중심 카드: 위쪽 브랜드색 선과 조금 더 진한 테두리로만 강조한다
     <section
-      className={`min-w-0 rounded-md border border-gray-200 bg-white ${className}`}
+      className={`relative flex min-w-0 flex-col overflow-hidden rounded-md border border-[#C9D2FF] bg-white ${className}`}
     >
-      <PanelHeader
-        icon={ListChecks}
-        iconTone="bg-[#5873F9] text-white"
-        title="확인할 작업"
-        count={schedules ? tasks.length : undefined}
-        description="이 프로젝트의 미완료 일정 · 지연과 임박한 일정부터"
-        action={<HeaderLink href={scheduleHref}>일정 관리</HeaderLink>}
-      />
+      {/* 공간을 차지하지 않게 겹쳐 그려, 옆 카드들과 머리 구분선 높이가 같게 둔다 */}
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[#5873F9]" />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
+            <ListChecks size={16} strokeWidth={2.2} />
+          </span>
+
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-1.5 text-[15px] font-bold leading-[1.333] text-gray-900">
+              오늘의 작업
+              {schedules ? (
+                <span className="rounded-full bg-[#5873F9] px-1.5 py-px text-[10px] font-bold tabular-nums text-white">
+                  {works.length}
+                </span>
+              ) : null}
+            </h2>
+
+            <p className="mt-0.5 truncate text-[11px] text-gray-500">
+              <span className="font-semibold text-gray-700">{todayLabel}</span>
+              <span className="mx-1 text-gray-300">·</span>
+              오늘 일정과 진행 중 작업을 확인하세요
+            </p>
+          </div>
+        </div>
+
+        <HeaderLink href={scheduleHref}>일정 관리</HeaderLink>
+      </div>
 
       {loading ? (
-        <PanelMessage>확인할 작업을 불러오는 중입니다.</PanelMessage>
+        <PanelMessage>오늘의 작업을 불러오는 중입니다.</PanelMessage>
       ) : errorMessage ? (
         <PanelMessage tone="error">{errorMessage}</PanelMessage>
       ) : !schedules ? (
         <PanelMessage tone="error">일정을 불러오지 못했습니다.</PanelMessage>
-      ) : tasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-            <CheckCircle2 size={20} />
+      ) : works.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-10 text-center">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF2FF] text-[#5873F9]">
+            <CalendarDays size={18} />
           </span>
 
-          <p className="text-xs font-semibold text-gray-700">
-            남은 일정이 없어요
+          <p className="text-[13px] font-semibold text-gray-800">
+            오늘 예정된 작업이 없습니다.
+          </p>
+
+          <p className="text-[11px] text-gray-500">
+            오늘 일정이나 진행 중인 일정이 생기면 여기에 표시됩니다.
           </p>
 
           <Link
             href={scheduleHref}
-            className="text-[11px] font-semibold text-[#5873F9] hover:underline"
+            className="mt-1 text-[11px] font-semibold text-[#5873F9] hover:underline"
           >
-            일정 관리에서 새 일정 등록하기
+            일정 관리에서 일정 등록하기
           </Link>
         </div>
       ) : (
-        <div className="p-3">
-          <div className="mb-2.5 flex flex-wrap gap-1.5 px-1">
-            {summaryChips.map((chip) => (
-              <span
-                key={chip.key}
-                className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold ${
-                  counts[chip.key] > 0
-                    ? chip.tone
-                    : "border-gray-100 bg-white text-gray-300"
-                }`}
-              >
-                {chip.label}{" "}
-                <span className="tabular-nums">{counts[chip.key]}</span>
-              </span>
-            ))}
+        <div className="flex flex-1 flex-col p-3">
+          {/* 오늘 일정 / 진행 중 작업 개수 */}
+          <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px]">
+            <span className="rounded border border-[#D9E1FF] bg-[#F5F7FF] px-1.5 py-0.5 font-semibold text-[#4058D6]">
+              오늘 일정 <span className="tabular-nums">{todayCount}</span>
+            </span>
+
+            <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-semibold text-gray-600">
+              진행 중 작업 <span className="tabular-nums">{progressCount}</span>
+            </span>
           </div>
 
-          <ul className="space-y-1.5">
-            {visibleTasks.map(({ schedule, daysLeft, urgency }) => {
+          <ul className="space-y-2">
+            {visibleWorks.map(({ schedule, isToday }) => {
               const assigneeName = getAssigneeName(schedule);
 
               const meta = SCHEDULE_STATUS_META[schedule.status];
 
-              const accent =
-                urgency === "overdue"
-                  ? "bg-rose-500"
-                  : urgency === "soon"
-                    ? "bg-amber-500"
-                    : meta.bar;
+              const isOneDay =
+                !schedule.startKey || schedule.startKey === schedule.endKey;
 
-              const dueText =
-                daysLeft === null
-                  ? "마감 없음"
-                  : daysLeft < 0
-                    ? `${-daysLeft}일 지남`
-                    : daysLeft === 0
-                      ? "오늘 마감"
-                      : `D-${daysLeft}`;
+              const period = isOneDay
+                ? formatShortDate(schedule.endKey || schedule.startKey)
+                : `${formatShortDate(schedule.startKey)}–${formatShortDate(
+                    schedule.endKey,
+                  )}`;
 
-              const dueTone =
-                urgency === "overdue"
-                  ? "text-rose-600"
-                  : urgency === "soon"
-                    ? "text-amber-600"
-                    : "text-gray-400";
+              const isOverdue = Boolean(
+                schedule.endKey && schedule.endKey < todayKey,
+              );
+
+              const isDueToday = schedule.endKey === todayKey;
 
               return (
                 <li key={schedule.id}>
                   <Link
                     href={scheduleHref}
-                    className="group relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-md border border-gray-200 bg-white py-2.5 pl-4 pr-3 transition-colors hover:border-[#AAB8FF] hover:bg-[#F7F9FF] sm:grid-cols-[minmax(0,1fr)_64px_104px]"
+                    className="group relative block overflow-hidden rounded-lg border border-gray-200 bg-white py-3 pl-4 pr-3.5 transition-colors hover:border-[#AAB8FF] hover:bg-[#F7F9FF]"
                   >
+                    {/* 상태색은 왼쪽 얇은 선과 배지에만 쓴다 */}
                     <span
-                      className={`absolute inset-y-0 left-0 w-[3px] ${accent}`}
+                      className={`absolute inset-y-0 left-0 w-[3px] ${meta.bar}`}
                     />
 
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold text-gray-900 group-hover:text-[#4058D6]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${meta.badge}`}
+                      >
+                        {meta.label}
+                      </span>
+
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 group-hover:text-[#4058D6]">
                         {schedule.title}
                       </p>
 
-                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-gray-400">
-                        {assigneeName ? (
-                          <>
-                            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#EEF2FF] text-[9px] font-bold text-[#4058D6]">
-                              {assigneeName.slice(0, 1).toUpperCase()}
-                            </span>
-
-                            <span className="truncate text-gray-600">
-                              {assigneeName}
-                            </span>
-                          </>
-                        ) : (
-                          <span>담당자 미지정</span>
-                        )}
-                      </p>
+                      <ArrowRight
+                        size={14}
+                        strokeWidth={2.2}
+                        className="shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-[#5873F9]"
+                      />
                     </div>
 
-                    <span
-                      className={`rounded border px-1.5 py-0.5 text-center text-[11px] font-semibold sm:px-0 ${meta.badge}`}
-                    >
-                      {meta.label}
-                    </span>
-
-                    <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:block sm:text-right">
-                      <p className="font-mono text-xs font-medium text-gray-700">
-                        {schedule.startKey && schedule.startKey !== schedule.endKey
-                          ? `${formatShortDate(schedule.startKey)}–${formatShortDate(
-                              schedule.endKey,
-                            )}`
-                          : formatShortDate(schedule.endKey) || "-"}
-                      </p>
-
-                      <p
-                        className={`font-mono text-[10px] font-bold sm:mt-0.5 ${dueTone}`}
+                    <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-gray-500">
+                      <span
+                        className={`shrink-0 font-semibold ${
+                          isToday ? "text-[#4058D6]" : "text-gray-600"
+                        }`}
                       >
-                        {dueText}
-                      </p>
+                        {isToday ? "오늘 일정" : "진행 중 작업"}
+                      </span>
+
+                      <span className="text-gray-300">·</span>
+
+                      <span className="shrink-0 font-mono">{period}</span>
+
+                      {isDueToday ? (
+                        <span className="shrink-0 font-semibold text-amber-600">
+                          오늘 마감
+                        </span>
+                      ) : isOverdue ? (
+                        <span className="shrink-0 font-semibold text-rose-600">
+                          마감 지남
+                        </span>
+                      ) : null}
+
+                      <span className="text-gray-300">·</span>
+
+                      {assigneeName ? (
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#EEF2FF] text-[9px] font-bold text-[#4058D6]">
+                            {assigneeName.slice(0, 1).toUpperCase()}
+                          </span>
+
+                          <span className="truncate text-gray-600">
+                            담당 {assigneeName}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">담당자 미지정</span>
+                      )}
                     </div>
                   </Link>
                 </li>
@@ -1550,12 +1554,12 @@ function TaskFocusPanel({
             })}
           </ul>
 
-          {tasks.length > visibleTasks.length ? (
+          {works.length > visibleWorks.length ? (
             <Link
               href={scheduleHref}
-              className="mt-2 flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#5873F9]"
+              className="mt-2 flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-gray-600 transition-colors hover:bg-[#F2F5FF] hover:text-[#5873F9]"
             >
-              외 {tasks.length - visibleTasks.length}개 일정 더 보기
+              + {works.length - visibleWorks.length}개 더 보기
               <ArrowRight size={12} />
             </Link>
           ) : null}
@@ -1602,13 +1606,15 @@ function TeamPanel({
 
   return (
     <section
-      className={`min-w-0 rounded-md border border-gray-200 bg-white ${className}`}
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
     >
       <PanelHeader
         icon={UsersRound}
         iconTone="bg-emerald-50 text-emerald-600"
         title="팀원"
         count={Array.isArray(members) ? list.length : undefined}
+        // 같은 줄 카드들과 머리 높이(구분선 위치)를 맞추려고 설명 한 줄을 둔다
+        description="프로젝트에 참여 중인 멤버"
         action={
           mode === "team" ? (
             <HeaderLink href={settingsHref}>팀원 관리</HeaderLink>
@@ -1707,7 +1713,8 @@ function QuickLinksPanel({
   workspaceId: string;
   mode: WorkspaceMode;
 }) {
-  // IDE 는 상단 "작업하러 가기", 자료실·AI 보고서는 아래 자료실 영역에서 이동한다.
+  // 모두 지금 프로젝트(workspaceId·mode)를 그대로 넘긴다.
+  // AI 최종 보고서는 새 기능이 아니라 자료실의 "최종 보고서" 탭(초안 생성)을 바로 연다.
   const quickLinks: Array<{
     href: string;
     label: string;
@@ -1716,53 +1723,53 @@ function QuickLinksPanel({
     tone: string;
   }> = [
     {
+      href: `/aivs/${encodeURIComponent(workspaceId)}?mode=${mode}`,
+      label: "AIVS",
+      description: "웹 IDE에서 코드 작성 및 실행",
+      icon: Code2,
+      tone: "bg-[#EEF2FF] text-[#5873F9]",
+    },
+    {
       href: getScheduleHref(workspaceId, mode),
       label: "일정 관리",
-      description: "일정 등록과 진행 상태 변경",
+      description: "프로젝트 일정 확인 및 관리",
       icon: CalendarDays,
-      tone: "bg-[#EEF2FF] text-[#5873F9]",
+      tone: "bg-sky-50 text-sky-600",
     },
     {
       href: getDevlogHref(workspaceId, mode),
       label: "개발일지",
-      description: "작업 기록 작성과 이어 쓰기",
+      description: "개발 과정 기록 및 확인",
       icon: BookOpenText,
       tone: "bg-purple-50 text-purple-600",
     },
     {
-      href: `/design/${encodeURIComponent(workspaceId)}?mode=${mode}`,
-      label: "설계 관리",
-      description: "요구사항 · API 명세 · ERD",
-      icon: PenTool,
-      tone: "bg-sky-50 text-sky-600",
+      href: getFinalReportHref(workspaceId, mode),
+      label: "AI 최종 보고서",
+      description: "프로젝트 최종 보고서 생성",
+      icon: Sparkles,
+      tone: "bg-amber-50 text-amber-600",
     },
   ];
 
-  if (mode === "team") {
-    quickLinks.push({
-      href: `/messages?workspace=${encodeURIComponent(workspaceId)}&mode=team`,
-      label: "팀 채팅",
-      description: "프로젝트 팀원과 대화",
-      icon: MessageSquare,
-      tone: "bg-emerald-50 text-emerald-600",
-    });
-  }
-
   return (
     <nav
-      aria-label="바로 가기"
-      className={`min-w-0 rounded-md border border-gray-200 bg-white ${className}`}
+      aria-label="바로가기"
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
     >
-      <p className="border-b border-gray-100 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-        바로 가기
-      </p>
+      <PanelHeader
+        icon={Compass}
+        iconTone="bg-[#EEF2FF] text-[#5873F9]"
+        title="바로가기"
+        description="자주 쓰는 작업 화면으로 이동"
+      />
 
-      <ul className="p-2">
+      <ul className="space-y-1 p-2">
         {quickLinks.map(({ href, label, description, icon: Icon, tone }) => (
           <li key={label}>
             <Link
               href={href}
-              className="group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[#F7F9FF]"
+              className="group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[#F2F5FF]"
             >
               <span
                 className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${tone}`}
@@ -1771,7 +1778,7 @@ function QuickLinksPanel({
               </span>
 
               <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-semibold text-gray-900 group-hover:text-[#4058D6]">
+                <span className="block truncate text-[13px] font-semibold text-gray-900 group-hover:text-[#4058D6]">
                   {label}
                 </span>
 
@@ -1781,9 +1788,9 @@ function QuickLinksPanel({
               </span>
 
               <ArrowRight
-                size={14}
+                size={15}
                 strokeWidth={2.2}
-                className="shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-[#5873F9]"
+                className="shrink-0 text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-[#5873F9]"
               />
             </Link>
           </li>
@@ -1796,7 +1803,7 @@ function QuickLinksPanel({
 /* =========================================================
    최근 활동: 일정·개발일지·설계·Git 기록을 시간순으로
 ========================================================= */
-const VISIBLE_ACTIVITY_COUNT = 8;
+const VISIBLE_ACTIVITY_COUNT = 6;
 
 const ACTIVITY_META: Record<
   ActivityKind,
@@ -1828,6 +1835,12 @@ const ACTIVITY_META: Record<
   },
 };
 
+function getActivitySeq(id: string) {
+  const match = /(\d+)$/.exec(id);
+
+  return match ? Number(match[1]) : 0;
+}
+
 function ActivityPanel({
   className,
   loading,
@@ -1853,7 +1866,11 @@ function ActivityPanel({
       ? activity
       : activity.filter((item) => item.kind === filter);
 
-  const visible = filtered.slice(0, VISIBLE_ACTIVITY_COUNT);
+  // buildActivity 가 이미 발생 시각 내림차순이다. 시각이 같으면(날짜만 있는 기록 등)
+  // id 끝의 번호가 큰 것, 곧 나중에 만든 기록을 먼저 둔다.
+  const visible = [...filtered]
+    .sort((a, b) => b.time - a.time || getActivitySeq(b.id) - getActivitySeq(a.id))
+    .slice(0, VISIBLE_ACTIVITY_COUNT);
 
   const hrefByKind: Record<ActivityKind, string> = {
     schedule: getScheduleHref(workspaceId, mode),
@@ -1882,7 +1899,7 @@ function ActivityPanel({
 
   return (
     <section
-      className={`min-w-0 rounded-md border border-gray-200 bg-white ${className}`}
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
     >
       <PanelHeader
         icon={Activity}
@@ -1928,7 +1945,7 @@ function ActivityPanel({
             : `${ACTIVITY_META[filter].label} 활동이 없습니다.`}
         </PanelMessage>
       ) : (
-        <ol className="relative px-5 py-3 before:absolute before:bottom-6 before:left-[35px] before:top-6 before:w-px before:bg-gray-100">
+        <ol className="relative px-5 py-2 before:absolute before:bottom-5 before:left-[35px] before:top-5 before:w-px before:bg-gray-100">
           {visible.map((item) => {
             const meta = ACTIVITY_META[item.kind];
 
@@ -1938,7 +1955,7 @@ function ActivityPanel({
               <li key={item.id}>
                 <Link
                   href={hrefByKind[item.kind]}
-                  className="group relative -mx-2 flex items-start gap-3 rounded-md px-2 py-2 transition-colors hover:bg-[#F7F9FF]"
+                  className="group relative -mx-2 flex items-start gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-[#F7F9FF]"
                 >
                   <span
                     className={`relative z-10 mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md ${meta.tone}`}
@@ -1999,7 +2016,7 @@ function ActivityPanel({
       )}
 
       {!loading && failedSources.length > 0 ? (
-        <p className="border-t border-gray-100 px-5 py-2 text-[11px] text-amber-600">
+        <p className="mt-auto border-t border-gray-100 px-5 py-2 text-[11px] text-amber-600">
           {failedSources.join(" · ")} 기록을 불러오지 못해 빠져 있어요.
         </p>
       ) : null}
@@ -2106,7 +2123,7 @@ function ArchivePanel({
 
   return (
     <section
-      className={`min-w-0 rounded-md border border-gray-200 bg-white ${className}`}
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
     >
       <PanelHeader
         icon={FolderTree}
@@ -2166,7 +2183,8 @@ function ArchivePanel({
             ))}
           </ul>
 
-          <div className="flex items-center gap-3 border-t border-gray-100 bg-[#FAFBFF] px-5 py-3">
+          {/* 카드가 옆 카드 높이로 늘어나면 남는 공간은 목록 아래에 두고, 보고서 영역은 바닥에 붙인다 */}
+          <div className="mt-auto flex items-center gap-3 border-t border-gray-100 bg-[#FAFBFF] px-5 py-3">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
               <Sparkles size={15} />
             </span>
@@ -2180,7 +2198,7 @@ function ArchivePanel({
             </p>
 
             <Link
-              href={archiveHref}
+              href={getFinalReportHref(workspaceId, mode)}
               className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
             >
               보고서 만들기

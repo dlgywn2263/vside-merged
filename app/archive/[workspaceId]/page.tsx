@@ -11,6 +11,7 @@ import Link from "next/link";
 import {
   useParams,
   useRouter,
+  useSearchParams,
 } from "next/navigation";
 import {
   Archive,
@@ -1517,6 +1518,14 @@ export default function ArchivePage() {
     )
       ? params.workspaceId[0] ?? null
       : params?.workspaceId ?? null;
+  // 대시보드 "AI 최종 보고서" 바로가기가 ?tab=final 로 최종 보고서 탭을 바로 연다.
+  // 처음 열 때만 읽는다(탭을 바꿔도 주소는 그대로 둔다).
+  const searchParams =
+    useSearchParams();
+  const initialArchiveTab: ArchiveTabKey =
+    searchParams?.get("tab") === "final"
+      ? "final"
+      : "devlog";
   const [projects, setProjects] =
     useState<Project[]>([]);
   const [devlogs, setDevlogs] =
@@ -1530,7 +1539,7 @@ export default function ArchivePage() {
     setActiveArchiveTab,
   ] =
     useState<ArchiveTabKey>(
-      "devlog",
+      initialArchiveTab,
     );
   const [
     activeDesignSection,
