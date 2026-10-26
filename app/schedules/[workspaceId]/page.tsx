@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -964,8 +964,8 @@ export default function ScheduleManagementPage() {
   >(null);
 
   const [
-    isDetailModalOpen,
-    setIsDetailModalOpen,
+    isDetailPanelOpen,
+    setIsDetailPanelOpen,
   ] = useState(false);
 
   const [
@@ -1940,6 +1940,16 @@ export default function ScheduleManagementPage() {
       selectedScheduleId,
     ]);
 
+  // 패널은 열려 있을 때만 그 일정을 보여 주고, 목록의 선택 표시도 그때만 한다.
+  // 닫은 뒤에도 selectedScheduleId 는 남지만(새로 만든 일정 등) 선택된 것처럼 보이지 않게 한다.
+  const panelSchedule =
+    isDetailPanelOpen
+      ? selectedSchedule
+      : null;
+
+  const panelSelectedId =
+    panelSchedule?.id ?? null;
+
   /* =====================================================
      ACTION: WORKSPACE
      ===================================================== */
@@ -2062,7 +2072,7 @@ export default function ScheduleManagementPage() {
           null,
         );
 
-        setIsDetailModalOpen(
+        setIsDetailPanelOpen(
           false,
         );
       }
@@ -2079,7 +2089,7 @@ export default function ScheduleManagementPage() {
       schedule.id,
     );
 
-    setIsDetailModalOpen(
+    setIsDetailPanelOpen(
       true,
     );
   };
@@ -2441,10 +2451,7 @@ export default function ScheduleManagementPage() {
         null,
     });
 
-    setIsDetailModalOpen(
-      false,
-    );
-
+    // 상세 패널은 닫지 않는다. 저장·취소 뒤에도 같은 일정이 선택된 채 패널에 남아 이어서 볼 수 있다.
     setIsEditModalOpen(
       true,
     );
@@ -2800,7 +2807,15 @@ export default function ScheduleManagementPage() {
         return;
       }
 
-      if (!saving) {
+      if (saving) {
+        return;
+      }
+
+      // 수정 모달이 상세 패널 위에 떠 있을 때 ESC 는 모달만 닫는다. 한 번에 둘 다 닫히면 선택이 사라진다.
+      if (
+        isCreateModalOpen ||
+        isEditModalOpen
+      ) {
         setIsCreateModalOpen(
           false,
         );
@@ -2809,10 +2824,12 @@ export default function ScheduleManagementPage() {
           false,
         );
 
-        setIsDetailModalOpen(
-          false,
-        );
+        return;
       }
+
+      setIsDetailPanelOpen(
+        false,
+      );
     };
 
     window.addEventListener(
@@ -2825,7 +2842,11 @@ export default function ScheduleManagementPage() {
         "keydown",
         handleKeyDown,
       );
-  }, [saving]);
+  }, [
+    isCreateModalOpen,
+    isEditModalOpen,
+    saving,
+  ]);
 
   /* =====================================================
      RENDER
@@ -3017,10 +3038,37 @@ export default function ScheduleManagementPage() {
         <div className="flex min-h-0 flex-1 lg:overflow-hidden">
           {/* ===============================================
               LEFT RAIL (lg 이상)
-              보기 · 빠른 필터 · 상태 · 담당자 · 진행률을 한 열에 모은다.
+              진행률 · 보기 · 빠른 필터 · 상태 · 담당자를 한 열에 모은다.
               좁은 화면에서는 본문 위 툴바가 같은 역할을 한다.
              =============================================== */}
           <aside className="hidden w-[248px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-[#F7F8FA] px-3 py-4 lg:flex">
+            {/* 진행률은 들어오자마자 보여야 해서 맨 위에 둔다. 예전처럼 맨 아래(mt-auto)에 두면
+                필터가 길어질 때 스크롤해야 보였다. 카드 대신 구분선만 둬 메뉴와 같은 무게로 맞춘다. */}
+            <div className="border-b border-slate-200 px-2.5 pb-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-medium text-slate-600">
+                  프로젝트 진행률
+                </span>
+
+                <span className="text-sm font-semibold tabular-nums text-slate-900">
+                  {progressRate}%
+                </span>
+              </div>
+
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-[#5873F9] transition-all"
+                  style={{
+                    width: `${progressRate}%`,
+                  }}
+                />
+              </div>
+
+              <p className="mt-1.5 text-[11px] tabular-nums text-slate-400">
+                전체 일정 {totalCount}개 중 {doneCount}개 완료
+              </p>
+            </div>
+
             <RailSection title="보기">
               {viewOptions.map((option) => (
                 <RailItem
@@ -3118,30 +3166,6 @@ export default function ScheduleManagementPage() {
               </RailSection>
             )}
 
-            <div className="mt-auto rounded-md border border-slate-200 bg-white p-3">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[11px] font-medium text-slate-500">
-                  진행률
-                </span>
-
-                <span className="text-sm font-semibold tabular-nums text-slate-900">
-                  {progressRate}%
-                </span>
-              </div>
-
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-[#5873F9] transition-all"
-                  style={{
-                    width: `${progressRate}%`,
-                  }}
-                />
-              </div>
-
-              <p className="mt-1.5 text-[11px] tabular-nums text-slate-400">
-                완료 {doneCount} / 전체 {totalCount}
-              </p>
-            </div>
           </aside>
 
           {/* ===============================================
@@ -3283,7 +3307,7 @@ export default function ScheduleManagementPage() {
                 CONTENT
                =============================================== */}
             {/* 보기가 영역 높이에 맞춰 줄어들면 캘린더 아래가 잘린다. 줄이지 않고 이 영역이 스크롤한다. */}
-            <div className="flex min-h-[360px] flex-1 flex-col bg-white p-4 lg:min-h-0 lg:overflow-auto [&>*]:shrink-0">
+            <div className="@container flex min-h-[360px] flex-1 flex-col bg-white p-4 lg:min-h-0 lg:overflow-auto [&>*]:shrink-0">
               {loading ? (
                 <LoadingBox />
               ) : errorMessage ? (
@@ -3315,6 +3339,7 @@ export default function ScheduleManagementPage() {
                       schedules={filteredSchedules}
                       teamMembers={teamMembers}
                       isTeam={isTeam}
+                      selectedId={panelSelectedId}
                       onOpen={openScheduleDetail}
                       onDragStart={handleDragStart}
                       onStatusDrop={(event, status) => {
@@ -3340,6 +3365,7 @@ export default function ScheduleManagementPage() {
                       onPrev={() => moveMonth(-1)}
                       onNext={() => moveMonth(1)}
                       onToday={moveMonthToday}
+                      selectedId={panelSelectedId}
                       onOpen={openScheduleDetail}
                       onCreateForDate={openCreateModal}
                       onDragStart={handleDragStart}
@@ -3380,6 +3406,7 @@ export default function ScheduleManagementPage() {
 
                         setGanttStartDate(now);
                       }}
+                      selectedId={panelSelectedId}
                       onOpen={openScheduleDetail}
                       onDragStart={handleDragStart}
                       onWriteDevlog={goToDevlogWrite}
@@ -3400,8 +3427,8 @@ export default function ScheduleManagementPage() {
                       schedules={filteredSchedules}
                       teamMembers={teamMembers}
                       isTeam={isTeam}
+                      selectedId={panelSelectedId}
                       onOpen={openScheduleDetail}
-                      onStatusChange={changeStatus}
                       onWriteDevlog={goToDevlogWrite}
                       onOpenDevlog={goToDevlogs}
                     />
@@ -3410,32 +3437,33 @@ export default function ScheduleManagementPage() {
               )}
             </div>
           </section>
+
+          {/* =================================================
+              DETAIL PANEL
+              네 가지 보기가 모두 같은 패널을 연다. 다른 일정을 누르면 닫지 않고 내용만 바꾼다.
+             ================================================= */}
+          {panelSchedule && (
+            <ScheduleDetailPanel
+              schedule={panelSchedule}
+              members={teamMembers}
+              isTeam={
+                workspaces.find(
+                  (workspace) => workspace.id === panelSchedule.workspaceId,
+                )?.mode === "team" || isTeam
+              }
+              deleting={deleting}
+              onClose={() => setIsDetailPanelOpen(false)}
+              onEdit={() => openEditModal(panelSchedule)}
+              onDelete={() => void deleteSchedule(panelSchedule.id)}
+              onStatusChange={(status) =>
+                void changeStatus(panelSchedule.id, status)
+              }
+              onWriteDevlog={() => goToDevlogWrite(panelSchedule)}
+              onOpenDevlog={() => goToDevlogs(panelSchedule)}
+            />
+          )}
         </div>
       </div>
-
-      {/* =================================================
-          DETAIL MODAL
-         ================================================= */}
-      {isDetailModalOpen && selectedSchedule && (
-        <ScheduleDetailModal
-          schedule={selectedSchedule}
-          members={teamMembers}
-          isTeam={
-            workspaces.find(
-              (workspace) => workspace.id === selectedSchedule.workspaceId,
-            )?.mode === "team" || isTeam
-          }
-          deleting={deleting}
-          onClose={() => setIsDetailModalOpen(false)}
-          onEdit={() => openEditModal(selectedSchedule)}
-          onDelete={() => void deleteSchedule(selectedSchedule.id)}
-          onStatusChange={(status) =>
-            void changeStatus(selectedSchedule.id, status)
-          }
-          onWriteDevlog={() => goToDevlogWrite(selectedSchedule)}
-          onOpenDevlog={() => goToDevlogs(selectedSchedule)}
-        />
-      )}
 
       {/* =================================================
           CREATE
@@ -3743,6 +3771,7 @@ function BoardView({
   schedules,
   teamMembers,
   isTeam,
+  selectedId,
   onOpen,
   onDragStart,
   onStatusDrop,
@@ -3751,6 +3780,7 @@ function BoardView({
   schedules: ProjectScheduleItem[];
   teamMembers: WorkspaceMember[];
   isTeam: boolean;
+  selectedId: string | null;
   onOpen: (
     schedule: ProjectScheduleItem,
   ) => void;
@@ -3769,7 +3799,9 @@ function BoardView({
   const [dropTarget, setDropTarget] = useState<ScheduleStatus | null>(null);
 
   return (
-    <div className="grid min-h-[360px] flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+    // 열 수를 화면 너비가 아니라 콘텐츠 영역 너비로 정한다. 오른쪽 상세 패널이 열려 영역이 좁아져도
+    // 네 열이 억지로 끼어 카드가 찌그러지지 않는다(@container 는 부모 콘텐츠 영역).
+    <div className="grid min-h-[360px] flex-1 grid-cols-1 gap-3 @lg:grid-cols-2 @4xl:grid-cols-4">
       {BOARD_STATUSES.map((status) => {
         const meta = STATUS_META[status];
 
@@ -3821,6 +3853,7 @@ function BoardView({
                   schedule={schedule}
                   members={teamMembers}
                   isTeam={isTeam}
+                  selected={selectedId === schedule.id}
                   onOpen={() => onOpen(schedule)}
                   onDragStart={(event) => onDragStart(event, schedule)}
                   onWriteDevlog={() => onWriteDevlog(schedule)}
@@ -3846,6 +3879,7 @@ function ScheduleBoardCard({
   schedule,
   members,
   isTeam,
+  selected,
   onOpen,
   onDragStart,
   onWriteDevlog,
@@ -3853,6 +3887,7 @@ function ScheduleBoardCard({
   schedule: ProjectScheduleItem;
   members: WorkspaceMember[];
   isTeam: boolean;
+  selected: boolean;
   onOpen: () => void;
   onDragStart: (
     event: React.DragEvent,
@@ -3872,7 +3907,13 @@ function ScheduleBoardCard({
       draggable
       onDragStart={onDragStart}
       onClick={onOpen}
-      className="group cursor-grab rounded-md border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300 active:cursor-grabbing"
+      aria-current={selected ? "true" : undefined}
+      className={cn(
+        "group cursor-grab rounded-md border px-3 py-2.5 transition-colors active:cursor-grabbing",
+        selected
+          ? "border-[#AAB8FF] bg-[#F7F9FF]"
+          : "border-slate-200 bg-white hover:border-slate-300",
+      )}
     >
       <div className="flex items-start gap-2">
         <span className="mt-[3px]">
@@ -4122,6 +4163,7 @@ function CalendarView({
   onPrev,
   onNext,
   onToday,
+  selectedId,
   onOpen,
   onCreateForDate,
   onDragStart,
@@ -4133,6 +4175,7 @@ function CalendarView({
   todayDate: string;
   cells: Date[];
   schedules: ProjectScheduleItem[];
+  selectedId: string | null;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -4459,6 +4502,8 @@ function CalendarView({
                             segment.continuesToNextWeek
                               ? "rounded-r-none border-r-0"
                               : "rounded-r-md",
+                            selectedId === schedule.id &&
+                              "z-10 ring-2 ring-[#5873F9]/50",
                           )}
                           style={{
                             left: `calc(${startPercent}% + ${leftInset}px)`,
@@ -4579,6 +4624,7 @@ function GanttView({
   onPrev,
   onNext,
   onToday,
+  selectedId,
   onOpen,
   onDragStart,
   onWriteDevlog,
@@ -4589,6 +4635,7 @@ function GanttView({
   schedules: ProjectScheduleItem[];
   teamMembers: WorkspaceMember[];
   isTeam: boolean;
+  selectedId: string | null;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -4802,7 +4849,14 @@ function GanttView({
                   }
                   className="flex min-h-[54px] border-b border-slate-100"
                 >
-                  <div className="flex w-[220px] shrink-0 items-center border-r border-slate-200 hover:bg-slate-50">
+                  <div
+                    className={cn(
+                      "flex w-[220px] shrink-0 items-center border-r border-slate-200",
+                      selectedId === schedule.id
+                        ? "bg-[#F0F3FF]"
+                        : "hover:bg-slate-50",
+                    )}
+                  >
                     <button
                       type="button"
                       onClick={() =>
@@ -4937,6 +4991,8 @@ function GanttView({
                           schedule
                             .status
                         ].bar,
+                        selectedId === schedule.id &&
+                          "ring-2 ring-[#5873F9]/50",
                       )}
                       style={{
                         left:
@@ -4986,21 +5042,18 @@ function ListView({
   schedules,
   teamMembers,
   isTeam,
+  selectedId,
   onOpen,
-  onStatusChange,
   onWriteDevlog,
   onOpenDevlog,
 }: {
   schedules: ProjectScheduleItem[];
   teamMembers: WorkspaceMember[];
   isTeam: boolean;
+  selectedId: string | null;
   onOpen: (
     schedule: ProjectScheduleItem,
   ) => void;
-  onStatusChange: (
-    scheduleId: string,
-    status: ScheduleStatus,
-  ) => Promise<void>;
   onWriteDevlog: (
     schedule: ProjectScheduleItem,
   ) => void;
@@ -5034,14 +5087,15 @@ function ListView({
     // lg 이상은 부모 콘텐츠 영역이 스크롤을 맡는다. 그보다 좁으면 여기서 가로 스크롤해 페이지가 밀리지 않게 한다.
     <div className="-mx-4 -mt-4 min-w-0 flex-1 max-lg:overflow-x-auto">
       <div className={isTeam ? "min-w-[760px]" : "min-w-[600px]"}>
+        {/* 부모 스크롤 영역에 p-4 가 있어 sticky 기준선이 16px 아래에 잡힌다. -mt-4 로 끌어올린 만큼
+            sticky 위치도 16px 올려야 헤더가 밀려 내려와 첫 행을 덮지 않는다(그룹 헤더 top-5 = 36px - 16px). */}
         <div
           className={cn(
-            "sticky top-0 z-20 grid h-9 items-center gap-4 border-b border-slate-200 bg-white px-5 text-xs font-medium text-slate-500",
+            "sticky -top-4 z-20 grid h-9 items-center gap-4 border-b border-slate-200 bg-white px-5 text-xs font-medium text-slate-500",
             gridClass,
           )}
         >
-          {/* 행의 상태 아이콘(24px) + 간격(12px) 만큼 들여 제목과 같은 위치에서 시작한다 */}
-          <span className="pl-9">일정 이름</span>
+          <span>일정 이름</span>
           <span>개발일지</span>
           <span>일정 기간</span>
           {isTeam && <span>담당자</span>}
@@ -5054,8 +5108,8 @@ function ListView({
 
           return (
             <section key={group.key}>
-              <div className="sticky top-9 z-10 flex h-9 items-center gap-3 border-b border-slate-100 bg-slate-50 px-5">
-                {/* 행의 상태 아이콘과 같은 24px 칸에 두어 세로로 줄을 맞춘다 */}
+              <div className="sticky top-5 z-10 flex h-9 items-center gap-3 border-b border-slate-100 bg-slate-50 px-5">
+                {/* 상태는 그룹 머리에서만 아이콘으로 보인다. 행마다 같은 아이콘을 반복하면 목록이 복잡해져서 뺐다. */}
                 <span className="grid h-6 w-6 shrink-0 place-items-center">
                   <StatusIcon status={group.key} />
                 </span>
@@ -5083,39 +5137,19 @@ function ListView({
                     <li
                       key={schedule.id}
                       className={cn(
-                        "group grid h-12 items-center gap-4 border-b border-slate-100 bg-white px-5 transition-colors hover:bg-[#F7F9FF]",
+                        "group grid h-12 items-center gap-4 border-b border-slate-100 px-5 transition-colors",
+                        selectedId === schedule.id
+                          ? "bg-[#F0F3FF]"
+                          : "bg-white hover:bg-[#F7F9FF]",
                         gridClass,
                       )}
                     >
-                      <div className="flex min-w-0 items-center gap-3">
-                        {/* 상태 아이콘 위에 투명한 select 를 겹쳐, 아이콘을 눌러 바로 상태를 바꾼다 */}
-                        <label
-                          className="relative grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded transition-colors hover:bg-slate-100"
-                          title="상태 변경"
-                        >
-                          <StatusIcon status={schedule.status} />
-
-                          <select
-                            value={schedule.status}
-                            onChange={(event) =>
-                              void onStatusChange(
-                                schedule.id,
-                                event.target.value as ScheduleStatus,
-                              )
-                            }
-                            aria-label={`${schedule.title} 상태 변경`}
-                            className="absolute inset-0 cursor-pointer opacity-0"
-                          >
-                            <option value="todo">할 일</option>
-                            <option value="progress">진행 중</option>
-                            <option value="done">완료</option>
-                            <option value="delayed">지연</option>
-                          </select>
-                        </label>
-
+                      {/* 상태 변경은 오른쪽 상세 패널의 상태 버튼에서 한다 */}
+                      <div className="flex min-w-0 items-center">
                         <button
                           type="button"
                           onClick={() => onOpen(schedule)}
+                          aria-current={selectedId === schedule.id ? "true" : undefined}
                           title={schedule.title}
                           className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
                         >
@@ -5213,10 +5247,16 @@ function ListView({
 }
 
 /* =========================================================
-   DETAIL MODAL
+   DETAIL PANEL
+   예전에는 화면 가운데 모달이라 목록이 가려졌다. 개발일지 상세처럼 오른쪽 패널로 열어
+   목록을 보면서 다른 일정을 바로 눌러 넘겨 볼 수 있게 한다.
+   - lg 이상: 콘텐츠 옆에 붙는다. 겹치면 검색창·오른쪽 열이 가려져서, 콘텐츠가 좁아지는 쪽을 택했다
+     (좁아진 목록·간트는 콘텐츠 영역 안에서 가로 스크롤한다). 너비는 화면에 따라 360 → 400 → 440.
+   - lg 미만: 사이드바가 없고 페이지 전체가 스크롤되므로 글로벌 헤더 아래에 고정해 겹친다.
+   어느 경우에도 뒤를 어둡게 가리지 않는다(목록을 계속 눌러 선택을 바꿀 수 있어야 한다).
    ========================================================= */
 
-function ScheduleDetailModal({
+function ScheduleDetailPanel({
   schedule,
   members,
   isTeam,
@@ -5241,271 +5281,254 @@ function ScheduleDetailModal({
   onWriteDevlog: () => void;
   onOpenDevlog: () => void;
 }) {
-  const member =
-    members.find(
-      (item) =>
-        item.userId ===
-        schedule.assigneeUserId,
-    );
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  const assigneeName =
-    member
-      ? getMemberName(member)
-      : schedule.assigneeName ||
-        "";
+  // 패널을 닫지 않고 내용만 바꾸므로, 다른 일정으로 넘어가면 본문을 맨 위부터 보여 준다.
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [schedule.id]);
 
-  const memberRole =
-    member
-      ? getMemberRole(member)
-      : null;
+  const member = members.find(
+    (item) => item.userId === schedule.assigneeUserId,
+  );
+
+  const assigneeName = member
+    ? getMemberName(member)
+    : schedule.assigneeName || "";
+
+  const memberRole = member ? getMemberRole(member) : null;
+
+  const overdue = isScheduleOverdue(schedule);
 
   return (
-    <ModalShell
-      onClose={onClose}
-      width="max-w-[620px]"
+    <aside
+      aria-label="일정 상세"
+      className="fixed bottom-0 right-0 top-[65px] z-30 flex w-full max-w-[440px] flex-col border-l border-slate-200 bg-white shadow-[-8px_0_24px_-16px_rgba(15,23,42,0.18)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[400px] 2xl:w-[440px]"
     >
-      <div className="border-b border-slate-100 px-5 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <StatusBadge
-                status={
-                  schedule.status
-                }
-              />
+      {/* HEADER: 왼쪽 도구 모음(py-2 + 입력창 32px + 선 1px)과 높이를 맞춰 아래 구분선이 한 줄로 이어진다 */}
+      <header className="flex h-[49px] shrink-0 items-center justify-between border-b border-slate-200 px-5">
+        <h2 className="text-sm font-semibold text-slate-900">
+          일정 상세
+        </h2>
 
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
-                {getProjectName(
-                  schedule,
-                )}
-              </span>
-            </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="-mr-1.5 grid h-7 w-7 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          aria-label="일정 상세 닫기"
+        >
+          <X size={16} />
+        </button>
+      </header>
 
-            <h2 className="text-lg font-semibold tracking-tight text-slate-950">
-              {schedule.title}
-            </h2>
+      {/* CONTENT: 여기서만 세로 스크롤한다 */}
+      <div
+        ref={bodyRef}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+      >
+        <section className="px-5 pb-4 pt-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge status={schedule.status} />
+
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
+              {getProjectName(schedule)}
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-md text-slate-400 hover:bg-slate-100"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      </div>
+          <h3 className="mt-2.5 text-base font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]">
+            {schedule.title}
+          </h3>
+        </section>
 
-      <div className="space-y-5 p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <DetailValue
-            label="기간"
-            value={getSchedulePeriodText(
-              schedule,
+        <section className="border-y border-slate-100 px-5 py-1">
+          <ScheduleDetailRow icon={<CalendarDays size={14} />} label="시작일">
+            <span className="text-xs tabular-nums text-slate-700">
+              {schedule.startDate}
+            </span>
+          </ScheduleDetailRow>
+
+          <ScheduleDetailRow icon={<CalendarClock size={14} />} label="종료일">
+            <span
+              className={cn(
+                "text-xs tabular-nums",
+                overdue ? "font-semibold text-rose-600" : "text-slate-700",
+              )}
+            >
+              {schedule.endDate}
+            </span>
+
+            {overdue && (
+              <span className="ml-2 rounded border border-rose-200 bg-rose-50 px-1.5 py-px text-[10px] font-medium text-rose-600">
+                기한 지남
+              </span>
             )}
-          />
+          </ScheduleDetailRow>
 
           {isTeam && (
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                담당자
-              </p>
-
+            <ScheduleDetailRow icon={<UserRound size={14} />} label="담당자">
               {assigneeName ? (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#5873F9]">
-                    {getInitial(
-                      assigneeName,
-                    )}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[10px] font-semibold text-[#4058D6]">
+                    {getInitial(assigneeName)}
                   </span>
 
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800">
-                      {
-                        assigneeName
-                      }
-                    </p>
+                  <span className="truncate text-xs font-medium text-slate-800">
+                    {assigneeName}
+                  </span>
 
-                    {memberRole && (
-                      <p className="text-[10px] font-semibold text-[#5873F9]">
-                        {
-                          memberRole
-                        }
-                      </p>
-                    )}
-                  </div>
-                </div>
+                  {memberRole && (
+                    <span className="shrink-0 text-[10px] font-semibold text-[#5873F9]">
+                      {memberRole}
+                    </span>
+                  )}
+                </span>
               ) : (
-                <p className="mt-2 text-xs font-bold text-slate-400">
-                  담당자가 지정되지
-                  않았습니다.
-                </p>
+                <span className="text-xs text-slate-400">
+                  담당자가 지정되지 않았습니다.
+                </span>
               )}
-            </div>
+            </ScheduleDetailRow>
           )}
-        </div>
 
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            설명
-          </p>
-
-          <div className="mt-2 min-h-[82px] whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs font-medium leading-6 text-slate-600">
-            {schedule.description ||
-              "등록된 상세 내용이 없습니다."}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            상태
-          </p>
-
-          <div className="grid grid-cols-4 gap-2">
-            {BOARD_STATUSES.map(
-              (status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() =>
-                    onStatusChange(
-                      status,
-                    )
-                  }
-                  className={cn(
-                    "rounded-md border px-2 py-2 text-[10px] font-semibold transition",
-                    schedule.status ===
-                      status
-                      ? STATUS_META[
-                          status
-                        ].badge
-                      : "border-slate-200 bg-white text-slate-400 hover:bg-slate-50",
-                  )}
-                >
-                  {
-                    STATUS_META[
-                      status
-                    ].label
-                  }
-                </button>
-              ),
-            )}
-          </div>
-        </div>
-
-        {/* devlog */}
-        <div
-          className={cn(
-            "rounded-md border p-4",
-            schedule.hasDevlog
-              ? "border-emerald-100 bg-emerald-50/60"
-              : "border-amber-100 bg-amber-50/60",
-          )}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                {schedule.hasDevlog ? (
-                  <CheckCircle2
-                    size={15}
-                    className="text-emerald-600"
-                  />
-                ) : (
-                  <FilePenLine
-                    size={15}
-                    className="text-amber-600"
-                  />
-                )}
-
-                <p
-                  className={cn(
-                    "text-xs font-semibold",
-                    schedule.hasDevlog
-                      ? "text-emerald-800"
-                      : "text-amber-800",
-                  )}
-                >
-                  개발일지
-                </p>
-              </div>
-
-              <p
-                className={cn(
-                  "mt-1 text-[10px] font-semibold",
-                  schedule.hasDevlog
-                    ? "text-emerald-600"
-                    : "text-amber-600",
-                )}
-              >
-                {schedule.hasDevlog
-                  ? "이 일정에 연결된 개발일지가 작성되어 있습니다."
-                  : "아직 이 일정에 연결된 개발일지가 없습니다."}
-              </p>
-            </div>
-
+          <ScheduleDetailRow icon={<FilePenLine size={14} />} label="개발일지" last>
             {schedule.hasDevlog ? (
-              <button
-                type="button"
-                onClick={
-                  onOpenDevlog
-                }
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[10px] font-semibold text-emerald-700"
-              >
-                개발일지 보기
-                <ArrowRight
-                  size={11}
-                />
-              </button>
+              <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[11px] font-medium text-emerald-700">
+                <CheckCircle2 size={11} />
+                작성됨
+              </span>
             ) : (
-              <button
-                type="button"
-                onClick={
-                  onWriteDevlog
-                }
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-amber-500 px-3 text-[10px] font-semibold text-white transition hover:bg-amber-600"
-              >
-                <FilePenLine
-                  size={11}
-                />
-                이 일정으로 일지 작성
-              </button>
+              <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-px text-[11px] font-medium text-amber-700">
+                <FilePenLine size={11} />
+                미작성
+              </span>
             )}
+
+            <span className="ml-2 truncate text-[11px] text-slate-400">
+              {schedule.hasDevlog
+                ? "이 일정에 연결된 개발일지가 있습니다."
+                : "아직 연결된 개발일지가 없습니다."}
+            </span>
+          </ScheduleDetailRow>
+        </section>
+
+        <section className="border-b border-slate-100 px-5 py-4">
+          <h3 className="mb-2 text-[11px] font-medium text-slate-500">
+            진행 상태
+          </h3>
+
+          <div className="grid grid-cols-4 gap-1.5">
+            {BOARD_STATUSES.map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => onStatusChange(status)}
+                aria-pressed={schedule.status === status}
+                className={cn(
+                  "h-8 rounded-md border px-2 text-[11px] font-semibold transition-colors",
+                  schedule.status === status
+                    ? STATUS_META[status].badge
+                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                )}
+              >
+                {STATUS_META[status].label}
+              </button>
+            ))}
           </div>
-        </div>
+        </section>
+
+        <section className="px-5 py-4">
+          <h3 className="mb-2 text-[11px] font-medium text-slate-500">
+            설명
+          </h3>
+
+          <p
+            className={cn(
+              "whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere]",
+              schedule.description ? "text-slate-800" : "text-slate-400",
+            )}
+          >
+            {schedule.description || "등록된 상세 내용이 없습니다."}
+          </p>
+        </section>
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4">
+      {/* FOOTER: 본문 스크롤과 떨어져 항상 보인다 */}
+      <footer className="flex shrink-0 items-center gap-2 border-t border-slate-200 px-5 py-3">
         <button
           type="button"
           disabled={deleting}
           onClick={onDelete}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {deleting ? (
-            <Loader2
-              size={13}
-              className="animate-spin"
-            />
+            <Loader2 size={14} className="animate-spin" />
           ) : (
-            <Trash2
-              size={13}
-            />
+            <Trash2 size={14} />
           )}
           삭제
         </button>
 
+        {schedule.hasDevlog ? (
+          <button
+            type="button"
+            onClick={onOpenDevlog}
+            className="ml-auto inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
+          >
+            개발일지 보기
+            <ArrowRight size={13} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onWriteDevlog}
+            className="ml-auto inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
+          >
+            <FilePenLine size={13} />
+            개발일지 작성
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#5873F9] px-4 text-[11px] font-semibold text-white transition hover:bg-[#4863E8]"
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
         >
-          <Pencil
-            size={13}
-          />
+          <Pencil size={14} />
           일정 수정
         </button>
+      </footer>
+    </aside>
+  );
+}
+
+function ScheduleDetailRow({
+  icon,
+  label,
+  children,
+  last,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid min-h-[44px] grid-cols-[84px_minmax(0,1fr)] items-center gap-3 py-2",
+        !last && "border-b border-slate-100",
+      )}
+    >
+      <div className="flex items-center gap-1.5 text-slate-400">
+        {icon}
+
+        <span className="text-[11px] font-medium text-slate-500">
+          {label}
+        </span>
       </div>
-    </ModalShell>
+
+      <div className="flex min-w-0 items-center">{children}</div>
+    </div>
   );
 }
 
@@ -6192,26 +6215,6 @@ function StatusBadge({
 
       {meta.label}
     </span>
-  );
-}
-
-function DetailValue({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-
-      <p className="mt-2 text-xs font-semibold text-slate-700">
-        {value}
-      </p>
-    </div>
   );
 }
 
