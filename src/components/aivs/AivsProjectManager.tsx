@@ -23,8 +23,6 @@ import {
 
   GitBranch,
 
-  GitCommitHorizontal,
-
   LayoutDashboard,
 
   CalendarCheck,
@@ -94,12 +92,6 @@ import type { WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
 
 import ProjectSwitcher from "@/components/main-dashboard/ProjectSwitcher";
 
-import {
-  loadCommits,
-  loadMembers,
-  type OverviewCommit,
-  type OverviewMember,
-} from "@/components/main-dashboard/dashboard.overview";
 
 /* =========================================================
 
@@ -498,7 +490,7 @@ function SubProjectCard({
   const devlogHref = getDevlogHref(project.workspaceId, mode);
 
   return (
-    <section className="group relative flex flex-col rounded-md border border-slate-200 bg-white p-4 transition-colors hover:border-[#AAB8FF]">
+    <section className="group relative flex h-full min-w-0 flex-col rounded-md border border-slate-200 bg-white p-3.5 transition-colors hover:border-[#AAB8FF]">
       {/* =================================================
           TOP
       ================================================= */}
@@ -600,7 +592,7 @@ function SubProjectCard({
         </div>
       </div>
 
-      <p className="mt-2.5 line-clamp-1 text-xs text-slate-500">
+      <p className="mt-2 line-clamp-1 text-xs text-slate-500">
         {project.description?.trim()
           ? project.description
           : `${project.language || "General"} 기반 작업 폴더입니다.`}
@@ -609,7 +601,7 @@ function SubProjectCard({
       {/* =================================================
           PROGRESS
       ================================================= */}
-      <div className="mt-3.5">
+      <div className="mt-3">
         <div className="mb-1.5 flex items-center justify-between">
           <span className="text-[11px] font-medium text-slate-500">진행률</span>
 
@@ -634,7 +626,7 @@ function SubProjectCard({
       {/* =================================================
           META
       ================================================= */}
-      <div className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-md border border-slate-100 bg-slate-50/60 text-center">
+      <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-100 rounded-md border border-slate-100 bg-slate-50/60 text-center">
         <div className="px-2 py-1.5">
           <p className="flex items-center justify-center gap-1 text-[10px] text-slate-400">
             <CalendarCheck size={11} />
@@ -672,7 +664,7 @@ function SubProjectCard({
       {/* =================================================
           FOOTER
       ================================================= */}
-      <div className="mt-3.5 flex min-w-0 items-center justify-between gap-3 border-t border-slate-100 pt-3">
+      <div className="mt-auto flex min-w-0 items-center justify-between gap-3 border-t border-slate-100 pt-2.5 [margin-top:12px]">
         <div className="min-w-0 flex-1">
           {project.gitUrl ? (
             <a
@@ -1555,75 +1547,6 @@ export function AivsProjectManager({
 
   const continueProject = lastOpenedProject ?? recentlyUpdatedProject;
 
-  /* =======================================================
-     오른쪽 개발 정보: 팀원 · 최근 커밋 (기존 조회 API)
-  ======================================================= */
-  const [members, setMembers] = useState<
-    OverviewMember[] | "personal" | "loading" | null
-  >("loading");
-
-  const [commits, setCommits] = useState<OverviewCommit[] | "loading" | null>(
-    "loading",
-  );
-
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadDevInfo() {
-      if (!selectedWorkspace) return;
-
-      setMembers("loading");
-      setCommits("loading");
-
-      const [memberResult, commitResult] = await Promise.allSettled([
-        selectedWorkspace.mode === "team"
-          ? loadMembers(String(selectedWorkspace.id))
-          : Promise.resolve("personal" as const),
-        loadCommits(selectedWorkspace),
-      ]);
-
-      if (ignore) return;
-
-      setMembers(
-        memberResult.status === "fulfilled" ? memberResult.value : null,
-      );
-
-      setCommits(
-        commitResult.status === "fulfilled"
-          ? [...commitResult.value].sort((a, b) => b.time - a.time)
-          : null,
-      );
-    }
-
-    void loadDevInfo();
-
-    return () => {
-      ignore = true;
-    };
-  }, [selectedWorkspace]);
-
-  const languageSummary = Object.entries(
-    projects.reduce<Record<string, number>>((acc, project) => {
-      const language = project.language || "General";
-
-      acc[language] = (acc[language] ?? 0) + 1;
-
-      return acc;
-    }, {}),
-  ).sort((a, b) => b[1] - a[1]);
-
-  const gitConnectedProjects = projects.filter((project) => project.gitUrl);
-
-  const totalScheduleCount = projects.reduce(
-    (sum, project) => sum + (project.scheduleCount ?? 0),
-    0,
-  );
-
-  const totalDoneScheduleCount = projects.reduce(
-    (sum, project) => sum + (project.doneScheduleCount ?? 0),
-    0,
-  );
-
   const statusTabs: Array<{
     value: "all" | SubProjectStatus;
     label: string;
@@ -1737,12 +1660,12 @@ export function AivsProjectManager({
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           {/* =================================================
               MAIN (남은 너비 전체)
           ================================================= */}
           <section className="min-w-0 flex-1 lg:overflow-y-auto">
-            <div className="space-y-5 px-4 py-5 lg:px-6">
+            <div className="space-y-4 px-4 py-4 lg:px-5">
               {/* ===============================================
                   최근 작업 이어하기
               =============================================== */}
@@ -1907,8 +1830,8 @@ export function AivsProjectManager({
                     </p>
                   ) : null}
 
-                  {/* 카드 폭을 350~380px 로 묶어, 폴더가 1개여도 커지지 않고 많아도 같은 크기로 줄 맞춰 놓인다 */}
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(350px,380px))] gap-3">
+                  {/* 메인 영역을 균등하게 사용하는 2열. 폴더가 하나면 과도하게 늘어나지 않도록 제한 */}
+                  <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {filteredProjects.map((project) => (
                       <SubProjectCard
                         key={project.id}
@@ -1933,195 +1856,6 @@ export function AivsProjectManager({
             </div>
           </section>
 
-          {/* =================================================
-              DEV INFO PANEL (360~400px, 보조 영역)
-          ================================================= */}
-          <aside className="w-full shrink-0 border-t border-slate-200 bg-[#F7F8FA] lg:w-[360px] lg:overflow-y-auto lg:border-l lg:border-t-0 2xl:w-[400px]">
-            <div className="space-y-3 p-4">
-              {/* 작업 현황 */}
-              <DevInfoSection title="작업 현황">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-slate-500">평균 진행률</span>
-
-                  <span className="text-lg font-semibold tabular-nums text-[#5873F9]">
-                    {averageProgress}%
-                  </span>
-                </div>
-
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-[#5873F9] transition-all"
-                    style={{
-                      width: `${averageProgress}%`,
-                    }}
-                  />
-                </div>
-
-                <dl className="mt-3.5 grid grid-cols-3 divide-x divide-slate-100 text-center">
-                  <DevInfoStat label="작업 폴더" value={`${allSubProjectCount}`} />
-                  <DevInfoStat
-                    label="일정 완료"
-                    value={`${totalDoneScheduleCount}/${totalScheduleCount}`}
-                  />
-                  <DevInfoStat label="개발일지" value={`${totalDevlogCount}`} />
-                </dl>
-              </DevInfoSection>
-
-              {/* 개발 환경 */}
-              <DevInfoSection title="개발 환경">
-                <p className="text-[11px] font-medium text-slate-500">언어</p>
-
-                {languageSummary.length === 0 ? (
-                  <p className="mt-1.5 text-xs text-slate-400">
-                    작업 폴더가 없습니다.
-                  </p>
-                ) : (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {languageSummary.map(([language, count]) => (
-                      <span
-                        key={language}
-                        className="inline-flex h-6 items-center gap-1 rounded border border-slate-200 px-1.5 font-mono text-[11px] text-slate-700"
-                      >
-                        {language}
-                        <span className="text-slate-400">{count}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <p className="mt-3 flex items-center justify-between text-[11px] font-medium text-slate-500">
-                  {/* gitUrl 은 원격 저장소(GitHub 등) 주소다. 아래 커밋은 로컬 저장소 기록이라 연결이 없어도 보인다 */}
-                  원격 저장소 연결
-                  <span className="tabular-nums text-slate-700">
-                    {gitConnectedProjects.length}/{allSubProjectCount} 폴더
-                  </span>
-                </p>
-
-                {gitConnectedProjects.length === 0 ? (
-                  <p className="mt-1.5 text-xs text-slate-400">
-                    원격 저장소가 연결된 작업 폴더가 없습니다.
-                  </p>
-                ) : (
-                  <ul className="mt-1.5 space-y-1">
-                    {gitConnectedProjects.map((project) => (
-                      <li key={project.id}>
-                        <a
-                          href={project.gitUrl ?? undefined}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:text-[#5873F9]"
-                        >
-                          <GitBranch size={12} className="shrink-0 text-emerald-600" />
-                          <span className="shrink-0 font-medium text-slate-800">
-                            {project.name}
-                          </span>
-                          <span className="truncate text-slate-400">
-                            {project.gitUrl}
-                          </span>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </DevInfoSection>
-
-              {/* 팀원 */}
-              <DevInfoSection
-                title="프로젝트 팀원"
-                count={Array.isArray(members) ? members.length : undefined}
-              >
-                {members === "loading" ? (
-                  <p className="text-xs text-slate-400">팀원을 불러오는 중입니다.</p>
-                ) : members === "personal" ? (
-                  <p className="text-xs text-slate-400">
-                    개인 프로젝트예요. 팀원 기능은 팀 프로젝트에서 사용할 수
-                    있어요.
-                  </p>
-                ) : !members ? (
-                  <p className="text-xs text-red-500">팀원 목록을 불러오지 못했습니다.</p>
-                ) : members.length === 0 ? (
-                  <p className="text-xs text-slate-400">참여 중인 팀원이 없습니다.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {members.map((member) => (
-                      <li
-                        key={member.userId}
-                        className="flex items-center gap-2.5 py-1"
-                      >
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#EEF3FF] text-[11px] font-semibold text-[#4058D6]">
-                          {member.name.slice(0, 1).toUpperCase()}
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium text-slate-800">
-                            {member.name}
-                          </span>
-
-                          <span className="block truncate text-[11px] text-slate-400">
-                            {member.email || "-"}
-                          </span>
-                        </span>
-
-                        <span
-                          className={cn(
-                            "shrink-0 rounded px-1 py-px text-[10px] font-semibold",
-                            member.isOwner
-                              ? "bg-[#EEF2FF] text-[#5873F9]"
-                              : "bg-slate-100 text-slate-500",
-                          )}
-                        >
-                          {member.isOwner ? "OWNER" : "MEMBER"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </DevInfoSection>
-
-              {/* 최근 커밋 */}
-              <DevInfoSection title="최근 커밋">
-                {commits === "loading" ? (
-                  <p className="text-xs text-slate-400">커밋 기록을 불러오는 중입니다.</p>
-                ) : !commits ? (
-                  <p className="text-xs text-red-500">커밋 기록을 불러오지 못했습니다.</p>
-                ) : commits.length === 0 ? (
-                  <p className="text-xs text-slate-400">
-                    아직 커밋 기록이 없습니다. (master 브랜치 기준)
-                  </p>
-                ) : (
-                  <ol className="relative space-y-0.5 before:absolute before:bottom-3 before:left-[11px] before:top-3 before:w-px before:bg-slate-200">
-                    {commits.slice(0, 6).map((commit) => (
-                      <li
-                        key={`${commit.projectName}-${commit.hash}`}
-                        className="relative flex items-start gap-2.5 py-1.5"
-                      >
-                        <span className="relative z-10 mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-900 text-white">
-                          <GitCommitHorizontal size={12} />
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium text-slate-800">
-                            {commit.message}
-                          </span>
-
-                          <span className="mt-0.5 block truncate text-[11px] text-slate-400">
-                            {commit.author ? `${commit.author} · ` : ""}
-                            <span className="font-mono">
-                              {commit.projectName} · {commit.hash.slice(0, 7)}
-                            </span>
-                          </span>
-                        </span>
-
-                        <span className="shrink-0 pt-0.5 font-mono text-[10px] text-slate-400">
-                          {commit.time ? formatDate(new Date(commit.time).toISOString()) : commit.dateText || "-"}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </DevInfoSection>
-            </div>
-          </aside>
         </div>
       </main>
 
@@ -2219,7 +1953,7 @@ function ContinueWorkPanel({
   const progress = getProgress(project);
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-[#D9E1FF] bg-[#F5F7FF] px-4 py-3 md:flex-row md:items-center">
+    <section className="flex flex-col gap-2 rounded-md border border-[#D9E1FF] bg-[#F5F7FF] px-4 py-2.5 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
           <Code2 size={20} />
@@ -2292,46 +2026,6 @@ function ContinueWorkPanel({
         </Link>
       </div>
     </section>
-  );
-}
-
-/* =========================================================
-   오른쪽 패널 조각
-========================================================= */
-function DevInfoSection({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-md border border-slate-200 bg-white px-4 py-3.5">
-      <h2 className="mb-3 flex items-center gap-1.5 text-[13px] font-semibold text-slate-800">
-        {title}
-
-        {typeof count === "number" ? (
-          <span className="rounded bg-slate-100 px-1.5 py-px text-[11px] font-semibold tabular-nums text-slate-500">
-            {count}
-          </span>
-        ) : null}
-      </h2>
-
-      {children}
-    </section>
-  );
-}
-
-function DevInfoStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-2">
-      <dd className="text-base font-semibold tabular-nums text-slate-900">
-        {value}
-      </dd>
-      <dt className="mt-0.5 text-[11px] text-slate-500">{label}</dt>
-    </div>
   );
 }
 
