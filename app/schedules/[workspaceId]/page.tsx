@@ -15,7 +15,6 @@ import {
   FilePenLine,
   ArrowUpRight,
   GripVertical,
-  LayoutDashboard,
 
   CalendarClock,
 
@@ -62,7 +61,6 @@ import type { WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
 
 import ProjectSwitcher from "@/components/main-dashboard/ProjectSwitcher";
 
-import Link from "next/link";
 
 import { getIdeHref } from "@/components/main-dashboard/dashboard.utils";
 
@@ -2852,10 +2850,6 @@ export default function ScheduleManagementPage() {
      RENDER
      ===================================================== */
 
-  const dashboardHref = workspaceId
-    ? `/dashboard/${encodeURIComponent(workspaceId)}?mode=${currentMode}`
-    : "/dashboard";
-
   const viewOptions: Array<{
     value: ScheduleViewMode;
     label: string;
@@ -2941,7 +2935,7 @@ export default function ScheduleManagementPage() {
     <main className="waivs-page flex flex-col bg-white font-sans text-slate-900 lg:h-[calc(100dvh-65px)] lg:min-h-0 lg:overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col">
         {/* ===============================================
-            TOP BAR: 대시보드 / 프로젝트(전환) / 일정
+            TOP BAR: 프로젝트(전환) / 일정
             사이드바 대신 프로젝트 이름을 눌러 다른 프로젝트로 이동한다.
            =============================================== */}
         <header className="flex shrink-0 flex-col gap-3 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 lg:h-[62px] lg:flex-row lg:items-center lg:justify-between lg:px-5 lg:py-0">
@@ -2949,16 +2943,6 @@ export default function ScheduleManagementPage() {
             aria-label="현재 위치"
             className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
           >
-            <Link
-              href={dashboardHref}
-              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            >
-              <LayoutDashboard size={14} />
-              대시보드
-            </Link>
-
-            <ChevronRight size={14} className="text-slate-300" />
-
             <ProjectSwitcher
               size="compact"
               label={workspaceName}
@@ -2971,7 +2955,7 @@ export default function ScheduleManagementPage() {
 
             <ChevronRight size={14} className="text-slate-300" />
 
-            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
+            <span className="inline-flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold text-slate-800">
               <CalendarDays size={14} className="text-[#5873F9]" />
               일정
             </span>

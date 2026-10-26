@@ -3,7 +3,6 @@
 // 경로: src/components/design/components/DesignHeader.tsx
 
 import { useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
 import {
   useParams,
   useRouter,
@@ -18,7 +17,6 @@ import {
   Database,
   FileCode,
   History,
-  LayoutDashboard,
   ListChecks,
   Loader2,
   Network,
@@ -160,7 +158,7 @@ export interface DesignHeaderProps {
 }
 
 // 설계 관리 헤더는 두 줄이다.
-// 1) 페이지 헤더(#F4F6FA): 위치(대시보드 › 프로젝트 › 설계), 저장 상태, 문서 전체에 대한 작업
+// 1) 페이지 헤더(#F4F6FA): 위치(프로젝트 › 설계), 저장 상태, 문서 전체에 대한 작업
 // 2) 탭 줄(흰색): 설계 탭과, 지금 탭에서 쓰는 검색·추가(DesignTabToolbar)
 // 일정 관리 페이지 헤더와 같은 높이·색·버튼 크기를 쓴다.
 export function DesignHeader({
@@ -209,10 +207,6 @@ export function DesignHeader({
 
   const isTeam = currentMode === "team";
 
-  const dashboardHref = workspaceId
-    ? `/dashboard/${encodeURIComponent(workspaceId)}?mode=${currentMode}`
-    : "/dashboard";
-
   return (
     <div className="shrink-0">
       {/* =================================================
@@ -223,21 +217,11 @@ export function DesignHeader({
           aria-label="현재 위치"
           className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
         >
-          <Link
-            href={dashboardHref}
-            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
-          >
-            <LayoutDashboard size={14} />
-            대시보드
-          </Link>
-
-          <ChevronRight size={14} className="text-slate-300" />
-
           {switcher}
 
           <ChevronRight size={14} className="text-slate-300" />
 
-          <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
+          <span className="inline-flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold text-slate-800">
             <PenTool size={14} className="text-[#5873F9]" />
             설계
           </span>

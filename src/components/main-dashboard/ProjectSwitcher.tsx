@@ -27,7 +27,7 @@ type Props = {
   errorMessage: string;
   onSelectWorkspace: (workspace: WorkspaceSidebarItem) => void;
   allProjectsHref?: string;
-  // "compact" 는 일정 관리처럼 경로 표시(대시보드 / 프로젝트 / 일정) 안에 넣을 때 쓴다.
+  // "compact" 는 일정 관리처럼 경로 표시(프로젝트 › 일정) 맨 앞에 넣을 때 쓴다.
   size?: "default" | "compact";
 };
 
@@ -237,7 +237,7 @@ export default function ProjectSwitcher({
           aria-expanded={open}
           // 잘린 이름도 마우스를 올리면 전체를 볼 수 있게 한다(메뉴 안에서는 줄바꿈으로 전체 표시)
           title={label}
-          // compact: 경로(대시보드 › 프로젝트 › 페이지) 중 현재 프로젝트만 눈에 띄도록
+          // compact: 경로(프로젝트 › 페이지)의 첫 요소라 페이지명(15px·600)보다 한 단계 크고 굵게,
           // 연한 블루 버튼으로 감싼다. 높이 36px(여백 6px + 줄 높이 24px)이라 62px 헤더가 늘어나지 않는다.
           className={`group inline-flex max-w-full items-center text-left transition-colors ${
             compact
@@ -253,7 +253,7 @@ export default function ProjectSwitcher({
           <span
             className={`truncate ${
               compact
-                ? "max-w-[200px] text-lg font-semibold leading-6 text-[#1B2559] sm:max-w-[320px] xl:max-w-[420px]"
+                ? "max-w-[200px] text-lg font-bold leading-6 text-[#1B2559] sm:max-w-[320px] xl:max-w-[420px]"
                 : "text-[26px] font-bold leading-tight tracking-tight text-gray-900"
             }`}
           >

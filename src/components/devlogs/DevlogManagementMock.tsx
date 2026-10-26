@@ -2,14 +2,12 @@
 
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   ArrowUpRight,
   BookOpenText,
   ChevronRight,
-  LayoutDashboard,
   UserRound,
   CalendarDays,
   Download,
@@ -1592,10 +1590,6 @@ export default function DevlogManagementMock() {
      RENDER
   ===================================================== */
 
-  const dashboardHref = workspaceId
-    ? `/dashboard/${encodeURIComponent(workspaceId)}?mode=${currentWorkspaceMode}`
-    : "/dashboard";
-
   // 유형 탭 옆 개수. 목록 필터(filteredDevlogs)와 같은 기준으로 센다(type 은 linked/general, 진행·완료는 status).
   const filterTabs: Array<{ value: DevlogFilter; label: string; count: number }> = [
     { value: "all", label: "전체", count: totalDevlogs },
@@ -1627,16 +1621,6 @@ export default function DevlogManagementMock() {
             aria-label="현재 위치"
             className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
           >
-            <Link
-              href={dashboardHref}
-              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
-            >
-              <LayoutDashboard size={14} />
-              대시보드
-            </Link>
-
-            <ChevronRight size={14} className="text-slate-300" />
-
             <ProjectSwitcher
               size="compact"
               label={workspaceName}
@@ -1649,7 +1633,7 @@ export default function DevlogManagementMock() {
 
             <ChevronRight size={14} className="text-slate-300" />
 
-            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
+            <span className="inline-flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold text-slate-800">
               <BookOpenText size={14} className="text-[#5873F9]" />
               개발일지
             </span>

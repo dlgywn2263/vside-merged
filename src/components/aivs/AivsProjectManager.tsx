@@ -23,7 +23,6 @@ import {
 
   GitBranch,
 
-  LayoutDashboard,
 
   CalendarCheck,
 
@@ -1559,10 +1558,6 @@ export function AivsProjectManager({
     { value: "hold", label: "보류", count: holdCount },
   ];
 
-  const dashboardHref = currentWorkspaceId
-    ? `/dashboard/${encodeURIComponent(currentWorkspaceId)}?mode=${currentMode}`
-    : "/dashboard";
-
   const rememberWorkspace = () => {
     if (typeof window === "undefined" || !currentWorkspaceId) {
       return;
@@ -1584,16 +1579,6 @@ export function AivsProjectManager({
             aria-label="현재 위치"
             className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
           >
-            <Link
-              href={dashboardHref}
-              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
-            >
-              <LayoutDashboard size={14} />
-              대시보드
-            </Link>
-
-            <ChevronRight size={14} className="text-slate-300" />
-
             <ProjectSwitcher
               size="compact"
               label={workspaceName}
@@ -1606,7 +1591,7 @@ export function AivsProjectManager({
 
             <ChevronRight size={14} className="text-slate-300" />
 
-            <span className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[15px] font-semibold text-slate-900">
+            <span className="inline-flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold text-slate-800">
               <Code2 size={14} className="text-[#5873F9]" />
               AIVS 작업 폴더
             </span>
