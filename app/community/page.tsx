@@ -310,7 +310,7 @@ export default function CommunityPage() {
                   setSelectedCategory(item);
                   setCurrentPage(0);
                 }}
-                className={`shrink-0 rounded-xl border px-3.5 py-2 text-sm font-semibold transition ${
+                className={`h-9 shrink-0 rounded-xl border px-3.5 text-[13px] font-semibold transition ${
                   selectedCategory === item
                     ? "border-blue-600 bg-blue-600 text-white"
                     : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600"
@@ -324,7 +324,7 @@ export default function CommunityPage() {
           <div className="flex min-w-0 gap-2 xl:w-[390px]">
             <div className="relative shrink-0">
               <ArrowUpDown
-                size={14}
+                size={13}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -335,7 +335,7 @@ export default function CommunityPage() {
                   setSortOption(event.target.value as SortOption);
                   setCurrentPage(0);
                 }}
-                className="h-10 appearance-none rounded-xl border border-slate-200 bg-white pl-8 pr-8 text-sm text-slate-600 outline-none focus:border-blue-400"
+                className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-8 pr-8 text-[13px] font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-400"
               >
                 <option value="latest">최신순</option>
                 <option value="oldest">오래된순</option>
@@ -343,14 +343,14 @@ export default function CommunityPage() {
               </select>
 
               <ChevronDown
-                size={14}
+                size={13}
                 className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
               />
             </div>
 
             <div className="relative min-w-0 flex-1">
               <Search
-                size={16}
+                size={14}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -359,7 +359,7 @@ export default function CommunityPage() {
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
                 placeholder="제목, 내용 검색"
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-400"
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] outline-none placeholder:text-slate-400 focus:border-blue-400"
               />
             </div>
           </div>
@@ -368,13 +368,13 @@ export default function CommunityPage() {
         {/* 독립된 공지사항 카드 */}
         <section
           aria-labelledby="community-notice-heading"
-          className="mb-4 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm"
+          className="mb-4 overflow-hidden rounded-xl border border-blue-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         >
           <div className="flex flex-col sm:flex-row sm:items-stretch">
             {/* 공지사항 라벨 */}
             <div className="flex shrink-0 items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2.5 sm:w-[160px] sm:border-b-0 sm:border-r sm:px-5 sm:py-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-                <Megaphone size={17} aria-hidden="true" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+                <Megaphone size={16} aria-hidden="true" />
               </span>
 
               <h2
@@ -395,7 +395,7 @@ export default function CommunityPage() {
                   key={notice.id}
                   href={`/community/${notice.id}`}
                   onClick={() => savePostInfo(notice)}
-                  className="group flex min-h-[64px] items-center gap-3 px-4 py-3 transition hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5"
+                  className="group flex min-h-[56px] items-center gap-3 px-4 py-3 transition hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5"
                 >
                   <span className="shrink-0 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-600">
                     관리자
@@ -405,7 +405,7 @@ export default function CommunityPage() {
                     {notice.title}
                   </span>
 
-                  <time className="hidden shrink-0 text-xs text-slate-400 md:block">
+                  <time className="hidden shrink-0 text-[13px] text-slate-400 md:block">
                     {formatDate(notice.createdAt)}
                   </time>
 
@@ -479,7 +479,7 @@ export default function CommunityPage() {
         {/* 전체 게시글 + HOT 게시글 */}
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_250px]">
           <section
-            className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+            className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
             aria-label="게시글 목록"
           >
             <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
@@ -529,7 +529,7 @@ export default function CommunityPage() {
                     key={post.id}
                     href={`/community/${post.id}`}
                     onClick={() => savePostInfo(post)}
-                    className="group flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50/80"
+                    className="group flex items-center gap-4 px-5 py-3.5 transition hover:bg-slate-50/80"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -544,20 +544,20 @@ export default function CommunityPage() {
                             "자유"}
                         </span>
 
-                        <h3 className="min-w-0 truncate text-[15px] font-semibold text-slate-900 group-hover:text-blue-600">
+                        <h3 className="min-w-0 truncate text-base font-semibold text-slate-900 group-hover:text-blue-600">
                           {post.title}
                         </h3>
                       </div>
 
                       {(post.contentSnippet || post.content) && (
-                        <p className="mt-1.5 truncate text-sm text-slate-500">
+                        <p className="mt-1 truncate text-sm leading-relaxed text-slate-500">
                           {post.contentSnippet || post.content}
                         </p>
                       )}
 
-                      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-slate-400">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="max-w-[120px] truncate text-slate-500">
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-slate-400">
+                        <div className="flex min-w-0 items-center gap-2 text-[13px]">
+                          <span className="max-w-[140px] truncate text-slate-500">
                             {post.authorName || "사용자"}
                           </span>
                           <span>·</span>
@@ -602,7 +602,7 @@ export default function CommunityPage() {
                       <img
                         src={post.previewImageUrl}
                         alt=""
-                        className="h-16 w-16 shrink-0 rounded-xl border border-slate-100 object-cover sm:h-[72px] sm:w-[72px]"
+                        className="h-16 w-16 shrink-0 rounded-lg border border-slate-100 object-cover sm:h-[72px] sm:w-[72px]"
                       />
                     )}
                   </Link>
@@ -639,7 +639,7 @@ export default function CommunityPage() {
                       currentPage === page ? "page" : undefined
                     }
                     onClick={() => setCurrentPage(page)}
-                    className={`h--8 min-w-8 rounded-lg text-xs font-semibold ${
+                    className={`h-8 min-w-8 rounded-lg text-xs font-semibold ${
                       currentPage === page
                         ? "bg-blue-600 text-white"
                         : "text-slate-500 hover:bg-blue-50"
@@ -668,7 +668,7 @@ export default function CommunityPage() {
 
           {/* HOT 게시글 */}
           <aside className="hidden min-w-0 lg:block">
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
                 <Flame size={17} className="text-orange-500" />
                 <h2 className="text-sm font-bold">HOT 게시글</h2>
@@ -697,19 +697,19 @@ export default function CommunityPage() {
                         {post.title}
                       </p>
 
-                      <div className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-400">
-                        <span>
+                      <div className="mt-1.5 flex items-center gap-3 text-xs text-slate-400">
+                        <span className="truncate">
                           {categoryLabel[post.category ?? ""] ??
                             post.category}
                         </span>
 
                         <span className="flex items-center gap-1">
-                          <Eye size={11} />
+                          <Eye size={12} />
                           {viewsOf(post)}
                         </span>
 
                         <span className="flex items-center gap-1">
-                          <Heart size={11} />
+                          <Heart size={12} />
                           {likesOf(post)}
                         </span>
                       </div>

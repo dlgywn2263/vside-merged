@@ -15,9 +15,9 @@ export default function CommunityHeader() {
 
       <Link
         href="/community/write"
-        className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-blue-100 transition hover:bg-blue-700"
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-[13px] font-semibold text-white shadow-sm shadow-blue-100 transition hover:bg-blue-700"
       >
-        <Plus size={18} />
+        <Plus size={15} />
         글 작성
       </Link>
     </div>
