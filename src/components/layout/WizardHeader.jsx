@@ -3,11 +3,8 @@
 import { useRouter, usePathname } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+// /new/workspace 는 페이지가 폼 너비에 맞춘 제목을 직접 그리므로 여기서는 빼 둔다(제목 중복 방지).
 const HEADER_MAP = {
-  "/new/workspace": {
-    title: "프로젝트 생성",
-    subtitle: "프로젝트를 생성하세요",
-  },
   "/new/language": {
     title: "언어 선택",
     subtitle: "프로젝트 언어를 선택하세요",
@@ -22,10 +19,8 @@ export default function WizardHeader() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const header = HEADER_MAP[pathname] ?? {
-    title: "",
-    subtitle: "",
-  };
+  const header = HEADER_MAP[pathname];
+  if (!header) return null;
 
   return (
     <header className="pt-6 border-gray-300 bg-gray-50  top-0 left-0 right-0 ">

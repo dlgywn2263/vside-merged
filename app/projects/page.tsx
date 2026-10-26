@@ -24,19 +24,9 @@ import {
 
   ArrowRight,
 
-  BookOpenText,
-
-  CalendarDays,
-
   CheckCircle2,
 
-  Code2,
-
   Copy,
-
-  FileText,
-
-  LayoutDashboard,
 
   Loader2,
 
@@ -1452,261 +1442,219 @@ export default function DashboardProjectSelectPage() {
 
     <>
 
-      <main className="min-h-screen bg-[#F6F8FC] px-4 py-4 text-slate-900 md:px-5 md:py-5">
+      <main className="min-h-screen bg-[#F6F8FC] px-4 py-5 text-slate-900 [font-family:Pretendard,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] md:px-6 md:py-6">
 
-        <div className="mx-auto flex max-w-[1520px] flex-col gap-3.5">
-
-
+        <div className="mx-auto flex max-w-[1280px] flex-col gap-4">
 
           {/* =============================================
 
               프로젝트 선택 헤더
 
+              카드로 감싸지 않고 제목 · 요약 · 툴바 3줄로 둔다.
+
+              헤더가 낮아야 프로젝트 카드가 첫 화면에 더 많이 들어온다.
+
           ============================================= */}
 
+          <header className="flex flex-col gap-3">
 
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 
-          <section className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] md:px-6">
+              <div className="min-w-0">
 
-            <div className="flex flex-col gap-3.5">
+                <h1 className="text-[22px] font-black leading-8 tracking-tight text-slate-950">
 
+                  프로젝트
 
+                </h1>
 
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-semibold text-slate-400">
 
-                <div className="min-w-0">
+                  <SummaryChip label="전체" value={`${totalCount}개`} />
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="text-slate-300">·</span>
 
-                    <h1 className="text-xl font-black tracking-tight text-slate-950">
+                  <SummaryChip label="팀" value={`${teamCount}개`} />
 
-                      프로젝트
+                  <span className="text-slate-300">·</span>
 
-                    </h1>
+                  <SummaryChip label="개인" value={`${personalCount}개`} />
 
+                  <span className="text-slate-300">·</span>
 
+                  <SummaryChip label="평균 진행률" value={`${averageProgress}%`} />
 
-                    <span className="hidden h-4 w-px bg-slate-200 sm:block" />
+                  {(filteredProjects.length !== totalCount || search.trim()) && (
 
+                    <>
 
+                      <span className="text-slate-300">·</span>
 
-                    <p className="text-xs font-semibold text-slate-400 sm:text-[13px]">
+                      <span className="font-bold text-[#5873F9]">
 
-                      작업할 프로젝트를 선택하거나 새 프로젝트를 생성하세요.
+                        {filteredProjects.length}개 표시
 
-                    </p>
+                      </span>
 
-                  </div>
+                    </>
 
-
-
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-bold text-slate-400">
-
-                    <SummaryChip label="전체" value={`${totalCount}`} />
-
-                    <span className="text-slate-200">·</span>
-
-                    <SummaryChip label="팀" value={`${teamCount}`} />
-
-                    <span className="text-slate-200">·</span>
-
-                    <SummaryChip label="개인" value={`${personalCount}`} />
-
-                    <span className="text-slate-200">·</span>
-
-                    <SummaryChip label="평균 진행률" value={`${averageProgress}%`} />
-
-
-
-                    {(filteredProjects.length !== totalCount || search.trim()) && (
-
-                      <>
-
-                        <span className="text-slate-200">·</span>
-
-                        <span className="font-black text-[#5873F9]">
-
-                          {filteredProjects.length}개 표시
-
-                        </span>
-
-                      </>
-
-                    )}
-
-                  </div>
-
-                </div>
-
-
-
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-
-                  <button
-
-                    type="button"
-
-                    onClick={loadDashboardProjects}
-
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-black text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
-
-                  >
-
-                    <RefreshCw size={14} />
-
-                    새로고침
-
-                  </button>
-
-
-
-                  <Link
-
-                    href="/new/workspace"
-
-                    onClick={() => {
-
-                      sessionStorage.setItem(
-
-                        "workspace_create_entry",
-
-                        "dashboard",
-
-                      );
-
-                    }}
-
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#4863E8]"
-
-                  >
-
-                    <Plus size={15} />
-
-                    새 프로젝트 생성
-
-                  </Link>
+                  )}
 
                 </div>
 
               </div>
 
+              <div className="flex shrink-0 items-center gap-2">
 
+                <button
 
-              {/* =========================================
+                  type="button"
 
-                  검색 + 정렬 + 필터
+                  onClick={loadDashboardProjects}
 
-              ========================================= */}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
 
+                >
 
+                  <RefreshCw size={14} />
 
-              <div className="flex flex-col gap-2.5 border-t border-slate-100 pt-3 lg:flex-row lg:items-center lg:justify-between">
+                  새로고침
 
-                <div className="flex min-w-0 flex-1 items-center gap-2">
+                </button>
 
-                  <div className="relative min-w-0 flex-1 lg:max-w-[560px]">
+                <Link
 
-                    <Search
+                  href="/new/workspace"
 
-                      size={15}
+                  onClick={() => {
 
-                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    sessionStorage.setItem(
+
+                      "workspace_create_entry",
+
+                      "dashboard",
+
+                    );
+
+                  }}
+
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#5873F9] px-3.5 text-[13px] font-bold text-white transition hover:bg-[#4863E8]"
+
+                >
+
+                  <Plus size={15} />
+
+                  새 프로젝트 생성
+
+                </Link>
+
+              </div>
+
+            </div>
+
+            {/* =========================================
+
+                검색 + 정렬 + 필터
+
+            ========================================= */}
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
+              <div className="relative min-w-0 flex-1 sm:max-w-[400px]">
+
+                <Search
+
+                  size={15}
+
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+
+                />
+
+                <input
+
+                  type="text"
+
+                  value={search}
+
+                  onChange={(e) => setSearch(e.target.value)}
+
+                  placeholder="프로젝트 검색"
+
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] font-medium text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+
+                />
+
+              </div>
+
+              <div className="flex items-center gap-2">
+
+                <div className="relative shrink-0">
+
+                  <Filter
+
+                    size={12}
+
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+
+                  />
+
+                  <select
+
+                    value={projectListSortType}
+
+                    onChange={(event) =>
+
+                      setProjectListSortType(
+
+                        event.target.value as ProjectListSortType,
+
+                      )
+
+                    }
+
+                    aria-label="정렬"
+
+                    className="h-9 w-[136px] appearance-none rounded-lg border border-slate-200 bg-white pl-8 pr-7 text-[13px] font-semibold text-slate-600 outline-none transition hover:border-slate-300 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
+
+                  >
+
+                    <option value="recent">최근 수정순</option>
+
+                    <option value="name">이름순</option>
+
+                    <option value="progress">진행률 높은순</option>
+
+                  </select>
+
+                  <svg
+
+                    className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+
+                    viewBox="0 0 20 20"
+
+                    fill="none"
+
+                    stroke="currentColor"
+
+                    strokeWidth="1.8"
+
+                  >
+
+                    <path
+
+                      d="m6 8 4 4 4-4"
+
+                      strokeLinecap="round"
+
+                      strokeLinejoin="round"
 
                     />
 
-
-
-                    <input
-
-                      type="text"
-
-                      value={search}
-
-                      onChange={(e) => setSearch(e.target.value)}
-
-                      placeholder="프로젝트 검색"
-
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-3.5 text-xs font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
-
-                    />
-
-                  </div>
-
-
-
-                  <div className="relative shrink-0">
-
-                    <Filter
-
-                      size={12}
-
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-
-                    />
-
-
-
-                    <select
-
-                      value={projectListSortType}
-
-                      onChange={(event) =>
-
-                        setProjectListSortType(
-
-                          event.target.value as ProjectListSortType,
-
-                        )
-
-                      }
-
-                      className="h-10 w-[142px] appearance-none rounded-xl border border-slate-200 bg-white pl-8 pr-7 text-[13px] font-bold text-slate-600 outline-none transition hover:border-slate-300 focus:border-[#AAB8FF] focus:ring-2 focus:ring-[#5873F9]/10"
-
-                    >
-
-                      <option value="recent">최근 수정순</option>
-
-                      <option value="name">이름순</option>
-
-                      <option value="progress">진행률 높은순</option>
-
-                    </select>
-
-
-
-                    <svg
-
-                      className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
-
-                      viewBox="0 0 20 20"
-
-                      fill="none"
-
-                      stroke="currentColor"
-
-                      strokeWidth="1.8"
-
-                    >
-
-                      <path
-
-                        d="m6 8 4 4 4-4"
-
-                        strokeLinecap="round"
-
-                        strokeLinejoin="round"
-
-                      />
-
-                    </svg>
-
-                  </div>
+                  </svg>
 
                 </div>
 
-
-
-                <div className="grid w-full grid-cols-3 rounded-xl bg-slate-100 p-1 lg:w-[220px]">
+                <div className="flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white p-0.5">
 
                   {FILTERS.map((item) => (
 
@@ -1718,13 +1666,15 @@ export default function DashboardProjectSelectPage() {
 
                       onClick={() => setFilter(item.key)}
 
-                      className={`h-8 rounded-lg px-3 text-[13px] font-black transition ${
+                      aria-pressed={filter === item.key}
+
+                      className={`h-full rounded-md px-3 text-[13px] font-bold transition ${
 
                         filter === item.key
 
-                          ? "bg-white text-[#5873F9] shadow-[0_1px_4px_rgba(15,23,42,0.08)]"
+                          ? "bg-[#EEF1FF] text-[#5873F9]"
 
-                          : "text-slate-400 hover:text-slate-700"
+                          : "text-slate-500 hover:text-slate-800"
 
                       }`}
 
@@ -1742,9 +1692,7 @@ export default function DashboardProjectSelectPage() {
 
             </div>
 
-          </section>
-
-
+          </header>
 
           {/* =============================================
 
@@ -1752,11 +1700,9 @@ export default function DashboardProjectSelectPage() {
 
           ============================================= */}
 
-
-
           {error && (
 
-            <section className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+            <section className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-semibold text-rose-700">
 
               {error}
 
@@ -1764,19 +1710,15 @@ export default function DashboardProjectSelectPage() {
 
           )}
 
-
-
           {/* =============================================
 
               로딩
 
           ============================================= */}
 
-
-
           {loading && (
 
-            <section className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 
               {Array.from({ length: 6 }).map((_, index) => (
 
@@ -1788,37 +1730,29 @@ export default function DashboardProjectSelectPage() {
 
           )}
 
-
-
           {/* =============================================
 
               결과 없음
 
           ============================================= */}
 
-
-
           {!loading && !error && filteredProjects.length === 0 && (
 
-            <section className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+            <section className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center">
 
-              <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-slate-400">
+              <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-400">
 
-                <Search size={20} />
+                <Search size={18} />
 
               </div>
 
-
-
-              <h2 className="mt-4 text-base font-black text-slate-900">
+              <h2 className="mt-3 text-[15px] font-black text-slate-900">
 
                 검색 결과가 없습니다
 
               </h2>
 
-
-
-              <p className="mt-1.5 text-xs font-medium text-slate-500">
+              <p className="mt-1 text-[13px] font-medium text-slate-500">
 
                 다른 키워드로 검색하거나 필터를 전체로 변경해보세요.
 
@@ -1828,19 +1762,15 @@ export default function DashboardProjectSelectPage() {
 
           )}
 
-
-
           {/* =============================================
 
               카드 목록
 
           ============================================= */}
 
-
-
           {!loading && !error && filteredProjects.length > 0 && (
 
-            <section className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 
               {filteredProjects.map((project) => (
 
@@ -1866,15 +1796,11 @@ export default function DashboardProjectSelectPage() {
 
       </main>
 
-
-
       {/* ===============================================
 
           토스트
 
       =============================================== */}
-
-
 
       {toast && (
 
@@ -2930,23 +2856,7 @@ function ProjectDashboardCard({
 
     <>
 
-      <article
-
-        className={`group relative flex min-h-[320px] flex-col overflow-visible rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-px hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] ${
-
-          isCompleted
-
-            ? "border-violet-200 hover:border-violet-300"
-
-            : project.type === "team"
-
-              ? "border-emerald-100 hover:border-[#BFCBFF]"
-
-              : "border-slate-200 hover:border-[#BFCBFF]"
-
-        }`}
-
-      >
+      <article className="group relative flex flex-col rounded-xl border border-slate-200 bg-white p-4 transition hover:border-[#BFCBFF] hover:shadow-[0_4px_14px_rgba(15,23,42,0.05)] @container">
 
         {/* ===============================================
 
@@ -2954,15 +2864,13 @@ function ProjectDashboardCard({
 
         =============================================== */}
 
+        <div className="flex min-w-0 items-center justify-between gap-2">
 
-
-        <div className="flex min-w-0 items-start justify-between gap-3">
-
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
 
             <span
 
-              className={`inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-black ${getTypeStyle(
+              className={`inline-flex h-5 items-center gap-1 rounded-md px-1.5 text-[11px] font-bold ${getTypeStyle(
 
                 project.type,
 
@@ -2972,11 +2880,11 @@ function ProjectDashboardCard({
 
               {project.type === "team" ? (
 
-                <Users size={12} strokeWidth={2.4} />
+                <Users size={11} strokeWidth={2.4} />
 
               ) : (
 
-                <UserRound size={12} strokeWidth={2.4} />
+                <UserRound size={11} strokeWidth={2.4} />
 
               )}
 
@@ -2984,19 +2892,15 @@ function ProjectDashboardCard({
 
             </span>
 
-
-
-            <span className="inline-flex h-6 items-center rounded-full bg-slate-100 px-2.5 text-[10px] font-bold text-slate-500">
+            <span className="inline-flex h-5 items-center rounded-md bg-slate-100 px-1.5 text-[11px] font-semibold text-slate-500">
 
               {project.tech}
 
             </span>
 
-
-
             {project.type === "team" && (
 
-              <span className="inline-flex h-6 items-center rounded-full border border-slate-200 bg-white px-2.5 text-[9px] font-black text-slate-500">
+              <span className="inline-flex h-5 items-center rounded-md border border-slate-200 px-1.5 text-[10px] font-bold tracking-wide text-slate-500">
 
                 {isOwner ? "OWNER" : "MEMBER"}
 
@@ -3004,11 +2908,9 @@ function ProjectDashboardCard({
 
             )}
 
-
-
             {isCompleted && (
 
-              <span className="inline-flex h-6 items-center rounded-full bg-violet-50 px-2.5 text-[10px] font-black text-violet-600">
+              <span className="inline-flex h-5 items-center rounded-md bg-violet-50 px-1.5 text-[11px] font-bold text-violet-600">
 
                 완료
 
@@ -3018,9 +2920,7 @@ function ProjectDashboardCard({
 
           </div>
 
-
-
-          <div ref={menuRef} className="relative shrink-0">
+          <div ref={menuRef} className="relative -mr-1 shrink-0">
 
             <button
 
@@ -3030,23 +2930,21 @@ function ProjectDashboardCard({
 
               aria-label="프로젝트 메뉴"
 
-              className={`grid h-8 w-8 place-items-center rounded-lg border transition ${
+              className={`grid h-7 w-7 place-items-center rounded-md transition ${
 
                 menuOpen
 
-                  ? "border-[#C8D2FF] bg-[#F2F5FF] text-[#5873F9]"
+                  ? "bg-[#F2F5FF] text-[#5873F9]"
 
-                  : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+                  : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
 
               }`}
 
             >
 
-              <MoreHorizontal size={17} />
+              <MoreHorizontal size={16} />
 
             </button>
-
-
 
             {/* =========================================
 
@@ -3054,11 +2952,9 @@ function ProjectDashboardCard({
 
             ========================================= */}
 
-
-
             {menuOpen && (
 
-              <div className="absolute right-0 top-9 z-40 w-[190px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/70">
+              <div className="absolute right-0 top-8 z-40 w-[180px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-lg shadow-slate-200/60">
 
                 {isOwner ? (
 
@@ -3070,17 +2966,15 @@ function ProjectDashboardCard({
 
                       onClick={() => openModal("edit")}
 
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
 
                     >
 
-                      <Pencil size={15} className="text-slate-400" />
+                      <Pencil size={14} className="text-slate-400" />
 
                       프로젝트 수정
 
                     </button>
-
-
 
                     <button
 
@@ -3088,21 +2982,17 @@ function ProjectDashboardCard({
 
                       onClick={() => openModal("duplicate")}
 
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
 
                     >
 
-                      <Copy size={15} className="text-slate-400" />
+                      <Copy size={14} className="text-slate-400" />
 
                       프로젝트 복제
 
                     </button>
 
-
-
                     <div className="my-1 h-px bg-slate-100" />
-
-
 
                     <button
 
@@ -3110,11 +3000,11 @@ function ProjectDashboardCard({
 
                       onClick={() => openModal("delete")}
 
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+                      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-semibold text-rose-600 transition hover:bg-rose-50"
 
                     >
 
-                      <Trash2 size={15} />
+                      <Trash2 size={14} />
 
                       프로젝트 삭제
 
@@ -3130,11 +3020,11 @@ function ProjectDashboardCard({
 
                     onClick={() => openModal("leave")}
 
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-semibold text-rose-600 transition hover:bg-rose-50"
 
                   >
 
-                    <LogOut size={15} />
+                    <LogOut size={14} />
 
                     프로젝트 나가기
 
@@ -3150,51 +3040,21 @@ function ProjectDashboardCard({
 
         </div>
 
-
-
         {/* ===============================================
 
             프로젝트 정보
 
         =============================================== */}
 
+        <div className="mt-2.5 min-w-0">
 
+          <h3 className="truncate text-[17px] font-black leading-6 tracking-tight text-slate-950 transition group-hover:text-[#4F68E8]">
 
-        <div className="mt-4 min-w-0">
+            {project.title}
 
-          <div className="flex min-w-0 items-start justify-between gap-3">
+          </h3>
 
-            <h3
-
-              className={`min-w-0 flex-1 truncate text-[20px] font-black leading-6 tracking-tight transition ${
-
-                isCompleted
-
-                  ? "text-violet-700"
-
-                  : "text-slate-950 group-hover:text-[#4F68E8]"
-
-              }`}
-
-            >
-
-              {project.title}
-
-            </h3>
-
-
-
-            <span className="shrink-0 text-[17px] font-black text-[#5873F9]">
-
-              {project.progress}%
-
-            </span>
-
-          </div>
-
-
-
-          <p className="mt-1.5 line-clamp-1 min-h-[18px] text-[11px] font-medium leading-[18px] text-slate-400">
+          <p className="mt-0.5 truncate text-[12px] font-medium leading-[18px] text-slate-400">
 
             {project.description}
 
@@ -3202,23 +3062,53 @@ function ProjectDashboardCard({
 
         </div>
 
-
-
         {/* ===============================================
 
             진행률 / 최근 수정
 
         =============================================== */}
 
+        <div className="mt-3">
 
+          <div className="flex items-baseline justify-between gap-3 text-[12px] font-semibold text-slate-400">
 
-        <div className="mt-4">
+            <span>
 
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+              진행률{" "}
+
+              <span
+
+                className={`font-black ${
+
+                  isCompleted ? "text-violet-600" : "text-[#5873F9]"
+
+                }`}
+
+              >
+
+                {project.progress}%
+
+              </span>
+
+            </span>
+
+            <span className="font-medium">
+
+              {formatDate(project.lastModified)} 수정
+
+            </span>
+
+          </div>
+
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
 
             <div
 
-              className="h-full rounded-full bg-[#5873F9] transition-all duration-500"
+              className={`h-full rounded-full transition-all duration-500 ${
+
+                isCompleted ? "bg-violet-500" : "bg-[#5873F9]"
+
+              }`}
 
               style={{ width: `${project.progress}%` }}
 
@@ -3226,94 +3116,67 @@ function ProjectDashboardCard({
 
           </div>
 
-
-
-          <div className="mt-2.5 flex items-center justify-between gap-3 text-[13px] font-semibold text-slate-400">
-
-            <span>최근 수정</span>
-
-            <span className="font-bold text-slate-500">
-
-              {formatDate(project.lastModified)}
-
-            </span>
-
-          </div>
-
         </div>
-
-
 
         {/* ===============================================
 
             하단 바로가기
 
+            열기만 메인 버튼으로 두고 나머지는 작은 텍스트 버튼.
+
+            카드가 좁으면(2열 하한) 한 줄에 다 안 들어가서 두 줄로 쌓는다.
+
         =============================================== */}
 
+        <div className="mt-3.5 flex flex-col gap-2 border-t border-slate-100 pt-3 @[22rem]:flex-row @[22rem]:items-center @[22rem]:justify-between">
 
-
-        <div className="mt-5 border-t border-slate-100 pt-4">
-
-          <div className="grid grid-cols-2 gap-2">
-
-            <CardActionLink
-
-              href={getDashboardHref(project)}
-
-              icon={<LayoutDashboard size={14} />}
-
-              label="프로젝트 열기"
-
-              primary
-
-              className="col-span-2"
-
-            />
-
-
+          <div className="order-2 grid grid-cols-4 gap-0.5 @[22rem]:order-1 @[22rem]:-ml-1.5 @[22rem]:flex @[22rem]:items-center">
 
             <CardActionLink
 
               href={getScheduleHref(project.id, project.type)}
 
-              icon={<CalendarDays size={13} />}
-
               label="일정관리"
 
             />
 
-
-
             <CardActionLink
-  href={getDevlogHref(project.id, project.type)}
-  icon={<BookOpenText size={13} />}
-  label="개발일지"
-/>
 
+              href={getDevlogHref(project.id, project.type)}
+
+              label="개발일지"
+
+            />
 
             <CardActionLink
 
               href={getAivsHref(project.id, project.type)}
 
-              icon={<Code2 size={13} />}
-
               label="AIVS"
 
             />
 
-
-
             <CardActionLink
 
               href={getAiReportHref(project)}
-
-              icon={<FileText size={13} />}
 
               label="AI 보고서"
 
             />
 
           </div>
+
+          <CardActionLink
+
+            href={getDashboardHref(project)}
+
+            label="프로젝트 열기"
+
+            primary
+
+            className="order-1 @[22rem]:order-2"
+
+          />
 
         </div>
 
@@ -4659,15 +4522,13 @@ function ToastNotification({
 
    카드 하단 링크
 
+   primary = 프로젝트 열기(메인 CTA), 나머지는 작은 텍스트 버튼
+
 ========================================================= */
-
-
 
 function CardActionLink({
 
   href,
-
-  icon,
 
   label,
 
@@ -4678,8 +4539,6 @@ function CardActionLink({
 }: {
 
   href: string;
-
-  icon: React.ReactNode;
 
   label: string;
 
@@ -4695,21 +4554,17 @@ function CardActionLink({
 
       href={href}
 
-      className={`flex items-center justify-center gap-1.5 rounded-xl text-[12px] font-black transition ${className} ${
+      className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap transition ${className} ${
 
         primary
 
-          ? "h-10 bg-[#5873F9] text-white shadow-sm hover:bg-[#4863E8]"
+          ? "h-8 gap-1 rounded-lg bg-[#5873F9] px-3 text-[12px] font-bold text-white hover:bg-[#4863E8]"
 
-          : "h-10 border border-slate-200 bg-white text-slate-600 hover:border-[#C8D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
+          : "h-7 rounded-md px-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#5873F9]"
 
       }`}
 
     >
-
-      {icon}
-
-
 
       <span>
 
@@ -4717,13 +4572,11 @@ function CardActionLink({
 
       </span>
 
-
-
       {primary && (
 
         <ArrowRight
 
-          size={14}
+          size={13}
 
         />
 
@@ -4735,75 +4588,51 @@ function CardActionLink({
 
 }
 
-
-
 /* =========================================================
 
    스켈레톤
 
 ========================================================= */
 
-
-
 function ProjectCardSkeleton() {
 
   return (
 
-    <div className="min-h-[320px] rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
 
       <div className="flex items-center justify-between">
 
-        <div className="flex gap-1.5">
+        <div className="flex gap-1">
 
-          <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-5 w-20 animate-pulse rounded-md bg-slate-100" />
 
-          <div className="h-6 w-24 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-5 w-16 animate-pulse rounded-md bg-slate-100" />
 
         </div>
 
-
-
-        <div className="h-8 w-8 animate-pulse rounded-lg bg-slate-100" />
+        <div className="h-7 w-7 animate-pulse rounded-md bg-slate-100" />
 
       </div>
 
+      <div className="mt-3 h-5 w-1/2 animate-pulse rounded-md bg-slate-100" />
 
+      <div className="mt-1.5 h-3.5 w-3/4 animate-pulse rounded-md bg-slate-100" />
 
-      <div className="mt-5 flex items-center justify-between gap-4">
+      <div className="mt-3.5 flex justify-between">
 
-        <div className="h-5 w-1/2 animate-pulse rounded-md bg-slate-100" />
+        <div className="h-3 w-16 animate-pulse rounded-md bg-slate-100" />
 
-        <div className="h-5 w-10 animate-pulse rounded-md bg-slate-100" />
+        <div className="h-3 w-20 animate-pulse rounded-md bg-slate-100" />
 
       </div>
 
+      <div className="mt-2 h-1 w-full animate-pulse rounded-full bg-slate-100" />
 
+      <div className="mt-3.5 flex items-center justify-between border-t border-slate-100 pt-3">
 
-      <div className="mt-2.5 h-3.5 w-3/4 animate-pulse rounded-md bg-slate-100" />
+        <div className="h-5 w-48 animate-pulse rounded-md bg-slate-100" />
 
-      <div className="mt-5 h-1.5 w-full animate-pulse rounded-full bg-slate-100" />
-
-      <div className="mt-2.5 ml-auto h-3 w-20 animate-pulse rounded-md bg-slate-100" />
-
-
-
-      <div className="mt-5 border-t border-slate-100 pt-4">
-
-        <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
-
-
-
-        <div className="mt-2 grid grid-cols-2 gap-2">
-
-          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-
-          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-
-          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-
-          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-
-        </div>
+        <div className="h-8 w-24 animate-pulse rounded-lg bg-slate-100" />
 
       </div>
 
