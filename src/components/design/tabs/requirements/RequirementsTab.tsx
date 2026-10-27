@@ -9,7 +9,7 @@
 // 연결이 이 재설계의 핵심 가치라, 어딘가 깊은 곳이 아니라 목록 첫 화면에서
 // 보여야 한다.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ListChecks, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -65,6 +65,23 @@ export function RequirementsTab({ model, mutations, findings }: RequirementsTabP
   const keyword = useDesignUiStore((s) => s.search.requirements);
   const selectedId = useDesignUiStore((s) => s.selection.requirementId);
   const select = useDesignUiStore((s) => s.select);
+
+  // 탭에 처음 들어오면 첫 번째 요구사항을 자동 선택한다.
+  // 한 번 초기 선택을 마친 뒤에는 사용자가 상세 패널을 닫아도 다시 열지 않는다.
+  const initialSelectionDone = useRef(false);
+  const firstRequirementId = model.requirements[0]?.id ?? null;
+
+  useEffect(() => {
+    if (initialSelectionDone.current) return;
+    if (selectedId) {
+      initialSelectionDone.current = true;
+      return;
+    }
+    if (!firstRequirementId) return; // 비동기로 데이터를 받는 경우 기다린다.
+
+    initialSelectionDone.current = true;
+    select({ requirementId: firstRequirementId });
+  }, [firstRequirementId, selectedId, select]);
 
   const filtered = useMemo(() => {
     const needle = keyword.trim().toLowerCase();
@@ -154,7 +171,10 @@ export function RequirementsTab({ model, mutations, findings }: RequirementsTabP
                         onChange={(event) =>
                           mutations.updateRequirement(item.id, { category: event.target.value })
                         }
-                        onClick={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          select({ requirementId: item.id });
+                        }}
                         className="h-8 border-transparent bg-transparent px-2 hover:border-[var(--waivs-border)]"
                       />
                     </td>
@@ -166,12 +186,21 @@ export function RequirementsTab({ model, mutations, findings }: RequirementsTabP
                         onChange={(event) =>
                           mutations.updateRequirement(item.id, { name: event.target.value })
                         }
-                        onClick={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          select({ requirementId: item.id });
+                        }}
                         className="h-8 border-transparent bg-transparent px-2 hover:border-[var(--waivs-border)]"
                       />
                     </td>
 
-                    <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
+                    <td
+                      className="px-3 py-2"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        select({ requirementId: item.id });
+                      }}
+                    >
                       <Select
                         value={item.priority}
                         onValueChange={(value) =>

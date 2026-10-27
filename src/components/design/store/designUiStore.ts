@@ -1,15 +1,7 @@
 "use client";
 
 // 경로: src/components/design/store/designUiStore.ts
-//
-// 화면에만 필요한 상태를 담는다. 탭 선택, 검색어, 지금 보고 있는 항목 같은 것들.
-//
-// 문서 데이터는 여기에 절대 복제하지 않는다. Y.Doc 이 유일한 진짜이고,
-// 복제본을 두는 순간 어느 쪽이 맞는지 알 수 없어지며 양방향 동기화 버그가
-// 시작된다. 여기 들어오는 것은 새로고침하면 사라져도 아무 문제 없는 값들뿐이다.
-//
-// Redux 대신 zustand 를 쓰는 이유는 기존 관례를 따르기 위해서다.
-// Redux 스토어는 IDE 전용이고, 워크스페이스 위저드가 이미 zustand 를 쓴다.
+// 문서 데이터는 Y.Doc에서 관리하고, 이 스토어는 화면 상태만 관리한다.
 
 import { create } from "zustand";
 
@@ -27,13 +19,7 @@ interface DesignUiState {
   search: Record<DesignTab, string>;
   selection: DesignSelection;
 
-  /**
-   * 설계 닥터 패널을 펼쳐 두었는지.
-   *
-   * 처음에는 닫아 둔다. 막 들어온 사람은 아직 아무것도 쓰지 않았는데
-   * 점검 결과부터 마주하게 되기 때문이다. 문제 개수는 헤더 버튼 위
-   * 배지로 계속 보이므로, 닫아 둬도 놓치지 않는다.
-   */
+  /** 설계 현황(닥터) 패널. 상세 정보 패널과 별도로 관리한다. */
   doctorOpen: boolean;
 
   /** ERD 탭에서 텍스트 패널이 차지하는 비율(0~1). */
@@ -57,20 +43,38 @@ const EMPTY_SELECTION: DesignSelection = {
 export const useDesignUiStore = create<DesignUiState>((set) => ({
   activeTab: "requirements",
   search: { requirements: "", screens: "", erd: "", apis: "" },
-  selection: EMPTY_SELECTION,
+  selection: { ...EMPTY_SELECTION },
   doctorOpen: false,
   erdTextRatio: 0.42,
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  // 탭 이동만으로 상세 패널이나 설계 현황 패널이 열리지 않도록 한다.
+  // 같은 탭을 다시 누르는 경우에는 현재 상태를 유지한다.
+  setActiveTab: (tab) =>
+    set((state) =>
+      state.activeTab === tab
+        ? {}
+        : {
+            activeTab: tab,
+            selection: { ...EMPTY_SELECTION },
+            doctorOpen: false,
+          },
+    ),
 
   setSearch: (tab, keyword) =>
     set((state) => ({ search: { ...state.search, [tab]: keyword } })),
 
+  // 목록/카드 선택 시 해당 항목의 ID를 저장한다.
+  // 각 탭은 selection의 ID를 기준으로 상세 정보 패널을 렌더링한다.
+  // 이때 설계 현황 패널은 함께 열지 않고 닫는다.
   select: (patch) =>
-    set((state) => ({ selection: { ...state.selection, ...patch } })),
+    set((state) => ({
+      selection: { ...state.selection, ...patch },
+      doctorOpen: false,
+    })),
 
-  clearSelection: () => set({ selection: EMPTY_SELECTION }),
+  clearSelection: () => set({ selection: { ...EMPTY_SELECTION } }),
 
+  // 설계 현황 버튼에서만 호출해야 한다. 다른 곳에서 호출하면 안 된다.
   toggleDoctor: (open) =>
     set((state) => ({ doctorOpen: open ?? !state.doctorOpen })),
 
@@ -78,10 +82,7 @@ export const useDesignUiStore = create<DesignUiState>((set) => ({
     set({ erdTextRatio: Math.min(0.8, Math.max(0.2, ratio)) }),
 }));
 
-/**
- * 설계 닥터가 보고한 항목을 클릭했을 때 해당 탭으로 이동하고 그 항목을 고른다.
- * 닥터의 가치는 "여기가 문제다"에서 끝나지 않고 그 자리로 데려다주는 데 있다.
- */
+/** 설계 현황에서 특정 문제를 클릭하면 해당 탭과 항목으로 이동한다. */
 export function focusDesignTarget(kind: string, id: string): void {
   const store = useDesignUiStore.getState();
 

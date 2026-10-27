@@ -82,6 +82,17 @@ function ScreenFlowCanvas({ model, mutations, findings }: ScreenFlowTabProps) {
   const selectedScreenId = useDesignUiStore((s) => s.selection.screenId);
   const select = useDesignUiStore((s) => s.select);
 
+  // 탭 진입 시 첫 화면의 상세 패널을 기본으로 연다.
+  // 직접 닫거나 캔버스 빈 영역을 선택한 후에는 다시 강제로 열지 않는다.
+  const initialSelectionDone = useRef(false);
+  const firstScreenId = model.screens[0]?.id ?? null;
+  useEffect(() => {
+    if (initialSelectionDone.current || !firstScreenId) return;
+    initialSelectionDone.current = true;
+    const currentId = useDesignUiStore.getState().selection.screenId;
+    if (!currentId) select({ screenId: firstScreenId });
+  }, [firstScreenId, select]);
+
   const [detailed, setDetailed] = useState(true);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const draggingRef = useRef(false);

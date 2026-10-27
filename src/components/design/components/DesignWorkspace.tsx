@@ -133,6 +133,14 @@ export function DesignWorkspace() {
   const activeTab = useDesignUiStore((s) => s.activeTab);
   const doctorOpen = useDesignUiStore((s) => s.doctorOpen);
 
+  // 스토어는 페이지를 떠나도 남는다. 전에 설계 현황을 열어 두었거나 항목을 골라 두고
+  // 나갔더라도, 다시 들어오면 오른쪽 패널을 모두 닫은 채로 시작한다.
+  useEffect(() => {
+    const store = useDesignUiStore.getState();
+    store.toggleDoctor(false);
+    store.clearSelection();
+  }, [workspaceId]);
+
   // 문서를 열지 못한 상태에서는 점검하지 않는다.
   const report = useDesignDoctor(
     workspaceId,
