@@ -6,7 +6,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 import { useParams } from "next/navigation";
 
-import { VscChevronLeft, VscChevronRight } from "react-icons/vsc";
+import { VscChevronRight, VscSparkle, VscDebugAlt } from "react-icons/vsc";
 
 import MenuBar from "@/components/ide/MenuBar";
 
@@ -42,25 +42,35 @@ import { useWorkspaceEntry } from "@/hooks/ide/useWorkspaceEntry";
 
 import MyPageShell from "../mypage/MyPageShell";
 
-import { toggleSidebar, toggleRightPanel } from "@/store/slices/uiSlice";
+import { toggleRightPanel } from "@/store/slices/uiSlice";
+
+import { PanelResizeHandle, RightPanelRail } from "@/components/ide/IdePanelChrome";
 
 const LEFT_SIDEBAR_DEFAULT_WIDTH = 260;
 
-const LEFT_SIDEBAR_MIN_WIDTH = 220;
+const LEFT_SIDEBAR_MIN_WIDTH = 200;
 
-const LEFT_SIDEBAR_MAX_WIDTH = 420;
+const LEFT_SIDEBAR_MAX_WIDTH = 400;
 
 const RIGHT_PANEL_DEFAULT_WIDTH = 320;
 
-const RIGHT_PANEL_MIN_WIDTH = 300;
+const RIGHT_PANEL_MIN_WIDTH = 280;
 
-const RIGHT_PANEL_MAX_WIDTH = 560;
+const RIGHT_PANEL_MAX_WIDTH = 450;
 
-const TERMINAL_DEFAULT_HEIGHT = 250;
+const TERMINAL_DEFAULT_HEIGHT = 220;
 
-const TERMINAL_MIN_HEIGHT = 140;
+const TERMINAL_MIN_HEIGHT = 120;
 
-const TERMINAL_MAX_HEIGHT = 520;
+// 터미널 최대 높이는 고정값이 아니라 편집 영역 높이의 비율이다(작은 화면에서도 에디터가 남게).
+
+const TERMINAL_MAX_HEIGHT_RATIO = 0.65;
+
+// 창이 좁을 때 양쪽 패널이 에디터를 밀어내지 않도록 비율로도 막는다.
+
+const LEFT_SIDEBAR_MAX_RATIO = "30%";
+
+const RIGHT_PANEL_MAX_RATIO = "35%";
 
 const clampPanelSize = (value, min, max) => {
 
@@ -113,6 +123,12 @@ export default function IdeMain() {
   );
 
   const [resizingPanel, setResizingPanel] = useState(null);
+
+  const hasRightPanel = isAgentVisible || isDebugMode;
+
+  const rightRailItems = isDebugMode
+    ? [{ id: "debug", label: "디버그", icon: <VscDebugAlt size={20} /> }]
+    : [{ id: "ai", label: "AI 어시스트", icon: <VscSparkle size={20} /> }];
 
   const startLeftSidebarResize = (event) => {
 
@@ -202,17 +218,13 @@ export default function IdeMain() {
 
           : window.innerHeight - event.clientY;
 
+        const maxHeight = layoutRect
+          ? Math.max(TERMINAL_MIN_HEIGHT, layoutRect.height * TERMINAL_MAX_HEIGHT_RATIO)
+          : window.innerHeight * TERMINAL_MAX_HEIGHT_RATIO;
+
         setTerminalHeight(
 
-          clampPanelSize(
-
-            nextHeight,
-
-            TERMINAL_MIN_HEIGHT,
-
-            TERMINAL_MAX_HEIGHT,
-
-          ),
+          clampPanelSize(nextHeight, TERMINAL_MIN_HEIGHT, maxHeight),
 
         );
 
@@ -301,29 +313,30 @@ export default function IdeMain() {
 
             ref={editorLayoutRef}
 
-            className="flex-1 flex overflow-hidden bg-[#f0f2f5] p-2 gap-2"
+            className="flex-1 min-h-0 min-w-0 flex overflow-hidden bg-[#f0f2f5]"
 
           >
 
-            {/* 왼쪽 탐색기 패널 */}
+            {/* 왼쪽 탐색기 패널. 접어도 Sidebar 를 언마운트하지 않는다 —
+                파일 트리 이벤트 소켓(/ws/workspace-events)이 Sidebar 안에 있다. */}
 
             <div
 
-              className={`relative rounded-2xl shadow-sm overflow-hidden bg-white border flex flex-col shrink-0 border-gray-200 ${
+              className={`relative overflow-hidden flex flex-col shrink-0 bg-white ${
 
                 resizingPanel === "left"
 
                   ? "transition-none"
 
-                  : "transition-all duration-300 ease-in-out"
+                  : "transition-[width,opacity] duration-200 ease-out"
 
               } ${
 
                 isSidebarVisible
 
-                  ? "opacity-100"
+                  ? "opacity-100 border-r border-gray-200"
 
-                  : "opacity-0 border-transparent"
+                  : "opacity-0"
 
               }`}
 
@@ -331,41 +344,37 @@ export default function IdeMain() {
 
                 width: isSidebarVisible ? `${leftSidebarWidth}px` : "0px",
 
+                maxWidth: LEFT_SIDEBAR_MAX_RATIO,
+
               }}
+
+              aria-hidden={!isSidebarVisible}
 
             >
 
               {isSidebarVisible && (
 
-                <div
+                <PanelResizeHandle
 
-                  role="separator"
+                  orientation="vertical"
 
-                  aria-orientation="vertical"
+                  edge="right"
+
+                  active={resizingPanel === "left"}
 
                   title="탐색기 너비 조절"
 
                   onPointerDown={startLeftSidebarResize}
 
-                  className="absolute right-0 top-0 z-[700] h-full w-3 translate-x-1/2 cursor-col-resize touch-none"
-
-                >
-
-                  <div className="mx-auto h-full w-px bg-transparent transition hover:bg-blue-400" />
-
-                </div>
+                />
 
               )}
 
               <div
 
-                className="h-full flex flex-col shrink-0"
+                className="h-full w-full flex flex-col"
 
-                style={{
-
-                  width: `${leftSidebarWidth}px`,
-
-                }}
+                style={{ minWidth: `${LEFT_SIDEBAR_MIN_WIDTH}px` }}
 
               >
 
@@ -375,39 +384,16 @@ export default function IdeMain() {
 
             </div>
 
-            {/* 탐색기 닫혀있을 때 열기 버튼 */}
+            {/* 중앙 에디터 영역 — 남은 가로 공간을 전부 차지한다.
+                Monaco 는 automaticLayout, xterm 은 ResizeObserver 로 크기를 따라간다. */}
 
-            {!isSidebarVisible && (
-
-              <div className="relative flex items-center justify-center -ml-4 z-10 w-0">
-
-                <button
-
-                  onClick={() => dispatch(toggleSidebar())}
-
-                  className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center shadow-md text-gray-500 hover:text-blue-600 hover:scale-110 transition-all z-20"
-
-                  title="탐색기 열기"
-
-                >
-
-                  <VscChevronRight size={14} />
-
-                </button>
-
-              </div>
-
-            )}
-
-            {/* 중앙 에디터 영역 */}
-
-            <div className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 z-0 relative">
+            <div className="flex-1 min-h-0 min-w-[240px] flex flex-col bg-white overflow-hidden relative z-0">
 
               <FileTabs />
 
-              <div className="flex-1 flex relative overflow-hidden">
+              <div className="flex-1 min-h-0 flex relative overflow-hidden">
 
-                <div className="flex-1 flex flex-col min-w-0 relative">
+                <div className="flex-1 min-h-0 flex flex-col min-w-0 relative">
 
                   <CodeEditor />
 
@@ -427,27 +413,27 @@ export default function IdeMain() {
 
                     height: `${terminalHeight}px`,
 
+                    minHeight: `${TERMINAL_MIN_HEIGHT}px`,
+
+                    maxHeight: `${TERMINAL_MAX_HEIGHT_RATIO * 100}%`,
+
                   }}
 
                 >
 
-                  <div
+                  <PanelResizeHandle
 
-                    role="separator"
+                    orientation="horizontal"
 
-                    aria-orientation="horizontal"
+                    edge="top"
+
+                    active={resizingPanel === "terminal"}
 
                     title="터미널 높이 조절"
 
                     onPointerDown={startTerminalResize}
 
-                    className="absolute left-0 top-0 z-[700] h-3 w-full -translate-y-1/2 cursor-row-resize touch-none"
-
-                  >
-
-                    <div className="h-px w-full bg-transparent transition hover:bg-blue-400" />
-
-                  </div>
+                  />
 
                   <BottomPanel />
 
@@ -457,51 +443,27 @@ export default function IdeMain() {
 
             </div>
 
-            {/* 오른쪽 패널이 닫혀있을 때 열기 버튼 */}
+            {/* 오른쪽 AI 패널. 접어도 언마운트하지 않아 대화 내용이 남는다. */}
 
-            {(isAgentVisible || isDebugMode) && !isRightPanelVisible && (
-
-              <div className="relative flex items-center justify-center -mr-4 z-10 w-0">
-
-                <button
-
-                  onClick={() => dispatch(toggleRightPanel())}
-
-                  className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center shadow-md text-gray-500 hover:text-blue-600 hover:scale-110 transition-all z-20"
-
-                  title="AI 어시스트 열기"
-
-                >
-
-                  <VscChevronLeft size={14} />
-
-                </button>
-
-              </div>
-
-            )}
-
-            {/* 오른쪽 AI 패널 */}
-
-            {(isAgentVisible || isDebugMode) && (
+            {hasRightPanel && (
 
               <div
 
-                className={`relative rounded-2xl shadow-sm overflow-hidden bg-white border flex flex-col z-[600] shrink-0 border-gray-200 ${
+                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-white ${
 
                   resizingPanel === "right"
 
                     ? "transition-none"
 
-                    : "transition-all duration-300 ease-in-out"
+                    : "transition-[width,opacity] duration-200 ease-out"
 
                 } ${
 
                   isRightPanelVisible
 
-                    ? "opacity-100"
+                    ? "opacity-100 border-l border-gray-200"
 
-                    : "opacity-0 border-transparent"
+                    : "opacity-0"
 
                 }`}
 
@@ -509,47 +471,45 @@ export default function IdeMain() {
 
                   width: isRightPanelVisible ? `${rightPanelWidth}px` : "0px",
 
+                  maxWidth: RIGHT_PANEL_MAX_RATIO,
+
                 }}
+
+                aria-hidden={!isRightPanelVisible}
 
               >
 
                 {isRightPanelVisible && (
 
-                  <div
+                  <PanelResizeHandle
 
-                    role="separator"
+                    orientation="vertical"
 
-                    aria-orientation="vertical"
+                    edge="left"
+
+                    active={resizingPanel === "right"}
 
                     title="AI 어시스트 너비 조절"
 
                     onPointerDown={startRightPanelResize}
 
-                    className="absolute left-0 top-0 z-[700] h-full w-3 -translate-x-1/2 cursor-col-resize touch-none"
-
-                  >
-
-                    <div className="mx-auto h-full w-px bg-transparent transition hover:bg-blue-400" />
-
-                  </div>
+                  />
 
                 )}
 
                 <div
 
-                  className="h-full flex flex-col shrink-0"
+                  className="h-full w-full flex flex-col"
 
-                  style={{
-
-                    width: `${rightPanelWidth}px`,
-
-                  }}
+                  style={{ minWidth: `${RIGHT_PANEL_MIN_WIDTH}px` }}
 
                 >
 
-                  <div className="flex items-center justify-between h-11 border-b border-gray-200 shrink-0 px-2 pt-1 bg-[#f8f9fa]">
+                  <div className="flex items-center justify-between h-9 border-b border-gray-200 shrink-0 pl-1 pr-1.5 bg-white">
 
-                    <div className="flex-1 h-full flex items-center justify-center text-[13px] font-bold border-t-2 border-t-blue-500 bg-white text-blue-600 shadow-sm rounded-t-lg select-none cursor-default">
+                    <div className="flex items-center gap-1.5 h-full px-3 text-[12px] font-bold border-b-2 border-[#5873F9] text-[#5873F9] select-none cursor-default">
+
+                      {isDebugMode ? <VscDebugAlt size={14} /> : <VscSparkle size={14} />}
 
                       {isDebugMode ? "디버깅 모드" : "AI 어시스트"}
 
@@ -557,21 +517,25 @@ export default function IdeMain() {
 
                     <button
 
+                      type="button"
+
                       onClick={() => dispatch(toggleRightPanel())}
 
-                      className="mb-1 ml-2 p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-md transition-all"
+                      className="shrink-0 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
 
-                      title="AI 어시스트 닫기"
+                      title="패널 접기"
+
+                      aria-label="AI 어시스트 패널 접기"
 
                     >
 
-                      <VscChevronRight size={18} />
+                      <VscChevronRight size={16} />
 
                     </button>
 
                   </div>
 
-                  <div className="flex-1 overflow-hidden relative bg-white">
+                  <div className="flex-1 min-h-0 overflow-hidden relative bg-white">
 
                     {isDebugMode ? <DebugPanel /> : <AgentPanel />}
 
@@ -580,6 +544,22 @@ export default function IdeMain() {
                 </div>
 
               </div>
+
+            )}
+
+            {/* 오른쪽 패널을 접었을 때의 세로 아이콘 바 */}
+
+            {hasRightPanel && !isRightPanelVisible && (
+
+              <RightPanelRail
+
+                items={rightRailItems}
+
+                activeId={isDebugMode ? "debug" : "ai"}
+
+                onSelect={() => dispatch(toggleRightPanel())}
+
+              />
 
             )}
 
@@ -593,13 +573,13 @@ export default function IdeMain() {
 
   return (
 
-    <div className="w-full h-[calc(100vh-61px)] flex flex-col bg-white text-[#333] overflow-hidden font-sans relative">
+    <div className="w-full h-full flex-1 min-h-0 min-w-0 flex flex-col bg-white text-[#333] overflow-hidden font-sans relative">
 
       <CommandPalette />
 
       <MenuBar mode="personal" />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
 
         <ActivityBar />
 

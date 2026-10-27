@@ -12,7 +12,7 @@ import {
   VscSettingsGear,
   VscSignOut,
 } from "react-icons/vsc";
-import { setActiveActivity } from "@/store/slices/uiSlice";
+import { setActiveActivity, toggleSidebar } from "@/store/slices/uiSlice";
 import { getMyWorkspacesByTokenApi } from "@/lib/ide/api";
 
 export default function ActivityBar() {
@@ -20,7 +20,7 @@ export default function ActivityBar() {
   const router = useRouter();
   const pathname = usePathname() || "";
   const searchParams = useSearchParams();
-  const { activeActivity } = useSelector((state) => state.ui);
+  const { activeActivity, isSidebarVisible } = useSelector((state) => state.ui);
   const [workspaceName, setWorkspaceName] = useState("");
 
   const workspaceInfo = useMemo(() => {
@@ -107,27 +107,37 @@ export default function ActivityBar() {
   };
 
   const handleActivityClick = (id) => {
+    // 이미 에디터 화면이면 탐색기를 접었다 편다(VS Code 와 같은 조작). 탐색기를 접은 뒤
+    // 다시 여는 길이 화면 가장자리 버튼뿐이면 가려졌을 때 열 방법이 없다.
+    if (id === "editor" && activeActivity === "editor") {
+      dispatch(toggleSidebar());
+      return;
+    }
     dispatch(setActiveActivity(id));
   };
 
   return (
-    <div className="z-30 flex h-full w-12 shrink-0 flex-col justify-between border-r border-gray-200 bg-[#f8f8f8] shadow-sm">
+    <div className="z-30 flex h-full w-12 shrink-0 flex-col justify-between border-r border-gray-200 bg-[#f8f8f8]">
       <div className="flex flex-col gap-2 pt-2">
         {topItems.map((item) => {
           const active = activeActivity === item.id;
+          const label =
+            item.id === "editor" && activeActivity === "editor"
+              ? isSidebarVisible ? "탐색기 접기" : "탐색기 열기"
+              : item.label;
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => handleActivityClick(item.id)}
-              className={`group relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all ${active ? "text-[#333]" : "text-gray-400 hover:text-gray-600"}`}
-              aria-label={item.label}
-              title={item.label}
+              className={`group relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all ${active ? "text-[#5873F9]" : "text-gray-400 hover:text-gray-600"}`}
+              aria-label={label}
+              title={label}
             >
-              {active && <span className="absolute bottom-0 left-0 top-0 w-[3px] rounded-r-full bg-[#333]" />}
+              {active && <span className="absolute bottom-0 left-0 top-0 w-[3px] rounded-r-full bg-[#5873F9]" />}
               {item.icon}
               <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
-                {item.label}
+                {label}
               </span>
             </button>
           );
@@ -137,11 +147,11 @@ export default function ActivityBar() {
         <button
           type="button"
           onClick={() => handleActivityClick("mypage")}
-          className={`group relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all ${activeActivity === "mypage" ? "text-[#333]" : "text-gray-400 hover:text-gray-600"}`}
+          className={`group relative flex h-12 w-12 cursor-pointer items-center justify-center transition-all ${activeActivity === "mypage" ? "text-[#5873F9]" : "text-gray-400 hover:text-gray-600"}`}
           aria-label="마이페이지"
           title="마이페이지"
         >
-          {activeActivity === "mypage" && <span className="absolute bottom-0 left-0 top-0 w-[3px] rounded-r-full bg-[#333]" />}
+          {activeActivity === "mypage" && <span className="absolute bottom-0 left-0 top-0 w-[3px] rounded-r-full bg-[#5873F9]" />}
           <VscAccount size={24} />
           <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">마이페이지</span>
         </button>

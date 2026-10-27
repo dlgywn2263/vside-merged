@@ -49,6 +49,7 @@ import { isSandboxFile, sandboxScopeKey } from "@/store/slices/sandboxSlice";
 import SandboxControls from "@/components/ide/sandbox/SandboxControls";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import GitBranchControls from "@/components/ide/git/GitBranchControls";
+import WaivsNavMenu from "@/components/ide/WaivsNavMenu";
 import { useGitRemoteActions } from "@/hooks/ide/useGitRemoteActions";
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE_URL || "ws://localhost:8080";
@@ -971,7 +972,11 @@ if (tree && tree.children) {
       />
       {/* IDE 메뉴바: 전체 화면은 기존 UI 유지, 좁은 화면에서만 단계적으로 축약 */}
       {!isRelocationPage && (
-        <div className="relative z-[2000] box-border flex h-[48px] w-full min-w-0 max-w-full items-center justify-between gap-2 border-b border-gray-200 bg-white px-2 shadow-sm select-none min-[1120px]:px-3 min-[1320px]:px-4">
+        <div className="relative z-[2000] box-border flex h-[48px] w-full min-w-0 max-w-full items-center justify-between gap-2 border-b border-gray-200 bg-white px-2 select-none min-[1120px]:px-3 min-[1320px]:px-4">
+          {/* 0. WAIVS 페이지 이동 드롭다운. 공통 헤더 대신이다. menuRef 밖에 두어야
+              이것을 눌렀을 때 열려 있던 IDE 메뉴가 기존 바깥 클릭 처리로 닫힌다. */}
+          <WaivsNavMenu />
+          <div className="h-4 w-px shrink-0 bg-gray-200" aria-hidden="true" />
           {/* 1. 왼쪽 메뉴 영역 - 절대 줄바꿈하지 않는다. */}
           <div
             className="flex min-w-0 flex-1 items-center overflow-visible whitespace-nowrap"
