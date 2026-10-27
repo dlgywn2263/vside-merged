@@ -272,7 +272,7 @@ export function CreateDevlogModal({
            ================================================= */}
 
         <div
-          className="pointer-events-auto flex max-h-[calc(100dvh-60px)] w-full max-w-[720px] flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+          className="pointer-events-auto flex max-h-[calc(100dvh-60px)] w-full max-w-[720px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
           onMouseDown={(event) => {
             event.stopPropagation();
           }}
@@ -284,18 +284,18 @@ export function CreateDevlogModal({
           <header className="flex shrink-0 items-start justify-between border-b border-slate-100 px-6 py-5">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5873F9]">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5873F9]">
                   Development Log
                 </span>
 
-                <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[9px] font-black text-[#5873F9]">
+                <span className="rounded-full bg-[#EEF3FF] px-2 py-0.5 text-[10px] font-semibold text-[#5873F9]">
                   {isEdit
                     ? "EDIT"
                     : "NEW"}
                 </span>
               </div>
 
-              <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
                 {isEdit
                   ? "개발일지 수정"
                   : "개발일지 작성"}
@@ -311,7 +311,7 @@ export function CreateDevlogModal({
               type="button"
               disabled={saving}
               onClick={onClose}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
               aria-label="개발일지 모달 닫기"
             >
               <X size={17} />
@@ -333,7 +333,7 @@ export function CreateDevlogModal({
                  ============================================= */}
 
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                   Title
                 </label>
 
@@ -345,7 +345,7 @@ export function CreateDevlogModal({
                     )
                   }
                   placeholder="오늘 작업한 내용을 한 줄로 정리해주세요."
-                  className="mt-1 w-full border-0 border-b border-slate-200 bg-transparent px-0 pb-3 pt-1 text-[19px] font-black tracking-tight text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#5873F9]"
+                  className="mt-1 w-full border-0 border-b border-slate-200 bg-transparent px-0 pb-3 pt-1 text-[19px] font-semibold tracking-tight text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#5873F9]"
                   autoFocus
                 />
               </div>
@@ -354,7 +354,7 @@ export function CreateDevlogModal({
                   META
                  ============================================= */}
 
-              <section className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              <section className="mt-5 overflow-hidden rounded-md border border-slate-200">
 
                 {/* PROJECT */}
 
@@ -366,7 +366,7 @@ export function CreateDevlogModal({
                   }
                   label="프로젝트"
                 >
-                  <span className="text-xs font-black text-slate-700">
+                  <span className="text-xs font-semibold text-slate-700">
                     {selectedProjectName}
                   </span>
                 </MetaRow>
@@ -463,7 +463,7 @@ export function CreateDevlogModal({
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span
                           className={cn(
-                            "rounded-md px-2 py-1 text-[9px] font-black",
+                            "rounded-md px-2 py-1 text-[10px] font-semibold",
                             scheduleStatusStyle[
                               selectedSchedule
                                 .status
@@ -485,7 +485,7 @@ export function CreateDevlogModal({
                         </span>
 
                         {!selectedSchedule.hasDevlog && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600">
                             <FilePenLine
                               size={10}
                             />
@@ -561,7 +561,7 @@ export function CreateDevlogModal({
               <section className="mt-5">
                 <div className="mb-2 flex items-end justify-between gap-3">
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                       Work Log
                     </label>
 
@@ -594,7 +594,7 @@ export function CreateDevlogModal({
 - 로그인 실패 예외 처리 수정
 - Postman API 테스트 완료`}
                   rows={11}
-                  className="w-full resize-none rounded-xl border border-slate-200 bg-[#FBFCFE] p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+                  className="w-full resize-none rounded-md border border-slate-200 bg-[#FBFCFE] p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
                 />
               </section>
 
@@ -657,7 +657,7 @@ export function CreateDevlogModal({
                 type="button"
                 disabled={saving}
                 onClick={onClose}
-                className="h-9 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
+                className="h-9 rounded-md border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 취소
               </button>
@@ -673,7 +673,7 @@ export function CreateDevlogModal({
                 onClick={
                   onSubmit
                 }
-                className="inline-flex h-9 min-w-[110px] items-center justify-center gap-2 rounded-xl bg-[#5873F9] px-4 text-xs font-black text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 min-w-[110px] items-center justify-center gap-2 rounded-md bg-[#5873F9] px-4 text-xs font-semibold text-white transition hover:bg-[#4863E8] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? (
                   <>
@@ -743,7 +743,7 @@ function MetaRow({
       >
         {icon}
 
-        <span className="text-[10px] font-black text-slate-500">
+        <span className="text-[10px] font-semibold text-slate-500">
           {label}
         </span>
       </div>
@@ -782,7 +782,7 @@ function StatusButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-8 rounded-lg border px-3 text-[10px] font-black transition",
+        "h-8 rounded-lg border px-3 text-[10px] font-semibold transition",
         active
           ? "border-[#BFCBFF] bg-[#EEF3FF] text-[#5873F9]"
           : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",

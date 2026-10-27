@@ -82,6 +82,17 @@ function ScreenFlowCanvas({ model, mutations, findings }: ScreenFlowTabProps) {
   const selectedScreenId = useDesignUiStore((s) => s.selection.screenId);
   const select = useDesignUiStore((s) => s.select);
 
+  // 탭 진입 시 첫 화면의 상세 패널을 기본으로 연다.
+  // 직접 닫거나 캔버스 빈 영역을 선택한 후에는 다시 강제로 열지 않는다.
+  const initialSelectionDone = useRef(false);
+  const firstScreenId = model.screens[0]?.id ?? null;
+  useEffect(() => {
+    if (initialSelectionDone.current || !firstScreenId) return;
+    initialSelectionDone.current = true;
+    const currentId = useDesignUiStore.getState().selection.screenId;
+    if (!currentId) select({ screenId: firstScreenId });
+  }, [firstScreenId, select]);
+
   const [detailed, setDetailed] = useState(true);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const draggingRef = useRef(false);
@@ -154,8 +165,13 @@ function ScreenFlowCanvas({ model, mutations, findings }: ScreenFlowTabProps) {
     <div className="flex h-full min-h-0">
       <div className="relative min-w-0 flex-1">
         <div className="absolute left-4 top-4 z-10 flex gap-2">
-          <Button size="sm" onClick={handleAddScreen} className="gap-1.5 shadow-sm">
-            <Plus className="h-4 w-4" />
+          {/* 기본 Button 은 검정이라 다른 탭의 추가 버튼(브랜드색)과 어긋났다 */}
+          <Button
+            size="sm"
+            onClick={handleAddScreen}
+            className="h-8 gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white hover:bg-[#4863E8]"
+          >
+            <Plus className="h-3.5 w-3.5" />
             화면 추가
           </Button>
 
@@ -163,7 +179,7 @@ function ScreenFlowCanvas({ model, mutations, findings }: ScreenFlowTabProps) {
             size="sm"
             variant="outline"
             onClick={() => setDetailed((value) => !value)}
-            className="gap-1.5 bg-white shadow-sm"
+            className="h-8 gap-1.5 rounded-md border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-none hover:bg-slate-50"
           >
             {detailed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             {detailed ? "요약 보기" : "상세 보기"}

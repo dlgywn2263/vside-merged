@@ -2,7 +2,7 @@
 
 // 경로: src/components/design/components/DesignHeader.tsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   useParams,
   useRouter,
@@ -12,18 +12,24 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Check,
+  ChevronRight,
   CloudOff,
+  Database,
   FileCode,
   History,
+  ListChecks,
   Loader2,
+  Network,
+  PenTool,
   Printer,
   Sparkles,
   Stethoscope,
   Users,
+  Workflow,
+  type LucideIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { getIdeHref } from "@/components/main-dashboard/dashboard.utils";
 
 import type {
@@ -37,12 +43,20 @@ import {
 } from "../store/designUiStore";
 import { DesignTabToolbar } from "./DesignTabToolbar";
 
-const TABS: { id: DesignTab; label: string }[] = [
-  { id: "requirements", label: "요구사항" },
-  { id: "screens", label: "화면 흐름" },
-  { id: "erd", label: "ERD" },
-  { id: "apis", label: "API 명세" },
+const TABS: { id: DesignTab; label: string; icon: LucideIcon }[] = [
+  { id: "requirements", label: "요구사항", icon: ListChecks },
+  { id: "screens", label: "화면 흐름", icon: Workflow },
+  { id: "erd", label: "ERD", icon: Database },
+  { id: "apis", label: "API 명세", icon: Network },
 ];
+
+// 헤더 버튼은 일정 관리 헤더와 같은 크기·색을 쓴다(높이 32px, 얇은 테두리).
+// 개발일지 페이지 헤더 버튼(DevlogManagementMock)과 같은 높이·여백·글씨·테두리
+const HEADER_BUTTON =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
+
+const HEADER_ICON_BUTTON =
+  "grid h-9 w-9 place-items-center rounded-md border border-slate-300 bg-white text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50";
 
 function relativeTime(
   savedAt: number | null,
@@ -127,7 +141,10 @@ function SaveIndicator({
 }
 
 export interface DesignHeaderProps {
-  workspaceName: string;
+  /** 프로젝트 이름 자리에 들어가는 프로젝트 전환 메뉴(ProjectSwitcher). */
+  switcher: ReactNode;
+  /** OWNER / MEMBER. 모르면 표시하지 않는다. */
+  roleLabel?: string;
   state: DesignDocState;
   errorCount: number;
   progressPercent: number;
@@ -140,8 +157,13 @@ export interface DesignHeaderProps {
   onOpenHistory: () => void;
 }
 
+// 설계 관리 헤더는 두 줄이다.
+// 1) 페이지 헤더(#F4F6FA): 위치(프로젝트 › 설계), 저장 상태, 문서 전체에 대한 작업
+// 2) 탭 줄(흰색): 설계 탭과, 지금 탭에서 쓰는 검색·추가(DesignTabToolbar)
+// 일정 관리 페이지 헤더와 같은 높이·색·버튼 크기를 쓴다.
 export function DesignHeader({
-  workspaceName,
+  switcher,
+  roleLabel,
   state,
   errorCount,
   progressPercent,
@@ -183,105 +205,104 @@ export function DesignHeader({
       ? "team"
       : "personal";
 
+  const isTeam = currentMode === "team";
+
   return (
-    <header className="shrink-0 border-b border-[var(--waivs-border-soft)] px-5 py-3">
-      <div className="flex items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <h1 className="truncate text-xl font-black tracking-tight text-[var(--waivs-text)]">
-            {workspaceName || "설계 관리"}
-          </h1>
+    <div className="shrink-0">
+      {/* =================================================
+          PAGE HEADER
+         ================================================= */}
+      <header className="flex flex-col gap-3 border-y border-slate-200 bg-[#F4F6FA] px-4 py-2.5 lg:h-[62px] lg:flex-row lg:items-center lg:justify-between lg:px-5 lg:py-0">
+        <nav
+          aria-label="현재 위치"
+          className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
+        >
+          {switcher}
+
+          <ChevronRight size={14} className="text-slate-300" />
+
+          <span className="inline-flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold text-slate-800">
+            <PenTool size={14} className="text-[#5873F9]" />
+            설계
+          </span>
+
+          <span
+            className={cn(
+              "ml-1.5 rounded border px-1.5 py-px text-[10px] font-semibold",
+              isTeam
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-blue-200 bg-blue-50 text-blue-700",
+            )}
+          >
+            {isTeam ? "Team" : "Personal"}
+          </span>
+
+          {roleLabel ? (
+            <span className="rounded border border-slate-200 bg-white px-1.5 py-px text-[10px] font-semibold text-slate-500">
+              {roleLabel}
+            </span>
+          ) : null}
+
+          <span className="mx-2 hidden h-4 w-px bg-slate-200 sm:block" />
 
           <SaveIndicator state={state} />
-        </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {state.peerCount > 1 ? (
             <span
               title={`${state.peerCount}명이 함께 보는 중`}
-              className="flex items-center gap-1 rounded-full bg-[#EEF3FF] px-2 py-1 text-xs font-bold text-[#5873F9]"
+              className="ml-2 flex items-center gap-1 rounded-md bg-[#EEF3FF] px-1.5 py-0.5 text-[11px] font-semibold text-[#4058D6]"
             >
               <Users className="h-3.5 w-3.5" />
               {state.peerCount}
             </span>
           ) : null}
+        </nav>
 
-          <Button
-            variant="outline"
-            size="sm"
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
             onClick={onOpenAiDraft}
-            className="gap-1.5"
+            className={HEADER_BUTTON}
           >
-            <Sparkles className="h-4 w-4 text-[#5873F9]" />
+            <Sparkles className="h-3.5 w-3.5 text-[#5873F9]" />
             AI 초안
-          </Button>
+          </button>
 
-          <Button
-            variant="outline"
-            size="sm"
+          <button
+            type="button"
+            onClick={onOpenCodegen}
+            className={HEADER_BUTTON}
+          >
+            <FileCode className="h-3.5 w-3.5 text-slate-500" />
+            코드 생성
+          </button>
+
+          <button
+            type="button"
             onClick={onOpenHistory}
             title="기록"
             aria-label="기록"
-            className="px-2"
+            className={HEADER_ICON_BUTTON}
           >
-            <History className="h-4 w-4 text-[var(--waivs-text-sub)]" />
-          </Button>
+            <History className="h-3.5 w-3.5" />
+          </button>
 
-          <Button
-            variant="outline"
-            size="sm"
+          <button
+            type="button"
             onClick={onPrint}
             disabled={printing}
             title="PDF / 인쇄"
             aria-label="PDF / 인쇄"
-            className="px-2"
+            className={HEADER_ICON_BUTTON}
           >
             {printing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Printer className="h-4 w-4 text-[var(--waivs-text-sub)]" />
+              <Printer className="h-3.5 w-3.5" />
             )}
-          </Button>
+          </button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenCodegen}
-            className="gap-1.5"
-          >
-            <FileCode className="h-4 w-4 text-[var(--waivs-text-sub)]" />
-            코드 생성
-          </Button>
-
-          <Button
-            variant={
-              doctorOpen ? "default" : "outline"
-            }
-            size="sm"
-            onClick={() => toggleDoctor()}
-            className="gap-1.5"
-          >
-            <Stethoscope className="h-4 w-4" />
-            설계 현황
-
-            <span
-              className={cn(
-                "ml-0.5 text-[11px] font-semibold tabular-nums",
-                doctorOpen
-                  ? "text-white/80"
-                  : "text-[var(--waivs-text-muted)]",
-              )}
-            >
-              {progressPercent}%
-            </span>
-
-            {errorCount > 0 ? (
-              <span className="ml-0.5 rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
-                {errorCount}
-              </span>
-            ) : null}
-          </Button>
-
-          <div className="mx-1 h-5 w-px bg-[var(--waivs-border-soft)]" />
+          <span className="mx-0.5 h-5 w-px bg-slate-200" />
 
           <button
             type="button"
@@ -298,54 +319,108 @@ export function DesignHeader({
                 ),
               );
             }}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#D9E1FF] bg-white px-4 text-xs font-black text-[#5873F9] transition hover:bg-[#F7F9FF] disabled:cursor-not-allowed disabled:opacity-50"
+            className={HEADER_BUTTON}
           >
-            작업하러가기
-            <ArrowUpRight size={17} />
+            작업하러 가기
+            <ArrowUpRight className="h-3.5 w-3.5" />
           </button>
         </div>
-      </div>
+      </header>
 
-      <nav className="mt-3 flex items-center gap-3 border-t border-[var(--waivs-border-soft)] pt-2.5">
-        <div className="flex w-fit shrink-0 items-center gap-1 rounded-xl bg-slate-100 p-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() =>
-                setActiveTab(tab.id)
-              }
-              aria-current={
-                activeTab === tab.id
-                  ? "page"
-                  : undefined
-              }
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-black transition",
-                activeTab === tab.id
-                  ? "bg-white text-[#5873F9] shadow-sm"
-                  : "text-slate-500 hover:text-slate-800",
-              )}
-            >
-              {tab.label}
+      {/* =================================================
+          TAB BAR
+         ================================================= */}
+      <div className="flex h-12 items-center gap-4 border-b border-slate-200 bg-white px-4 lg:px-5">
+        <nav
+          aria-label="설계 탭"
+          className="-mb-px flex h-full shrink-0 items-stretch gap-1 overflow-x-auto"
+        >
+          {TABS.map((tab) => {
+            const active = activeTab === tab.id;
 
-              <span
+            const Icon = tab.icon;
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() =>
+                  setActiveTab(tab.id)
+                }
+                aria-current={
+                  active
+                    ? "page"
+                    : undefined
+                }
                 className={cn(
-                  "tabular-nums",
-                  activeTab === tab.id
-                    ? "text-[#5873F9]/70"
-                    : "text-slate-400",
+                  "relative inline-flex items-center gap-1.5 border-b-2 px-2.5 text-[13px] font-medium transition-colors",
+                  active
+                    ? "border-[#5873F9] text-[#4058D6]"
+                    : "border-transparent text-slate-500 hover:text-slate-900",
                 )}
               >
-                {counts[tab.id]}
-              </span>
-            </button>
-          ))}
-        </div>
+                <Icon
+                  className={cn(
+                    "h-4 w-4",
+                    active
+                      ? "text-[#5873F9]"
+                      : "text-slate-400",
+                  )}
+                />
+
+                {tab.label}
+
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-px text-[11px] font-semibold tabular-nums",
+                    active
+                      ? "bg-[#EEF2FF] text-[#4058D6]"
+                      : "bg-slate-100 text-slate-500",
+                  )}
+                >
+                  {counts[tab.id]}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
 
         <DesignTabToolbar mutations={mutations} />
-      </nav>
-    </header>
+
+        {/* 설계 현황(점검 패널)은 오른쪽 패널을 여닫는 토글이라 탭 줄 끝, 패널이 열리는 쪽에 둔다 */}
+        <button
+          type="button"
+          onClick={() => toggleDoctor()}
+          aria-pressed={doctorOpen}
+          className={cn(
+            "ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors",
+            doctorOpen
+              ? "border-[#5873F9] bg-[#5873F9] text-white"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+          )}
+        >
+          <Stethoscope className="h-3.5 w-3.5" />
+          설계 현황
+
+          <span
+            className={cn(
+              "text-[11px] font-semibold tabular-nums",
+              doctorOpen
+                ? "text-white/80"
+                : "text-slate-400",
+            )}
+          >
+            {progressPercent}%
+          </span>
+
+          {errorCount > 0 ? (
+            <span className="rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
+              {errorCount}
+            </span>
+          ) : null}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -361,7 +436,7 @@ export function ConnectionNotice({
   }
 
   return (
-    <div className="m-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <div className="m-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
       <p className="font-medium">
         설계 문서를 불러오지 못했습니다.
       </p>

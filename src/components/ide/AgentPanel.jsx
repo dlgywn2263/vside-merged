@@ -126,34 +126,30 @@ export default function AgentPanel() {
   ];
 
   return (
-    <div className="h-full bg-white flex flex-col font-sans border-l border-gray-200">
-      <div className="h-9 px-4 flex items-center justify-between text-[13px] font-bold text-gray-800 bg-[#f8f9fa] border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <span className="text-blue-600 text-lg font-black">A</span>
-          <span>AI 코드 어시스트</span>
-        </div>
+    <div className="h-full bg-[#F8FAFC] flex flex-col font-sans">
+      {/* 패널 탭이 이미 "AI 어시스트"라서 여기에는 제목을 다시 쓰지 않고 지우기 버튼만 둔다. */}
+      <div className="h-8 px-2 flex items-center justify-end border-b border-gray-200 shrink-0">
         <button
           onClick={() => dispatch(clearAgentMessages())}
-          className="text-gray-400 hover:text-red-500 transition-colors"
+          className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-gray-400 hover:bg-gray-100 hover:text-red-500 transition-colors"
           title="채팅 내역 지우기"
         >
-          <VscTrash size={16} />
+          <VscTrash size={13} />
+          대화 지우기
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 bg-[#fbfbfc]">
+      <div className="flex-1 overflow-y-auto p-4">
         {agentMessages.length === 0 ? (
           <div className="flex flex-col gap-2 mt-2 animate-fade-in">
-            <div className="text-xs text-gray-500 mb-4 px-1">
-              <strong>AI 어시스트</strong>
-              <br />
-              코드 블록을 드래그한 후 질문해 보세요!
+            <div className="text-xs text-gray-500 mb-2 px-1">
+              코드를 드래그해 선택한 뒤 질문해 보세요.
             </div>
 
             {suggestionButtons.map((btn, idx) => (
               <button
                 key={idx}
-                className="bg-white border border-gray-200 p-2.5 rounded text-left text-[13px] text-gray-700 hover:border-blue-400 hover:text-blue-600 transition-all flex items-center gap-2 shadow-sm"
+                className="h-9 bg-white border border-gray-200 px-3 rounded-md text-left text-[13px] text-gray-700 hover:border-[#5873F9]/40 hover:bg-[#5873F9]/[0.04] hover:text-[#5873F9] transition-colors flex items-center gap-2"
                 onClick={() => handleSend(btn.text)}
               >
                 <span>{btn.icon}</span> {btn.text}
@@ -195,7 +191,7 @@ export default function AgentPanel() {
         )}
       </div>
 
-      <div className="p-3 bg-white border-t border-gray-200 shrink-0">
+      <div className="p-3 bg-[#F8FAFC] border-t border-gray-200 shrink-0">
         <div className="flex flex-col gap-2">
           {selectedText && selectedText.trim() !== "" && (
             <div className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded flex items-center gap-1.5 truncate shadow-sm">
@@ -211,7 +207,7 @@ export default function AgentPanel() {
             <button
               onClick={() => handleSend("✨ 현재 파일에 누락된 Import 문 추가해줘", true)}
               disabled={isLoading || !activeFileId}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-extrabold rounded-md transition-colors disabled:opacity-50 active:scale-95"
+              className="shrink-0 flex h-7 items-center gap-1.5 px-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-extrabold rounded-md transition-colors disabled:opacity-50 active:scale-95"
               title="현재 열린 파일에 누락된 Java/Spring Import 문을 자동으로 찾아 추가합니다."
             >
               <VscSparkle size={12} /> 자동 Import
@@ -219,13 +215,13 @@ export default function AgentPanel() {
             <button
               onClick={() => handleSend("코드에 주석 좀 달아줘")}
               disabled={isLoading || !activeFileId}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 text-[11px] font-bold rounded-md transition-colors disabled:opacity-50 active:scale-95"
+              className="shrink-0 flex h-7 items-center gap-1.5 px-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-[11px] font-bold rounded-md transition-colors disabled:opacity-50 active:scale-95"
             >
               주석 달기
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 bg-white border border-gray-300 rounded-lg focus-within:border-blue-500 px-3 py-2 transition-all shadow-inner">
+          <div className="flex flex-col gap-2 bg-white border border-gray-300 rounded-lg focus-within:border-blue-500 px-3 py-2 transition-all">
             <textarea
               ref={inputRef}
               className="w-full bg-transparent border-none outline-none text-gray-800 text-[13px] placeholder-gray-400 resize-none h-[40px] custom-scrollbar"

@@ -98,8 +98,8 @@ export default function BottomPanel() {
 
   return (
     <div className="h-full flex flex-col bg-white font-sans text-[#333]">
-      <div className="flex items-center justify-between bg-white h-9 border-b border-gray-200 select-none px-4 shrink-0">
-        <div className="flex gap-5 h-full min-w-0">
+      <div className="flex items-center justify-between gap-2 bg-[#fafbfc] h-9 border-b border-gray-200 select-none pl-3 pr-1.5 shrink-0">
+        <div className="flex gap-4 h-full min-w-0 overflow-x-auto overflow-y-hidden">
           {tabs.map((tab) => {
             const isActive = activeBottomTab === tab.id;
             return (
@@ -107,7 +107,7 @@ export default function BottomPanel() {
                 key={tab.id}
                 type="button"
                 className={`h-full shrink-0 flex items-center gap-1.5 text-[11px] font-medium border-b-[2px] transition-colors outline-none px-1 tracking-wide ${
-                  isActive ? "border-gray-800 text-gray-800 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"
+                  isActive ? "border-[#5873F9] text-gray-800 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"
                 }`}
                 onClick={() => dispatch(setActiveBottomTab(tab.id))}
               >
@@ -121,10 +121,10 @@ export default function BottomPanel() {
             );
           })}
         </div>
-        <div className="flex gap-3 items-center shrink-0">
+        <div className="flex gap-0.5 items-center shrink-0">
           <button
             type="button"
-            className="text-gray-500 hover:text-blue-600 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors"
             onClick={() => {
               if (!previewUrl) {
                 alert("아직 실행된 웹 서버가 없습니다. 코드를 먼저 실행해주세요!");
@@ -135,12 +135,12 @@ export default function BottomPanel() {
             title="웹 미리보기 창 다시 열기"
             aria-label="웹 미리보기 창 다시 열기"
           ><VscGlobe size={16} /></button>
-          <div className="w-px h-3 bg-gray-300 mx-1" />
-          <VscAdd className="text-gray-500 hover:text-black cursor-pointer w-4 h-4 transition-colors" title="New Terminal" />
-          <button type="button" onClick={() => setOutputContent("")} title="Clear Output" aria-label="Clear Output">
+          <div className="w-px h-3.5 bg-gray-200 mx-1" />
+          <span className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"><VscAdd className="text-gray-500 hover:text-black cursor-pointer w-4 h-4 transition-colors" title="New Terminal" /></span>
+          <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100" onClick={() => setOutputContent("")} title="Clear Output" aria-label="Clear Output">
             <VscTrash className="text-gray-500 hover:text-black w-4 h-4 transition-colors" />
           </button>
-          <button type="button" onClick={() => dispatch(toggleTerminal())} title="Close Panel" aria-label="Close Panel">
+          <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100" onClick={() => dispatch(toggleTerminal())} title="Close Panel" aria-label="Close Panel">
             <VscChromeClose className="text-gray-500 hover:text-black w-4 h-4 transition-colors" />
           </button>
         </div>

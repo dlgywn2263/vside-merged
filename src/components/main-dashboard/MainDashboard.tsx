@@ -4,9 +4,30 @@ import Link from "next/link";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { ArrowRight, FolderOpen } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  BookOpenText,
+  CalendarDays,
+  Code2,
+  Compass,
+  Database,
+  FileCode2,
+  FolderTree,
+  GitCommitHorizontal,
+  LayoutDashboard,
+  ListChecks,
+  MessageSquare,
+  Network,
+  PenTool,
+  Settings2,
+  Sparkles,
+  UsersRound,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
 
 import {
 
@@ -42,8 +63,6 @@ import {
 
   formatDateKey,
 
-  getAivsHref,
-
   getArchiveHref,
 
   getDevlogHref,
@@ -56,11 +75,22 @@ import {
 
   parseLastModified,
 
+  SCHEDULE_STATUS_META,
+
   SUMMARY_STATS_BASE,
 
 } from "./dashboard.utils";
 
 import { loadMonthlyWorkFlowItems } from "./dashboard.service";
+
+import {
+  buildActivity,
+  loadProjectOverview,
+  type ActivityKind,
+  type OverviewMember,
+  type OverviewSchedule,
+  type ProjectOverview,
+} from "./dashboard.overview";
 
 import SummaryCards from "./SummaryCards";
 
@@ -68,11 +98,9 @@ import ProjectCard from "./ProjectCard";
 
 import MonthlyWorkFlowSection from "./MonthlyWorkFlowSection";
 
-import ProjectSidebar, {
+import ProjectSwitcher from "./ProjectSwitcher";
 
-  type WorkspaceSidebarItem,
-
-} from "@/components/layout/ProjectSidebar";
+import type { WorkspaceSidebarItem } from "@/components/layout/ProjectSidebar";
 
 function getWorkspaceTitle(workspace?: WorkspaceListResponse | null) {
 
@@ -830,882 +858,1354 @@ export default function MainDashboard({
 
   };
 
+  const isProjectMode = Boolean(safeWorkspaceId);
+
+  // 확인할 작업·팀원·최근 활동·자료실은 프로젝트 화면에서만 따로 불러온다.
+  // 기존 진행률·월간 흐름 로딩과 분리해 두어 이 쪽이 실패해도 위 영역은 그대로 보인다.
+  const [overview, setOverview] = useState<ProjectOverview | null>(null);
+
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadOverview() {
+      setOverview(null);
+
+      if (!safeWorkspaceId || !selectedWorkspace) {
+        setOverviewLoading(false);
+
+        return;
+      }
+
+      setOverviewLoading(true);
+
+      try {
+        const result = await loadProjectOverview(selectedWorkspace);
+
+        if (!ignore) setOverview(result);
+      } finally {
+        if (!ignore) setOverviewLoading(false);
+      }
+    }
+
+    loadOverview();
+
+    return () => {
+      ignore = true;
+    };
+  }, [safeWorkspaceId, selectedWorkspace]);
+
+  const sectionLoading = isLoading || overviewLoading;
+
   return (
-
-    <main className="waivs-page p-4 font-sans md:p-5">
-
-      <div className="mx-auto flex max-w-[1680px] gap-4">
-
-        <ProjectSidebar
-
-          workspaces={
-
-            sidebarWorkspaces
-
+    <main className="waivs-page min-h-full px-4 py-5 font-sans md:px-6 md:py-6">
+      <div className="mx-auto max-w-[1840px] space-y-4">
+        {/* ===================== 상단: 프로젝트 정보 · 통계 ===================== */}
+        <DashboardHero
+          isProjectMode={isProjectMode}
+          workspace={selectedWorkspace}
+          workspaceId={currentWorkspaceId}
+          mode={currentMode}
+          progress={projectProgress}
+          doneScheduleCount={doneScheduleCount}
+          totalScheduleCount={totalScheduleCount}
+          switcher={
+            <ProjectSwitcher
+              label={
+                isProjectMode
+                  ? isLoading
+                    ? "프로젝트 불러오는 중"
+                    : selectedProjectName
+                  : "WAIVS"
+              }
+              workspaces={sidebarWorkspaces}
+              selectedWorkspaceId={currentWorkspaceId ?? ""}
+              loading={isLoading}
+              errorMessage={errorMessage}
+              onSelectWorkspace={handleSelectSidebarWorkspace}
+            />
           }
-
-          selectedWorkspaceId={
-
-            currentWorkspaceId ??
-
-            ""
-
-          }
-
-          loading={isLoading}
-
-          errorMessage={
-
-            errorMessage
-
-          }
-
-          onSelectWorkspace={
-
-            handleSelectSidebarWorkspace
-
-          }
-
         />
 
-        <div className="min-w-0 flex-1 space-y-3">
+        <SummaryCards stats={summaryStats} />
 
-          <section className="flex flex-col items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm md:flex-row md:items-center">
+        {isProjectMode ? (
+          <>
+            {/* ===================== 중단 1: 팀원(25%) · 오늘의 작업(50%) · 바로가기(25%) =====================
+                데스크톱에서는 가운데 오늘의 작업이 가장 넓다. 중간 폭에서는 오늘의 작업이 맨 위 한 줄을 다 쓰고,
+                팀원·바로가기가 그 아래 두 칸으로 놓인다(order 로 순서만 바꾼다). */}
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+              <TeamPanel
+                className="order-2 xl:order-1"
+                loading={sectionLoading}
+                members={overview?.members}
+                workspaceId={currentWorkspaceId}
+                mode={currentMode}
+              />
 
-            <div className="min-w-0">
+              <TodayWorkPanel
+                className="order-1 lg:col-span-2 xl:order-2 xl:col-span-1"
+                loading={sectionLoading}
+                errorMessage={errorMessage}
+                schedules={overview?.schedules}
+                members={overview?.members}
+                workspaceId={currentWorkspaceId}
+                mode={currentMode}
+              />
 
-              <h1 className="truncate text-[18px] font-black leading-tight tracking-tight text-[#5873F9]">
-
-                {safeWorkspaceId
-
-                  ? isLoading
-
-                    ? "프로젝트 불러오는 중"
-
-                    : selectedProjectName
-
-                  : "WAIVS"}
-
-              </h1>
-
-              <p className="mt-0.5 truncate text-xs font-medium text-gray-400">
-
-                {safeWorkspaceId
-
-                  ? `${selectedProjectName} 프로젝트 메인`
-
-                  : "프로젝트 구조 중심 협업을 위한 웹 IDE 플랫폼"}
-
-              </p>
-
+              <QuickLinksPanel
+                className="order-3"
+                workspaceId={currentWorkspaceId}
+                mode={currentMode}
+              />
             </div>
 
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            {/* ===================== 중단 2: 최근 활동 · 자료실 =====================
+                같은 줄일 때는 기본 stretch 로 더 긴 카드 높이에 맞춘다. 세로로 쌓이면 각자 내용 높이다. */}
+            <div className="grid gap-4 xl:grid-cols-12">
+              <ActivityPanel
+                className="xl:col-span-7"
+                loading={sectionLoading}
+                overview={overview}
+                workspaceId={currentWorkspaceId}
+                mode={currentMode}
+              />
 
-              <Link
-
-                href="/projects"
-
-                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#D9E1FF] bg-[#F7F9FF] px-3.5 text-xs font-bold text-[#5873F9] transition-colors hover:bg-[#EEF3FF] sm:flex-none"
-
-              >
-
-                전체 프로젝트
-
-                <ArrowRight
-
-                  size={15}
-
-                  strokeWidth={2.3}
-
-                />
-
-              </Link>
-
-              <Link
-
-                href={getIdeHref(
-
-                  currentWorkspaceId,
-
-                  currentMode,
-
-                )}
-
-                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5873F9] px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#4863E8] sm:flex-none"
-
-              >
-
-                작업하러 가기
-
-                <FolderOpen
-
-                  size={16}
-
-                  strokeWidth={2.3}
-
-                />
-
-              </Link>
-
+              <ArchivePanel
+                className="xl:col-span-5"
+                loading={sectionLoading}
+                overview={overview}
+                workspaceId={currentWorkspaceId}
+                mode={currentMode}
+              />
             </div>
-
-          </section>
-
-          <SummaryCards
-
-            stats={summaryStats}
-
-          />
-
-          {safeWorkspaceId ? (
-
-            <ProjectWorkStatusSection
-
-              isLoading={
-
-                isLoading
-
-              }
-
-              errorMessage={
-
-                errorMessage
-
-              }
-
-              workspace={
-
-                selectedWorkspace
-
-              }
-
-              projectName={
-
-                selectedProjectName
-
-              }
-
-              workspaceId={
-
-                currentWorkspaceId
-
-              }
-
-              mode={currentMode}
-
-              progress={
-
-                projectProgress
-
-              }
-
-              totalScheduleCount={
-
-                totalScheduleCount
-
-              }
-
-              doneScheduleCount={
-
-                doneScheduleCount
-
-              }
-
-              remainingScheduleCount={
-
-                remainingScheduleCount
-
-              }
-
-              devlogCount={
-
-                projectDevlogCount
-
-              }
-
-              workFlowItems={
-
-                workFlowItems
-
-              }
-
-            />
-
-          ) : (
-
-            <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-
-              <div className="mb-3">
-
-                <h2 className="text-base font-black text-gray-900">
-
+          </>
+        ) : (
+          <section className="rounded-md border border-gray-200 bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-gray-900">
                   최근 프로젝트
-
                 </h2>
 
-                <p className="mt-0.5 text-xs text-gray-400">
-
+                <p className="mt-0.5 truncate text-xs text-gray-500">
                   최근에 수정한 최상위 프로젝트만 빠르게 확인하세요.
-
                 </p>
-
               </div>
+            </div>
 
+            <div className="bg-[#FAFBFF] p-4">
               {isLoading ? (
-
-                <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
-
+                <p className="py-14 text-center text-xs text-gray-400">
                   프로젝트를 불러오는 중입니다.
-
-                </div>
-
+                </p>
               ) : errorMessage ? (
-
-                <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50 text-xs text-red-500">
-
+                <p className="rounded-md bg-red-50 py-14 text-center text-xs text-red-500">
                   {errorMessage}
-
-                </div>
-
-              ) : recentProjects.length ===
-
-                0 ? (
-
-                <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
-
+                </p>
+              ) : recentProjects.length === 0 ? (
+                <p className="py-14 text-center text-xs text-gray-400">
                   표시할 프로젝트가 없습니다.
-
-                </div>
-
+                </p>
               ) : (
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-
-                  {recentProjects.map(
-
-                    (project) => (
-
-                      <ProjectCard
-
-                        key={
-
-                          project.id
-
-                        }
-
-                        project={
-
-                          project
-
-                        }
-
-                      />
-
-                    ),
-
-                  )}
-
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {recentProjects.map((project) => (
+                    <ProjectCard key={project.id} project={project} />
+                  ))}
                 </div>
-
               )}
+            </div>
+          </section>
+        )}
 
-            </section>
-
-          )}
-
-          <MonthlyWorkFlowSection
-
-            isLoading={isLoading}
-
-            items={workFlowItems}
-
-            selectedDateKey={
-
-              selectedDateKey
-
-            }
-
-            onSelectDate={
-
-              setSelectedDateKey
-
-            }
-
-            workspaceId={
-
-              currentWorkspaceId
-
-            }
-
-            mode={currentMode}
-
-            isProjectMode={Boolean(
-
-              safeWorkspaceId,
-
-            )}
-
-            projectName={
-
-              selectedProjectName
-
-            }
-
-          />
-
-        </div>
-
+        {/* ===================== 하단: 월간 달력 · 날짜별 상세 ===================== */}
+        <MonthlyWorkFlowSection
+          isLoading={isLoading}
+          items={workFlowItems}
+          selectedDateKey={selectedDateKey}
+          onSelectDate={setSelectedDateKey}
+          workspaceId={currentWorkspaceId}
+          mode={currentMode}
+          isProjectMode={isProjectMode}
+          projectName={selectedProjectName}
+        />
       </div>
-
     </main>
-
   );
-
 }
 
-function ProjectWorkStatusSection({
+/* =========================================================
+   공통 조각
+========================================================= */
+const DAY_MS = 86_400_000;
 
-  isLoading,
+// 자료실을 "최종 보고서" 탭으로 연다(자료실이 ?tab=final 을 읽는다).
+function getFinalReportHref(workspaceId: string, mode: WorkspaceMode) {
+  return `${getArchiveHref(workspaceId, mode)}&tab=final`;
+}
 
-  errorMessage,
+function formatShortDate(dateKey: string) {
+  const [, month, day] = dateKey.split("-");
 
-  workspace,
+  return month && day
+    ? `${Number(month)}/${Number(day)}`
+    : dateKey;
+}
 
-  projectName,
+function formatRelativeTime(time: number) {
+  const diff = Date.now() - time;
 
-  workspaceId,
+  if (diff < 60_000) return "방금";
 
-  mode,
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`;
 
-  progress,
+  if (diff < DAY_MS) return `${Math.floor(diff / 3_600_000)}시간 전`;
 
-  totalScheduleCount,
+  if (diff < DAY_MS * 7) return `${Math.floor(diff / DAY_MS)}일 전`;
 
-  doneScheduleCount,
+  const date = new Date(time);
 
-  remainingScheduleCount,
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
 
-  devlogCount,
-
-  workFlowItems,
-
+function PanelHeader({
+  icon: Icon,
+  iconTone,
+  title,
+  count,
+  description,
+  action,
 }: {
-
-  isLoading: boolean;
-
-  errorMessage: string;
-
-  workspace:
-
-    | WorkspaceListResponse
-
-    | null;
-
-  projectName: string;
-
-  workspaceId: string;
-
-  mode: WorkspaceMode;
-
-  progress: number;
-
-  totalScheduleCount: number;
-
-  doneScheduleCount: number;
-
-  remainingScheduleCount: number;
-
-  devlogCount: number;
-
-  workFlowItems: WorkFlowItem[];
-
+  icon: LucideIcon;
+  iconTone: string;
+  title: string;
+  count?: number;
+  description?: string;
+  action?: ReactNode;
 }) {
-
-  const latestSchedule =
-
-    workFlowItems.find(
-
-      (item) =>
-
-        item.type === "schedule",
-
-    );
-
-  const latestDevlog =
-
-    workFlowItems.find(
-
-      (item) =>
-
-        item.type === "devlog",
-
-    );
-
-  const safeProgress = Math.min(
-
-    Math.max(progress, 0),
-
-    100,
-
-  );
-
-  const projectTech = workspace
-
-    ? getWorkspaceTechLabel(
-
-        workspace,
-
-      )
-
-    : "-";
-
-  const projectRole =
-
-    workspace?.role === "owner"
-
-      ? "Owner"
-
-      : "Member";
-
-  const projectMode =
-
-    workspace?.mode === "team"
-
-      ? "Team"
-
-      : "Personal";
-
-  const updatedAt =
-
-    workspace?.updatedAt ||
-
-    "최근 수정일 없음";
-
   return (
-
-    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${iconTone}`}
+        >
+          <Icon size={16} strokeWidth={2.2} />
+        </span>
 
         <div className="min-w-0">
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
+            {title}
 
-          <h2 className="text-base font-black text-gray-900">
-
-            프로젝트 작업 현황
-
+            {typeof count === "number" ? (
+              <span className="rounded-full bg-gray-900 px-1.5 py-px text-[10px] font-bold tabular-nums text-white">
+                {count}
+              </span>
+            ) : null}
           </h2>
 
-          <p className="mt-0.5 text-xs font-medium text-gray-400">
-
-            최근 작업을 확인하고 필요한 화면으로 바로 이동하세요.
-
-          </p>
-
+          {description ? (
+            <p className="mt-0.5 truncate text-[11px] text-gray-500">
+              {description}
+            </p>
+          ) : null}
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-
-          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500">
-
-            {projectTech}
-
-          </span>
-
-          <span
-
-            className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-
-              mode === "team"
-
-                ? "bg-emerald-50 text-emerald-700"
-
-                : "bg-blue-50 text-blue-700"
-
-            }`}
-
-          >
-
-            {projectMode}
-
-          </span>
-
-          <span className="rounded-full bg-[#EEF2FF] px-2.5 py-1 text-[10px] font-bold text-[#5873F9]">
-
-            {projectRole}
-
-          </span>
-
-        </div>
-
       </div>
 
-      {isLoading ? (
+      {action}
+    </div>
+  );
+}
 
-        <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
+function PanelMessage({
+  children,
+  tone = "muted",
+}: {
+  children: ReactNode;
+  tone?: "muted" | "error";
+}) {
+  return (
+    <p
+      className={`px-5 py-10 text-center text-xs ${
+        tone === "error" ? "text-red-500" : "text-gray-400"
+      }`}
+    >
+      {children}
+    </p>
+  );
+}
 
-          프로젝트 작업 현황을 불러오는 중입니다.
+function HeaderLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-gray-500 transition-colors hover:bg-[#F2F5FF] hover:text-[#5873F9]"
+    >
+      {children}
+      <ArrowRight size={12} strokeWidth={2.4} />
+    </Link>
+  );
+}
 
-        </div>
+/* =========================================================
+   HERO: 프로젝트 전환 + 프로젝트 정보 + 주요 이동
+========================================================= */
+function DashboardHero({
+  isProjectMode,
+  workspace,
+  workspaceId,
+  mode,
+  progress,
+  doneScheduleCount,
+  totalScheduleCount,
+  switcher,
+}: {
+  isProjectMode: boolean;
+  workspace: WorkspaceListResponse | null;
+  workspaceId: string;
+  mode: WorkspaceMode;
+  progress: number;
+  doneScheduleCount: number;
+  totalScheduleCount: number;
+  switcher: ReactNode;
+}) {
+  const isTeam = mode === "team";
 
-      ) : errorMessage ? (
+  const safeProgress = Math.min(Math.max(progress, 0), 100);
 
-        <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50 text-xs text-red-500">
+  return (
+    <section className="rounded-md border border-gray-200 bg-white">
+      {/* 브랜드색 띠로 화면의 시작점을 잡는다 */}
+      <div className="h-1 rounded-t-md bg-[#5873F9]" />
 
-          {errorMessage}
+      <div className="flex flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6 md:py-5">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            <LayoutDashboard size={12} strokeWidth={2.4} />
+            {isProjectMode
+              ? `${isTeam ? "Team" : "Personal"} project`
+              : "Dashboard"}
+          </p>
 
-        </div>
+          <div className="mt-1">{switcher}</div>
 
-      ) : !workspace ? (
-
-        <div className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
-
-          선택한 프로젝트 정보를 찾을 수 없습니다.
-
-        </div>
-
-      ) : (
-
-        <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
-
-          <div className="rounded-lg border border-gray-200 bg-[#FBFCFF] p-4">
-
-            <div className="flex items-start justify-between gap-3">
-
-              <div className="min-w-0">
-
-                <p className="text-[10px] font-black text-[#5873F9]">
-
-                  이어서 작업
-
-                </p>
-
-                <h3 className="mt-0.5 truncate text-[17px] font-black text-gray-900">
-
-                  {projectName}
-
-                </h3>
-
-              </div>
-
-              <span className="shrink-0 text-lg font-black text-[#5873F9]">
-
-                {safeProgress}%
-
+          {isProjectMode && workspace ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono font-medium text-gray-600">
+                <FolderTree size={12} />
+                {getWorkspaceTechLabel(workspace)}
               </span>
 
-            </div>
-
-            <div className="mt-3 grid gap-2.5 md:grid-cols-2">
-
-              <Link
-
-                href={getScheduleHref(
-
-                  workspaceId,
-
-                  mode,
-
-                )}
-
-                className="rounded-lg border border-gray-200 bg-white px-3.5 py-3 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF]"
-
+              <span
+                className={`rounded border px-1.5 py-0.5 font-semibold ${
+                  isTeam
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-blue-200 bg-blue-50 text-blue-700"
+                }`}
               >
-
-                <p className="text-[10px] font-bold text-gray-400">
-
-                  최근 일정
-
-                </p>
-
-                <p className="mt-1 truncate text-sm font-black text-gray-900">
-
-                  {latestSchedule?.title ??
-
-                    "등록된 일정이 없습니다."}
-
-                </p>
-
-                <p className="mt-1.5 text-[11px] font-medium text-gray-400">
-
-                  일정 관리에서 상태 확인
-
-                </p>
-
-              </Link>
-
-<Link
-
-  href={getDevlogHref(
-
-    workspaceId,
-
-    mode,
-
-  )}
-
-                className="rounded-lg border border-gray-200 bg-white px-3.5 py-3 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF]"
-
-              >
-
-                <p className="text-[10px] font-bold text-gray-400">
-
-                  최근 개발일지
-
-                </p>
-
-                <p className="mt-1 truncate text-sm font-black text-gray-900">
-
-                  {latestDevlog?.title ??
-
-                    "작성된 개발일지가 없습니다."}
-
-                </p>
-
-                <p className="mt-1.5 text-[11px] font-medium text-gray-400">
-
-                  마지막 기록에서 이어서 작성
-
-                </p>
-
-              </Link>
-
-            </div>
-
-            <div className="mt-3 rounded-lg border border-[#DDE4FF] bg-[#F7F9FF] px-3.5 py-3">
-
-              <div className="flex items-center justify-between gap-3">
-
-                <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-gray-500">
-
-                  <span>
-
-                    남은 일정{" "}
-
-                    <strong className="text-gray-900">
-
-                      {
-
-                        remainingScheduleCount
-
-                      }
-
-                    </strong>
-
-                    개
-
-                  </span>
-
-                  <span className="text-gray-300">
-
-                    ·
-
-                  </span>
-
-                  <span className="truncate">
-
-                    최근 수정{" "}
-
-                    <strong className="text-gray-900">
-
-                      {updatedAt}
-
-                    </strong>
-
-                  </span>
-
-                </div>
-
-                <span className="shrink-0 text-[11px] font-black text-[#5873F9]">
-
-                  {doneScheduleCount}/
-
-                  {totalScheduleCount} 완료
-
-                </span>
-
-              </div>
-
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-
-                <div
-
-                  className="h-full rounded-full bg-[#5873F9] transition-all duration-500"
-
-                  style={{
-
-                    width: `${safeProgress}%`,
-
-                  }}
-
-                />
-
-              </div>
-
-            </div>
-
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-
-            <div className="mb-3">
-
-              <p className="text-[10px] font-black text-[#5873F9]">
-
-                빠른 작업
-
-              </p>
-
-              <h3 className="mt-0.5 text-base font-black text-gray-900">
-
-                바로 이동
-
-              </h3>
-
-              <p className="mt-0.5 text-[11px] font-medium text-gray-400">
-
-                필요한 기능으로 바로 이동합니다.
-
-              </p>
-
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-
-              <Link
-
-                href={getAivsHref(
-
-                  workspaceId,
-
-                  mode,
-
-                )}
-
-                className="col-span-2 flex h-10 items-center justify-between rounded-lg bg-[#5873F9] px-3.5 text-xs font-bold text-white transition hover:bg-[#4863E8]"
-
-              >
-
-                <span>
-
-                  AIVS에서 작업하기
-
-                </span>
-
-                <ArrowRight
-
-                  size={15}
-
-                  strokeWidth={2.4}
-
-                />
-
-              </Link>
-
-              <Link
-
-                href={getScheduleHref(
-
-                  workspaceId,
-
-                  mode,
-
-                )}
-
-                className="flex h-10 items-center justify-between rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
-
-              >
-
-                <span>일정 관리</span>
-
-                <ArrowRight
-
-                  size={14}
-
-                  strokeWidth={2.3}
-
-                />
-
-              </Link>
-
-              <Link
-
-                href={getDevlogHref(
-
-                  workspaceId,
-
-                  mode
-
-                )}
-
-                className="flex h-10 items-center justify-between rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
-
-              >
-
-                <span>개발일지</span>
-
-                <ArrowRight
-
-                  size={14}
-
-                  strokeWidth={2.3}
-
-                />
-
-              </Link>
-
-              <Link
-
-                href={getArchiveHref(
-
-                  workspaceId,
-
-                  mode
-
-                )}
-
-                className="col-span-2 flex h-10 items-center justify-between rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-600 transition hover:border-[#AAB8FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]"
-
-              >
-
-                <span>
-
-                  AI 최종 보고서
-
-                </span>
-
-                <ArrowRight
-
-                  size={14}
-
-                  strokeWidth={2.3}
-
-                />
-
-              </Link>
-
-            </div>
-
-            <p className="mt-2.5 text-[10px] font-semibold text-gray-400">
-
-              이번 달 개발일지{" "}
-
-              <span className="font-black text-[#5873F9]">
-
-                {devlogCount}개
-
+                {isTeam ? "Team" : "Personal"}
               </span>
 
+              <span className="rounded border border-[#D9E1FF] bg-[#EEF2FF] px-1.5 py-0.5 font-semibold text-[#5873F9]">
+                {workspace.role === "owner" ? "Owner" : "Member"}
+              </span>
+
+              <span className="pl-1 text-gray-400">
+                최근 수정{" "}
+                <span className="font-mono text-gray-500">
+                  {workspace.updatedAt || "-"}
+                </span>
+              </span>
+            </div>
+          ) : isProjectMode ? (
+            // 프로젝트 정보를 받기 전에는 메인 화면 문구 대신 자리만 잡아 둔다
+            <div className="mt-2 h-5 w-64 animate-pulse rounded bg-gray-100" />
+          ) : (
+            <p className="mt-1.5 text-xs text-gray-500">
+              프로젝트 구조 중심 협업을 위한 웹 IDE 플랫폼 · 프로젝트 이름을
+              눌러 이동할 수 있어요.
             </p>
-
-          </div>
-
+          )}
         </div>
 
-      )}
+        <div className="flex w-full shrink-0 flex-col gap-4 md:w-auto lg:flex-row lg:items-center lg:gap-6">
+          {isProjectMode && workspace ? (
+            <div className="w-full lg:w-64">
+              <div className="flex items-end justify-between">
+                <span className="text-[11px] font-semibold text-gray-500">
+                  일정 진행률
+                </span>
 
+                <span className="text-lg font-bold leading-none tabular-nums text-[#5873F9]">
+                  {safeProgress}
+                  <span className="ml-0.5 text-xs">%</span>
+                </span>
+              </div>
+
+              <div
+                className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#E4E9FF]"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={safeProgress}
+                aria-label="일정 진행률"
+              >
+                <div
+                  className="h-full rounded-full bg-[#5873F9] transition-all duration-500"
+                  style={{ width: `${safeProgress}%` }}
+                />
+              </div>
+
+              <p className="mt-1 text-right text-[11px] tabular-nums text-gray-400">
+                완료 {doneScheduleCount} / 전체 {totalScheduleCount}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-2 lg:border-l lg:border-gray-100 lg:pl-6">
+          {isProjectMode && workspace ? (
+            <Link
+              href={`/dashboard/${encodeURIComponent(
+                workspace.id,
+              )}/settings?mode=${workspace.mode}`}
+              aria-label="프로젝트 설정"
+              title="프로젝트 설정"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-gray-200 bg-white text-gray-500 transition-colors hover:border-[#AAB8FF] hover:text-[#5873F9]"
+            >
+              <Settings2 size={16} />
+            </Link>
+          ) : null}
+
+          <Link
+            href="/projects"
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3.5 text-xs font-semibold text-gray-700 transition-colors hover:border-[#AAB8FF] hover:text-[#5873F9] md:flex-none"
+          >
+            전체 프로젝트
+          </Link>
+
+          <Link
+            href={getIdeHref(workspaceId, mode)}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-[#5873F9] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8] md:flex-none"
+          >
+            <Code2 size={15} strokeWidth={2.2} />
+            작업하러 가기
+          </Link>
+          </div>
+        </div>
+      </div>
     </section>
+  );
+}
 
+/* =========================================================
+   오늘의 작업: 오늘 일정(미완료) + 오늘이 아니어도 진행 중인 미완료 일정
+   - 오늘 일정: 오늘이 시작일~종료일 안에 드는 일정. 완료는 뺀다(해야 할 일 중심).
+   - 진행 중 작업: 오늘 일정이 아니면서 상태가 "진행 중"인 일정.
+   일정 API 는 날짜(YYYY-MM-DD)만 주므로 시간은 표시하지 않는다.
+   날짜는 문자열 키끼리 비교한다. Date 로 바꾸면 UTC 해석 때문에 하루가 밀릴 수 있다.
+========================================================= */
+const VISIBLE_TODAY_WORK_COUNT = 4;
+
+// 바로 이어서 할 일이 위로: 오늘·진행 중 → 오늘·할 일 → 오늘·지연 → 오늘 아님·진행 중
+const TODAY_WORK_ORDER: Record<"progress" | "todo" | "delayed", number> = {
+  progress: 0,
+  todo: 1,
+  delayed: 2,
+};
+
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function isScheduleOnDate(schedule: OverviewSchedule, dateKey: string) {
+  const start = schedule.startKey || schedule.endKey;
+  const end = schedule.endKey || schedule.startKey;
+
+  if (!start || !end) return false;
+
+  return start <= dateKey && dateKey <= end;
+}
+
+function TodayWorkPanel({
+  className,
+  loading,
+  errorMessage,
+  schedules,
+  members,
+  workspaceId,
+  mode,
+}: {
+  className: string;
+  loading: boolean;
+  errorMessage: string;
+  schedules: OverviewSchedule[] | null | undefined;
+  members: ProjectOverview["members"] | undefined;
+  workspaceId: string;
+  mode: WorkspaceMode;
+}) {
+  const now = new Date();
+
+  const todayKey = formatDateKey(now);
+
+  const todayLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 ${
+    WEEKDAY_LABELS[now.getDay()]
+  }요일`;
+
+  // 일정에 이름 없이 담당자 번호만 온 경우 팀원 목록에서 이름을 찾는다(일정 관리 화면과 같은 방식).
+  const getAssigneeName = (schedule: OverviewSchedule) =>
+    schedule.assigneeName ||
+    (Array.isArray(members)
+      ? members.find((member) => member.userId === schedule.assigneeUserId)
+          ?.name
+      : "") ||
+    "";
+
+  const works = (schedules ?? [])
+    .filter((schedule) => schedule.status !== "done")
+    .map((schedule) => ({
+      schedule,
+      isToday: isScheduleOnDate(schedule, todayKey),
+    }))
+    .filter(({ schedule, isToday }) => isToday || schedule.status === "progress")
+    .sort(
+      (a, b) =>
+        Number(b.isToday) - Number(a.isToday) ||
+        TODAY_WORK_ORDER[a.schedule.status as keyof typeof TODAY_WORK_ORDER] -
+          TODAY_WORK_ORDER[b.schedule.status as keyof typeof TODAY_WORK_ORDER] ||
+        (a.schedule.endKey || "9999").localeCompare(
+          b.schedule.endKey || "9999",
+        ) ||
+        a.schedule.title.localeCompare(b.schedule.title, "ko"),
+    );
+
+  const todayCount = works.filter((work) => work.isToday).length;
+
+  const progressCount = works.length - todayCount;
+
+  const visibleWorks = works.slice(0, VISIBLE_TODAY_WORK_COUNT);
+
+  const scheduleHref = getScheduleHref(workspaceId, mode);
+
+  return (
+    // 대시보드의 중심 카드: 위쪽 브랜드색 선과 조금 더 진한 테두리로만 강조한다
+    <section
+      className={`relative flex min-w-0 flex-col overflow-hidden rounded-md border border-[#C9D2FF] bg-white ${className}`}
+    >
+      {/* 공간을 차지하지 않게 겹쳐 그려, 옆 카드들과 머리 구분선 높이가 같게 둔다 */}
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[#5873F9]" />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
+            <ListChecks size={16} strokeWidth={2.2} />
+          </span>
+
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-1.5 text-[15px] font-bold leading-[1.333] text-gray-900">
+              오늘의 작업
+              {schedules ? (
+                <span className="rounded-full bg-[#5873F9] px-1.5 py-px text-[10px] font-bold tabular-nums text-white">
+                  {works.length}
+                </span>
+              ) : null}
+            </h2>
+
+            <p className="mt-0.5 truncate text-[11px] text-gray-500">
+              <span className="font-semibold text-gray-700">{todayLabel}</span>
+              <span className="mx-1 text-gray-300">·</span>
+              오늘 일정과 진행 중 작업을 확인하세요
+            </p>
+          </div>
+        </div>
+
+        <HeaderLink href={scheduleHref}>일정 관리</HeaderLink>
+      </div>
+
+      {loading ? (
+        <PanelMessage>오늘의 작업을 불러오는 중입니다.</PanelMessage>
+      ) : errorMessage ? (
+        <PanelMessage tone="error">{errorMessage}</PanelMessage>
+      ) : !schedules ? (
+        <PanelMessage tone="error">일정을 불러오지 못했습니다.</PanelMessage>
+      ) : works.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-10 text-center">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF2FF] text-[#5873F9]">
+            <CalendarDays size={18} />
+          </span>
+
+          <p className="text-[13px] font-semibold text-gray-800">
+            오늘 예정된 작업이 없습니다.
+          </p>
+
+          <p className="text-[11px] text-gray-500">
+            오늘 일정이나 진행 중인 일정이 생기면 여기에 표시됩니다.
+          </p>
+
+          <Link
+            href={scheduleHref}
+            className="mt-1 text-[11px] font-semibold text-[#5873F9] hover:underline"
+          >
+            일정 관리에서 일정 등록하기
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col p-3">
+          {/* 오늘 일정 / 진행 중 작업 개수 */}
+          <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px]">
+            <span className="rounded border border-[#D9E1FF] bg-[#F5F7FF] px-1.5 py-0.5 font-semibold text-[#4058D6]">
+              오늘 일정 <span className="tabular-nums">{todayCount}</span>
+            </span>
+
+            <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-semibold text-gray-600">
+              진행 중 작업 <span className="tabular-nums">{progressCount}</span>
+            </span>
+          </div>
+
+          <ul className="space-y-2">
+            {visibleWorks.map(({ schedule, isToday }) => {
+              const assigneeName = getAssigneeName(schedule);
+
+              const meta = SCHEDULE_STATUS_META[schedule.status];
+
+              const isOneDay =
+                !schedule.startKey || schedule.startKey === schedule.endKey;
+
+              const period = isOneDay
+                ? formatShortDate(schedule.endKey || schedule.startKey)
+                : `${formatShortDate(schedule.startKey)}–${formatShortDate(
+                    schedule.endKey,
+                  )}`;
+
+              const isOverdue = Boolean(
+                schedule.endKey && schedule.endKey < todayKey,
+              );
+
+              const isDueToday = schedule.endKey === todayKey;
+
+              return (
+                <li key={schedule.id}>
+                  <Link
+                    href={scheduleHref}
+                    className="group relative block overflow-hidden rounded-lg border border-gray-200 bg-white py-3 pl-4 pr-3.5 transition-colors hover:border-[#AAB8FF] hover:bg-[#F7F9FF]"
+                  >
+                    {/* 상태색은 왼쪽 얇은 선과 배지에만 쓴다 */}
+                    <span
+                      className={`absolute inset-y-0 left-0 w-[3px] ${meta.bar}`}
+                    />
+
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${meta.badge}`}
+                      >
+                        {meta.label}
+                      </span>
+
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 group-hover:text-[#4058D6]">
+                        {schedule.title}
+                      </p>
+
+                      <ArrowRight
+                        size={14}
+                        strokeWidth={2.2}
+                        className="shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-[#5873F9]"
+                      />
+                    </div>
+
+                    <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-gray-500">
+                      <span
+                        className={`shrink-0 font-semibold ${
+                          isToday ? "text-[#4058D6]" : "text-gray-600"
+                        }`}
+                      >
+                        {isToday ? "오늘 일정" : "진행 중 작업"}
+                      </span>
+
+                      <span className="text-gray-300">·</span>
+
+                      <span className="shrink-0 font-mono">{period}</span>
+
+                      {isDueToday ? (
+                        <span className="shrink-0 font-semibold text-amber-600">
+                          오늘 마감
+                        </span>
+                      ) : isOverdue ? (
+                        <span className="shrink-0 font-semibold text-rose-600">
+                          마감 지남
+                        </span>
+                      ) : null}
+
+                      <span className="text-gray-300">·</span>
+
+                      {assigneeName ? (
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#EEF2FF] text-[9px] font-bold text-[#4058D6]">
+                            {assigneeName.slice(0, 1).toUpperCase()}
+                          </span>
+
+                          <span className="truncate text-gray-600">
+                            담당 {assigneeName}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">담당자 미지정</span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          {works.length > visibleWorks.length ? (
+            <Link
+              href={scheduleHref}
+              className="mt-2 flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-gray-600 transition-colors hover:bg-[#F2F5FF] hover:text-[#5873F9]"
+            >
+              + {works.length - visibleWorks.length}개 더 보기
+              <ArrowRight size={12} />
+            </Link>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* =========================================================
+   팀원: 멤버 API 의 이름·이메일·역할만 쓴다 (온라인 상태 등은 없음)
+========================================================= */
+const VISIBLE_MEMBER_COUNT = 6;
+
+const AVATAR_TONES = [
+  "bg-[#EEF2FF] text-[#4058D6]",
+  "bg-emerald-50 text-emerald-700",
+  "bg-amber-50 text-amber-700",
+  "bg-purple-50 text-purple-700",
+  "bg-sky-50 text-sky-700",
+  "bg-rose-50 text-rose-700",
+];
+
+function TeamPanel({
+  className,
+  loading,
+  members,
+  workspaceId,
+  mode,
+}: {
+  className: string;
+  loading: boolean;
+  members: ProjectOverview["members"] | undefined;
+  workspaceId: string;
+  mode: WorkspaceMode;
+}) {
+  const settingsHref = `/dashboard/${encodeURIComponent(
+    workspaceId,
+  )}/settings?mode=${mode}`;
+
+  const list: OverviewMember[] = Array.isArray(members) ? members : [];
+
+  const visibleMembers = list.slice(0, VISIBLE_MEMBER_COUNT);
+
+  return (
+    <section
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
+    >
+      <PanelHeader
+        icon={UsersRound}
+        iconTone="bg-emerald-50 text-emerald-600"
+        title="팀원"
+        count={Array.isArray(members) ? list.length : undefined}
+        // 같은 줄 카드들과 머리 높이(구분선 위치)를 맞추려고 설명 한 줄을 둔다
+        description="프로젝트에 참여 중인 멤버"
+        action={
+          mode === "team" ? (
+            <HeaderLink href={settingsHref}>팀원 관리</HeaderLink>
+          ) : undefined
+        }
+      />
+
+      {loading ? (
+        <PanelMessage>팀원을 불러오는 중입니다.</PanelMessage>
+      ) : members === "personal" || mode !== "team" ? (
+        <PanelMessage>
+          개인 프로젝트예요. 팀원 기능은 팀 프로젝트에서 사용할 수 있어요.
+        </PanelMessage>
+      ) : !Array.isArray(members) ? (
+        <PanelMessage tone="error">팀원 목록을 불러오지 못했습니다.</PanelMessage>
+      ) : list.length === 0 ? (
+        <PanelMessage>참여 중인 팀원이 없습니다.</PanelMessage>
+      ) : (
+        <ul className="p-2">
+          {visibleMembers.map((member) => (
+            <li
+              key={member.userId}
+              className="group flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-gray-50"
+            >
+              <span
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                  AVATAR_TONES[member.userId % AVATAR_TONES.length]
+                }`}
+                aria-hidden
+              >
+                {member.name.slice(0, 1).toUpperCase()}
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5">
+                  <span className="truncate text-[13px] font-semibold text-gray-900">
+                    {member.name}
+                  </span>
+
+                  <span
+                    className={`shrink-0 rounded px-1 py-px text-[10px] font-bold ${
+                      member.isOwner
+                        ? "bg-[#EEF2FF] text-[#5873F9]"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {member.isOwner ? "OWNER" : "MEMBER"}
+                  </span>
+                </p>
+
+                <p className="truncate text-[11px] text-gray-400">
+                  {member.email || "-"}
+                </p>
+              </div>
+
+              {/* 메시지 화면이 ?workspace=&member= 로 그 팀원과의 대화를 바로 연다 */}
+              <Link
+                href={`/messages?workspace=${encodeURIComponent(
+                  workspaceId,
+                )}&member=${member.userId}&mode=team`}
+                aria-label={`${member.name}에게 메시지`}
+                title="메시지 보내기"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-300 transition-colors hover:bg-white hover:text-[#5873F9] group-hover:text-gray-500"
+              >
+                <MessageSquare size={14} />
+              </Link>
+            </li>
+          ))}
+
+          {list.length > visibleMembers.length ? (
+            <li>
+              <Link
+                href={settingsHref}
+                className="mt-1 flex h-8 items-center justify-center gap-1 rounded-md text-[11px] font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#5873F9]"
+              >
+                외 {list.length - visibleMembers.length}명 더 보기
+                <ArrowRight size={12} />
+              </Link>
+            </li>
+          ) : null}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/* =========================================================
+   바로 가기
+========================================================= */
+function QuickLinksPanel({
+  className,
+  workspaceId,
+  mode,
+}: {
+  className: string;
+  workspaceId: string;
+  mode: WorkspaceMode;
+}) {
+  // 모두 지금 프로젝트(workspaceId·mode)를 그대로 넘긴다.
+  // AI 최종 보고서는 새 기능이 아니라 자료실의 "최종 보고서" 탭(초안 생성)을 바로 연다.
+  const quickLinks: Array<{
+    href: string;
+    label: string;
+    description: string;
+    icon: LucideIcon;
+    tone: string;
+  }> = [
+    {
+      href: `/aivs/${encodeURIComponent(workspaceId)}?mode=${mode}`,
+      label: "AIVS",
+      description: "웹 IDE에서 코드 작성 및 실행",
+      icon: Code2,
+      tone: "bg-[#EEF2FF] text-[#5873F9]",
+    },
+    {
+      href: getScheduleHref(workspaceId, mode),
+      label: "일정 관리",
+      description: "프로젝트 일정 확인 및 관리",
+      icon: CalendarDays,
+      tone: "bg-sky-50 text-sky-600",
+    },
+    {
+      href: getDevlogHref(workspaceId, mode),
+      label: "개발일지",
+      description: "개발 과정 기록 및 확인",
+      icon: BookOpenText,
+      tone: "bg-purple-50 text-purple-600",
+    },
+    {
+      href: getFinalReportHref(workspaceId, mode),
+      label: "AI 최종 보고서",
+      description: "프로젝트 최종 보고서 생성",
+      icon: Sparkles,
+      tone: "bg-amber-50 text-amber-600",
+    },
+  ];
+
+  return (
+    <nav
+      aria-label="바로가기"
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
+    >
+      <PanelHeader
+        icon={Compass}
+        iconTone="bg-[#EEF2FF] text-[#5873F9]"
+        title="바로가기"
+        description="자주 쓰는 작업 화면으로 이동"
+      />
+
+      <ul className="space-y-1 p-2">
+        {quickLinks.map(({ href, label, description, icon: Icon, tone }) => (
+          <li key={label}>
+            <Link
+              href={href}
+              className="group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[#F2F5FF]"
+            >
+              <span
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${tone}`}
+              >
+                <Icon size={17} strokeWidth={2} />
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-gray-900 group-hover:text-[#4058D6]">
+                  {label}
+                </span>
+
+                <span className="mt-0.5 block truncate text-[11px] text-gray-500">
+                  {description}
+                </span>
+              </span>
+
+              <ArrowRight
+                size={15}
+                strokeWidth={2.2}
+                className="shrink-0 text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-[#5873F9]"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/* =========================================================
+   최근 활동: 일정·개발일지·설계·Git 기록을 시간순으로
+========================================================= */
+const VISIBLE_ACTIVITY_COUNT = 6;
+
+const ACTIVITY_META: Record<
+  ActivityKind,
+  { label: string; icon: LucideIcon; tone: string; text: string }
+> = {
+  schedule: {
+    label: "일정",
+    icon: CalendarDays,
+    tone: "bg-[#EEF2FF] text-[#5873F9]",
+    text: "text-[#4058D6]",
+  },
+  devlog: {
+    label: "개발일지",
+    icon: BookOpenText,
+    tone: "bg-purple-50 text-purple-600",
+    text: "text-purple-700",
+  },
+  design: {
+    label: "설계",
+    icon: PenTool,
+    tone: "bg-sky-50 text-sky-600",
+    text: "text-sky-700",
+  },
+  commit: {
+    label: "Git",
+    icon: GitCommitHorizontal,
+    tone: "bg-gray-900 text-white",
+    text: "text-gray-900",
+  },
+};
+
+function getActivitySeq(id: string) {
+  const match = /(\d+)$/.exec(id);
+
+  return match ? Number(match[1]) : 0;
+}
+
+function ActivityPanel({
+  className,
+  loading,
+  overview,
+  workspaceId,
+  mode,
+}: {
+  className: string;
+  loading: boolean;
+  overview: ProjectOverview | null;
+  workspaceId: string;
+  mode: WorkspaceMode;
+}) {
+  const [filter, setFilter] = useState<ActivityKind | "all">("all");
+
+  const activity = useMemo(
+    () => (overview ? buildActivity(overview) : []),
+    [overview],
   );
 
+  const filtered =
+    filter === "all"
+      ? activity
+      : activity.filter((item) => item.kind === filter);
+
+  // buildActivity 가 이미 발생 시각 내림차순이다. 시각이 같으면(날짜만 있는 기록 등)
+  // id 끝의 번호가 큰 것, 곧 나중에 만든 기록을 먼저 둔다.
+  const visible = [...filtered]
+    .sort((a, b) => b.time - a.time || getActivitySeq(b.id) - getActivitySeq(a.id))
+    .slice(0, VISIBLE_ACTIVITY_COUNT);
+
+  const hrefByKind: Record<ActivityKind, string> = {
+    schedule: getScheduleHref(workspaceId, mode),
+    devlog: getDevlogHref(workspaceId, mode),
+    design: `/design/${encodeURIComponent(workspaceId)}?mode=${mode}`,
+    commit: getIdeHref(workspaceId, mode),
+  };
+
+  // 불러오지 못한 영역은 "활동 없음"과 구분해 알려 준다.
+  const failedSources = overview
+    ? [
+        !overview.schedules && "일정",
+        !overview.devlogs && "개발일지",
+        !overview.design && "설계",
+        !overview.commits && "Git",
+      ].filter(Boolean)
+    : [];
+
+  const tabs: Array<ActivityKind | "all"> = [
+    "all",
+    "schedule",
+    "devlog",
+    "design",
+    "commit",
+  ];
+
+  return (
+    <section
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
+    >
+      <PanelHeader
+        icon={Activity}
+        iconTone="bg-gray-900 text-white"
+        title="최근 프로젝트 활동"
+        description="일정 · 개발일지 · 설계 문서 · Git 커밋 기록"
+        action={
+          <div className="flex flex-wrap gap-1 rounded-md bg-gray-100 p-0.5">
+            {tabs.map((tab) => {
+              const count =
+                tab === "all"
+                  ? activity.length
+                  : activity.filter((item) => item.kind === tab).length;
+
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setFilter(tab)}
+                  className={`h-7 rounded px-2 text-[11px] font-semibold transition-colors ${
+                    filter === tab
+                      ? "bg-white text-[#5873F9]"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  {tab === "all" ? "전체" : ACTIVITY_META[tab].label}
+                  <span className="ml-1 tabular-nums text-gray-400">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        }
+      />
+
+      {loading ? (
+        <PanelMessage>최근 활동을 불러오는 중입니다.</PanelMessage>
+      ) : visible.length === 0 ? (
+        <PanelMessage>
+          {filter === "all"
+            ? "아직 기록된 활동이 없습니다."
+            : `${ACTIVITY_META[filter].label} 활동이 없습니다.`}
+        </PanelMessage>
+      ) : (
+        <ol className="relative px-5 py-2 before:absolute before:bottom-5 before:left-[35px] before:top-5 before:w-px before:bg-gray-100">
+          {visible.map((item) => {
+            const meta = ACTIVITY_META[item.kind];
+
+            const Icon = meta.icon;
+
+            return (
+              <li key={item.id}>
+                <Link
+                  href={hrefByKind[item.kind]}
+                  className="group relative -mx-2 flex items-start gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-[#F7F9FF]"
+                >
+                  <span
+                    className={`relative z-10 mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md ${meta.tone}`}
+                  >
+                    <Icon size={14} strokeWidth={2.2} />
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="flex min-w-0 items-baseline gap-2">
+                      <span
+                        className={`shrink-0 text-[11px] font-bold ${meta.text}`}
+                      >
+                        {item.action}
+                      </span>
+
+                      <span className="truncate text-[13px] font-semibold text-gray-900 group-hover:text-[#4058D6]">
+                        {item.title}
+                      </span>
+                    </p>
+
+                    {item.detail || item.actor ? (
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-gray-400">
+                        {item.actor ? (
+                          <span className="shrink-0 font-semibold text-gray-600">
+                            {item.actor}
+                          </span>
+                        ) : null}
+
+                        {item.actor && item.detail ? (
+                          <span className="text-gray-300">·</span>
+                        ) : null}
+
+                        {item.detail ? (
+                          <span
+                            className={`truncate ${
+                              item.kind === "commit" ? "font-mono" : ""
+                            }`}
+                          >
+                            {item.detail}
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <time
+                    dateTime={new Date(item.time).toISOString()}
+                    title={new Date(item.time).toLocaleString("ko-KR")}
+                    className="shrink-0 pt-0.5 font-mono text-[11px] text-gray-400"
+                  >
+                    {formatRelativeTime(item.time)}
+                  </time>
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      {!loading && failedSources.length > 0 ? (
+        <p className="mt-auto border-t border-gray-100 px-5 py-2 text-[11px] text-amber-600">
+          {failedSources.join(" · ")} 기록을 불러오지 못해 빠져 있어요.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/* =========================================================
+   자료실: 이 프로젝트 자료실에 모이는 문서 현황
+========================================================= */
+function ArchivePanel({
+  className,
+  loading,
+  overview,
+  workspaceId,
+  mode,
+}: {
+  className: string;
+  loading: boolean;
+  overview: ProjectOverview | null;
+  workspaceId: string;
+  mode: WorkspaceMode;
+}) {
+  const archiveHref = getArchiveHref(workspaceId, mode);
+
+  const design = overview?.design;
+
+  const devlogs = overview?.devlogs;
+
+  const latest = (times: number[]) =>
+    times.reduce((max, time) => (time > max ? time : max), 0);
+
+  const rows: Array<{
+    key: string;
+    label: string;
+    type: string;
+    icon: LucideIcon;
+    tone: string;
+    value: string | null;
+    updatedAt: number;
+    href: string;
+  }> = [
+    {
+      key: "devlog",
+      label: "개발일지",
+      type: "기록",
+      icon: BookOpenText,
+      tone: "bg-purple-50 text-purple-600",
+      value: devlogs ? `${devlogs.length}건` : null,
+      updatedAt: devlogs ? latest(devlogs.map((item) => item.time)) : 0,
+      href: archiveHref,
+    },
+    {
+      key: "requirements",
+      label: "요구사항 명세",
+      type: "설계",
+      icon: FileCode2,
+      tone: "bg-sky-50 text-sky-600",
+      value: design ? `${design.requirements.length}건` : null,
+      updatedAt: design
+        ? latest(
+            design.requirements.map(
+              (item) => item.updatedAt || item.createdAt,
+            ),
+          )
+        : 0,
+      href: archiveHref,
+    },
+    {
+      key: "api",
+      label: "API 명세",
+      type: "설계",
+      icon: Network,
+      tone: "bg-sky-50 text-sky-600",
+      value: design ? `${design.apiSpecs.length}건` : null,
+      updatedAt: design
+        ? latest(
+            design.apiSpecs.map((item) => item.updatedAt || item.createdAt),
+          )
+        : 0,
+      href: archiveHref,
+    },
+    {
+      key: "erd",
+      label: "ERD",
+      type: "다이어그램",
+      icon: Database,
+      tone: "bg-amber-50 text-amber-600",
+      value: design ? `엔티티 ${design.erdNodeCount}개` : null,
+      updatedAt: design?.documentUpdatedAt ?? 0,
+      href: archiveHref,
+    },
+    {
+      key: "flow",
+      label: "화면 흐름도",
+      type: "다이어그램",
+      icon: Workflow,
+      tone: "bg-amber-50 text-amber-600",
+      value: design ? `화면 ${design.flowNodeCount}개` : null,
+      updatedAt: design?.documentUpdatedAt ?? 0,
+      href: archiveHref,
+    },
+  ];
+
+  return (
+    <section
+      className={`flex min-w-0 flex-col rounded-md border border-gray-200 bg-white ${className}`}
+    >
+      <PanelHeader
+        icon={FolderTree}
+        iconTone="bg-amber-50 text-amber-600"
+        title="자료실"
+        description="이 프로젝트에 쌓인 기록과 설계 문서"
+        action={<HeaderLink href={archiveHref}>자료실 열기</HeaderLink>}
+      />
+
+      {loading ? (
+        <PanelMessage>자료실 정보를 불러오는 중입니다.</PanelMessage>
+      ) : (
+        <>
+          <div className="hidden grid-cols-[minmax(0,1fr)_72px_96px_72px] gap-3 px-5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:grid">
+            <span>문서</span>
+            <span>유형</span>
+            <span className="text-right">분량</span>
+            <span className="text-right">수정</span>
+          </div>
+
+          <ul className="px-2 pb-2 pt-1 sm:pt-0">
+            {rows.map(({ key, label, type, icon: Icon, tone, value, updatedAt, href }) => (
+              <li key={key}>
+                <Link
+                  href={href}
+                  className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-[#F7F9FF] sm:grid-cols-[minmax(0,1fr)_72px_96px_72px]"
+                >
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${tone}`}
+                    >
+                      <Icon size={14} strokeWidth={2.2} />
+                    </span>
+
+                    <span className="truncate text-[13px] font-semibold text-gray-900 group-hover:text-[#4058D6]">
+                      {label}
+                    </span>
+                  </span>
+
+                  <span className="hidden text-[11px] text-gray-500 sm:block">
+                    {type}
+                  </span>
+
+                  <span
+                    className={`text-right text-xs font-semibold tabular-nums ${
+                      value ? "text-gray-700" : "text-red-400"
+                    }`}
+                  >
+                    {value ?? "불러오기 실패"}
+                  </span>
+
+                  <span className="hidden text-right font-mono text-[11px] text-gray-400 sm:block">
+                    {updatedAt ? formatRelativeTime(updatedAt) : "-"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {/* 카드가 옆 카드 높이로 늘어나면 남는 공간은 목록 아래에 두고, 보고서 영역은 바닥에 붙인다 */}
+          <div className="mt-auto flex items-center gap-3 border-t border-gray-100 bg-[#FAFBFF] px-5 py-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#5873F9] text-white">
+              <Sparkles size={15} />
+            </span>
+
+            <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-gray-500">
+              자료실에서 개발일지와 설계 문서를 모아{" "}
+              <strong className="font-semibold text-gray-800">
+                AI 최종 보고서
+              </strong>
+              를 만들 수 있어요.
+            </p>
+
+            <Link
+              href={getFinalReportHref(workspaceId, mode)}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#4863E8]"
+            >
+              보고서 만들기
+            </Link>
+          </div>
+        </>
+      )}
+    </section>
+  );
 }

@@ -69,6 +69,17 @@ function ErdCanvasAndText({ model, mutations, awareness, findings }: ErdTabProps
   const selectedTableId = useDesignUiStore((s) => s.selection.tableId);
   const select = useDesignUiStore((s) => s.select);
 
+  // 최초 테이블을 기본 선택하여 다이어그램 강조와 영향 정보를 표시한다.
+  // ERD의 기존 스키마 패널 배치는 변경하지 않는다.
+  const initialSelectionDone = useRef(false);
+  const firstTableId = model.erd.tables[0]?.id ?? null;
+  useEffect(() => {
+    if (initialSelectionDone.current || !firstTableId) return;
+    initialSelectionDone.current = true;
+    const currentId = useDesignUiStore.getState().selection.tableId;
+    if (!currentId) select({ tableId: firstTableId });
+  }, [firstTableId, select]);
+
   const [text, setText] = useState("");
   const [errors, setErrors] = useState<ParseError[]>([]);
   const [focused, setFocused] = useState(false);

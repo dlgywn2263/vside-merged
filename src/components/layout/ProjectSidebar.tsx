@@ -474,7 +474,7 @@ export default function ProjectSidebar({
 
       className={cn(
 
-        "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
+        "waivs-sidebar sticky hidden h-[calc(100dvh-104px)] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition-[width] duration-200 lg:flex lg:flex-col",
 
         isPageScrolled
 
@@ -536,7 +536,7 @@ export default function ProjectSidebar({
 
               <div className="flex items-center gap-2">
 
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EEF3FF] text-[#5873F9]">
+                <div className="grid h-8 w-8 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
 
                   <FolderOpen
 
@@ -594,7 +594,7 @@ export default function ProjectSidebar({
 
             className={cn(
 
-              "grid shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700",
+              "grid shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700",
 
               sidebarExpanded
 
@@ -678,13 +678,13 @@ export default function ProjectSidebar({
 
                 placeholder="프로젝트 검색"
 
-                className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
 
               />
 
             </div>
 
-            <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+            <div className="mt-2 grid grid-cols-3 gap-1 rounded-md bg-slate-100 p-1">
 
               {(
 
@@ -732,13 +732,13 @@ export default function ProjectSidebar({
 
                     className={cn(
 
-                      "rounded-lg px-2 py-1.5 text-[11px] font-black transition",
+                      "rounded-md px-2 py-1.5 text-[11px] font-black transition",
 
                       projectFilter ===
 
                         value
 
-                        ? "bg-white text-[#5873F9] shadow-sm"
+                        ? "bg-white text-[#5873F9]"
 
                         : "text-slate-400 hover:text-slate-700",
 
@@ -802,7 +802,7 @@ export default function ProjectSidebar({
 
           sidebarExpanded ? (
 
-            <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-600">
+            <div className="rounded-md border border-rose-100 bg-rose-50 p-3 text-xs font-semibold leading-5 text-rose-600">
 
               {errorMessage}
 
@@ -894,7 +894,7 @@ export default function ProjectSidebar({
 
               }
 
-              className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+              className="grid h-10 w-10 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
 
               title="프로젝트 검색"
 
@@ -920,7 +920,7 @@ export default function ProjectSidebar({
 
               }
 
-              className="mt-1 grid h-10 w-10 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
+              className="mt-1 grid h-10 w-10 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-[#5873F9]"
 
               title="프로젝트 목록"
 
@@ -950,7 +950,7 @@ export default function ProjectSidebar({
 
                 className={cn(
 
-                  "mt-1 grid h-10 w-10 place-items-center rounded-xl transition",
+                  "mt-1 grid h-10 w-10 place-items-center rounded-md transition",
 
                   isSettingsPage
 
@@ -1022,11 +1022,11 @@ export default function ProjectSidebar({
 
                 className={cn(
 
-                  "flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition",
+                  "flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-black transition",
 
                   isSettingsPage
 
-                    ? "border-[#5873F9] bg-[#5873F9] text-white shadow-sm"
+                    ? "border-[#5873F9] bg-[#5873F9] text-white"
 
                     : "border-slate-200 bg-white text-slate-600 hover:border-[#C8D2FF] hover:bg-[#F7F9FF] hover:text-[#5873F9]",
 
@@ -1060,7 +1060,7 @@ export default function ProjectSidebar({
 
               }
 
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
+              className="flex w-full items-center justify-center gap-2 rounded-md border border-[#D9E1FF] bg-[#F7F9FF] px-3 py-2 text-xs font-black text-[#5873F9] transition hover:bg-[#EEF3FF]"
 
             >
 
@@ -1246,7 +1246,7 @@ function WorkspaceButton({
 
       className={cn(
 
-        "flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition",
+        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition",
 
         selected
 
@@ -1254,9 +1254,9 @@ function WorkspaceButton({
 
             "team"
 
-            ? "bg-[#ECFDF5] text-[#007A55] shadow-sm"
+            ? "bg-[#ECFDF5] text-[#007A55]"
 
-            : "bg-[#5873F9] text-white shadow-sm"
+            : "bg-[#5873F9] text-white"
 
           : "text-slate-700 hover:bg-slate-100",
 
@@ -1268,7 +1268,7 @@ function WorkspaceButton({
 
         className={cn(
 
-          "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
+          "grid h-8 w-8 shrink-0 place-items-center rounded-md",
 
           selected
 

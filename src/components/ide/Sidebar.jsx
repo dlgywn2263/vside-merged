@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import {
-  VscCollapseAll,
   VscEdit,
   VscChevronDown,
   VscChevronRight,
@@ -13,7 +12,6 @@ import {
   VscFolder,
   VscNewFile,
   VscNewFolder,
-  VscRefresh,
   VscRepo,
   VscRocket,
   VscSparkle,
@@ -36,7 +34,6 @@ import {
   setActiveProject,
   setWorkspaceTree,
   mergeProjectFiles,
-  collapseAllFolders,
 } from "@/store/slices/fileSystemSlice";
 
 import {
@@ -1425,82 +1422,27 @@ export default function Sidebar() {
     : tree?.children || [];
 
   return (
-    <div className="h-full w-full bg-white flex flex-col font-sans">
-      <div className="flex items-center justify-between px-4 h-[44px] border-b border-gray-100 shrink-0 bg-white">
-        {/* 이름이 길면 말줄임으로 자르고 전체 이름은 툴팁으로 보여 준다.
-            오른쪽 새로고침·닫기 버튼이 밀려나면 안 되기 때문이다. */}
+    <div className="h-full w-full bg-[#F8FAFC] flex flex-col font-sans">
+      <div className="flex items-center justify-between gap-3 px-4 h-[44px] border-b border-gray-200 shrink-0 bg-[#F8FAFC]">
+        {/* 헤더에는 제목과 접기 버튼만 둔다. 새로고침·새 파일·새 폴더·모두 접기 버튼이
+            이름 자리를 먹어 "병원 예..." 처럼 잘렸다. 파일·폴더 만들기는 트리 우클릭 메뉴에 그대로 있다.
+            트리 첫 줄에 작업 폴더가 바로 보이므로 제목은 "탐색기"로 줄이고,
+            워크스페이스 전체 이름은 툴팁으로 보여 준다. */}
         <span
-          className="min-w-0 text-[12px] font-black text-gray-800 tracking-wider"
-          title={workspaceName ? `${workspaceName} 탐색기` : undefined}
+          className="min-w-0 flex-1 text-[12px] font-black text-gray-800 tracking-wider"
+          title={workspaceName || undefined}
         >
-          <span className="block truncate whitespace-nowrap">
-            {workspaceName ? `${workspaceName} 탐색기` : "탐색기"}
-          </span>
+          <span className="block truncate whitespace-nowrap">탐색기</span>
         </span>
 
-        <div className="flex shrink-0 items-center gap-1 text-gray-500">
-          {!isVirtualMode && (
-            <>
-              <button
-                className="p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-blue-600"
-                onClick={refreshWorkspace}
-                title="새로고침"
-              >
-                <VscRefresh size={15} />
-              </button>
-
-              <button
-                className="p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-blue-600"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dispatch(
-                    startCreation({
-                      type: "file",
-                      parentId: activeProject ? "" : "root-folder",
-                    }),
-                  );
-                }}
-                title="새 파일"
-              >
-                <VscNewFile size={15} />
-              </button>
-
-              <button
-                className="p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-blue-600"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dispatch(
-                    startCreation({
-                      type: "folder",
-                      parentId: activeProject ? "" : "root-folder",
-                    }),
-                  );
-                }}
-                title="새 폴더"
-              >
-                <VscNewFolder size={15} />
-              </button>
-
-              <div className="w-[1px] h-3 bg-gray-200 mx-1" />
-            </>
-          )}
-
-          <button
-            onClick={() => dispatch(collapseAllFolders())}
-            className="p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-gray-800"
-            title="폴더 모두 접기"
-          >
-            <VscCollapseAll size={15} />
-          </button>
-
-          <button
-            onClick={() => dispatch(toggleSidebar())}
-            className="p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-gray-800 ml-0.5"
-            title="탐색기 닫기"
-          >
-            <VscChevronLeft size={16} />
-          </button>
-        </div>
+        <button
+          onClick={() => dispatch(toggleSidebar())}
+          className="shrink-0 p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-gray-800"
+          title="탐색기 닫기"
+          aria-label="탐색기 닫기"
+        >
+          <VscChevronLeft size={16} />
+        </button>
       </div>
 
       {isVirtualMode && (
@@ -1527,7 +1469,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar bg-[#fafafa]">
+      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar bg-[#F8FAFC]">
         {displayTreeChildren.length > 0 ? (
           displayTreeChildren.map((node, idx) => (
             <FileTreeItem

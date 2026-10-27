@@ -420,3 +420,69 @@ export function buildDevlogItems(
     })
     .filter(Boolean) as WorkFlowItem[];
 }
+
+export type ScheduleStatusKey =
+  | "delayed"
+  | "progress"
+  | "todo"
+  | "done";
+
+export const SCHEDULE_STATUS_META: Record<
+  ScheduleStatusKey,
+  {
+    label: string;
+    bar: string;
+    badge: string;
+    order: number;
+  }
+> = {
+  delayed: {
+    label: "지연",
+    bar: "bg-rose-500",
+    badge: "border-rose-200 bg-rose-50 text-rose-700",
+    order: 0,
+  },
+  progress: {
+    label: "진행 중",
+    bar: "bg-[#5873F9]",
+    badge: "border-[#D9E1FF] bg-[#EEF2FF] text-[#4058D6]",
+    order: 1,
+  },
+  todo: {
+    label: "할 일",
+    bar: "bg-gray-300",
+    badge: "border-gray-200 bg-gray-50 text-gray-600",
+    order: 2,
+  },
+  done: {
+    label: "완료",
+    bar: "bg-emerald-500",
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    order: 3,
+  },
+};
+
+// 일정 화면(app/schedules)과 같은 상태 값(todo/progress/done/delayed)을 쓴다.
+// 대소문자나 한글 표기로 들어와도 같은 상태로 본다.
+export function getScheduleStatusKey(
+  status?: string | null,
+): ScheduleStatusKey {
+  const value = String(status ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (value === "delayed" || value === "지연") return "delayed";
+
+  if (
+    value === "progress" ||
+    value === "in_progress" ||
+    value === "진행 중" ||
+    value === "진행중"
+  ) {
+    return "progress";
+  }
+
+  if (value === "done" || value === "완료") return "done";
+
+  return "todo";
+}

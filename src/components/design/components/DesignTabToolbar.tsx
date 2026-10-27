@@ -52,18 +52,23 @@ export function DesignTabToolbar({ mutations }: { mutations: DesignMutations | n
         글자를 넣는 곳이라는 것이 눌러 보기 전에 보이게 한다.
         포커스 색은 일정 관리 필터(#AAB8FF)와 같은 값이다.
       */}
-      <label className="flex h-9 w-full max-w-xs items-center gap-2 rounded-xl border border-[var(--waivs-border)] bg-white px-3 transition focus-within:border-[#AAB8FF] focus-within:ring-2 focus-within:ring-[#EEF3FF]">
-        <Search className="h-4 w-4 shrink-0 text-[var(--waivs-text-muted)]" />
+      <label className="flex h-8 w-full max-w-xs items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 transition focus-within:border-[#AAB8FF] focus-within:ring-2 focus-within:ring-[#EEF3FF]">
+        <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         <Input
           value={search[activeTab]}
           onChange={(event) => setSearch(activeTab, event.target.value)}
           placeholder={isRequirements ? "요구사항 검색" : "엔드포인트 검색"}
-          className="h-9 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+          className="h-8 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
         />
       </label>
 
-      <Button size="sm" onClick={handleAdd} className="h-9 shrink-0 gap-1.5">
-        <Plus className="h-4 w-4" />
+      {/* 일정 관리 "새 일정" 버튼과 같은 브랜드색 버튼 */}
+      <Button
+        size="sm"
+        onClick={handleAdd}
+        className="h-8 shrink-0 gap-1.5 rounded-md bg-[#5873F9] px-3 text-xs font-semibold text-white hover:bg-[#4863E8]"
+      >
+        <Plus className="h-3.5 w-3.5" />
         {isRequirements ? "요구사항 추가" : "API 추가"}
       </Button>
     </div>

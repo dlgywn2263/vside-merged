@@ -2,7 +2,7 @@
 
 // 경로: src/components/design/tabs/apis/ApiTab.tsx
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Braces, Plus, Route, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -54,6 +54,17 @@ export function ApiTab({ model, mutations, findings }: ApiTabProps) {
   const keyword = useDesignUiStore((s) => s.search.apis);
   const selectedId = useDesignUiStore((s) => s.selection.apiId);
   const select = useDesignUiStore((s) => s.select);
+
+  // 최초 데이터 로딩 시 첫 API를 기본 선택한다.
+  // 사용자가 패널을 닫은 뒤에는 같은 탭에서 자동으로 다시 열지 않는다.
+  const initialSelectionDone = useRef(false);
+  const firstApiId = model.apis[0]?.id ?? null;
+  useEffect(() => {
+    if (initialSelectionDone.current || !firstApiId) return;
+    initialSelectionDone.current = true;
+    const currentId = useDesignUiStore.getState().selection.apiId;
+    if (!currentId) select({ apiId: firstApiId });
+  }, [firstApiId, select]);
 
   const filtered = useMemo(() => {
     const needle = keyword.trim().toLowerCase();

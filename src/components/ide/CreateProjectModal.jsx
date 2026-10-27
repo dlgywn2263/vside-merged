@@ -8,15 +8,17 @@ import { DiJava, DiPython, DiHtml5, DiReact } from "react-icons/di";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
+  Check,
   CheckCircle2,
   Code2,
   Cpu,
   FolderPlus,
+  FolderTree,
   Github,
   Link2,
   PlayCircle,
   RefreshCw,
-  Rocket,
   Search,
   X,
 } from "lucide-react";
@@ -55,7 +57,7 @@ const TEMPLATES = [
     category: "server",
     name: "Spring Boot",
     desc: "엔터프라이즈급 REST API 및 JPA 활용",
-    icon: <DiJava size={38} className="text-green-600" />,
+    icon: <DiJava size={28} className="text-green-600" />,
     stack: ["Java", "Spring Boot", "JPA", "Gradle"],
     commands: ["./gradlew bootRun"],
     structure: [
@@ -75,7 +77,7 @@ const TEMPLATES = [
     category: "frontend",
     name: "React",
     desc: "Vite 기반 컴포넌트형 프론트엔드",
-    icon: <DiReact size={38} className="text-blue-400" />,
+    icon: <DiReact size={28} className="text-blue-400" />,
     stack: ["React", "Vite", "JavaScript", "CSS"],
     commands: ["npm install", "npm run dev"],
     structure: [
@@ -98,7 +100,7 @@ const TEMPLATES = [
     name: "Next.js",
     desc: "React 기반 TypeScript 웹 프레임워크",
     icon: (
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white">
         N
       </div>
     ),
@@ -125,7 +127,7 @@ const TEMPLATES = [
     category: "frontend",
     name: "Vanilla Web",
     desc: "HTML / CSS / JS 빌드 없는 기본 웹",
-    icon: <DiHtml5 size={38} className="text-orange-500" />,
+    icon: <DiHtml5 size={28} className="text-orange-500" />,
     stack: ["HTML", "CSS", "JavaScript"],
     commands: ["Open with Live Server"],
     structure: ["index.html", "style.css", "script.js", "assets/images"],
@@ -139,7 +141,7 @@ const TEMPLATES = [
     category: "console",
     name: "Java Console",
     desc: "객체지향 기본 학습 및 알고리즘",
-    icon: <DiJava size={38} className="text-orange-400" />,
+    icon: <DiJava size={28} className="text-orange-400" />,
     stack: ["Java"],
     commands: ["javac Main.java", "java Main"],
     structure: ["src/Main.java", "README.md"],
@@ -153,7 +155,7 @@ const TEMPLATES = [
     category: "console",
     name: "Python Console",
     desc: "가벼운 스크립트, 코딩 테스트",
-    icon: <DiPython size={38} className="text-blue-500" />,
+    icon: <DiPython size={28} className="text-blue-500" />,
     stack: ["Python"],
     commands: ["python main.py"],
     structure: ["main.py", "requirements.txt", "README.md"],
@@ -167,7 +169,7 @@ const TEMPLATES = [
     category: "console",
     name: "C / C++ Console",
     desc: "알고리즘 및 시스템 프로그래밍",
-    icon: <div className="text-xl font-black text-blue-600">C++</div>,
+    icon: <div className="text-sm font-black text-blue-600">C++</div>,
     stack: ["C", "C++"],
     commands: ["g++ main.cpp -o main", "./main"],
     structure: ["main.cpp", "include/vector", "README.md"],
@@ -458,6 +460,18 @@ export default function CreateProjectModal({
     resetModalState();
   };
 
+  // ESC 로 닫기. 닫기 버튼과 같은 handleClose 를 타므로 생성 중에는 닫히지 않는다.
+  useEffect(() => {
+    if (!isProjectModalVisible) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") handleClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isProjectModalVisible, handleClose]);
+
   const handleNext = () => {
     if (!selectedTemplateId) {
       alert("원하시는 템플릿을 선택해주세요.");
@@ -590,18 +604,18 @@ export default function CreateProjectModal({
         return (
           <div key={`${depth}-${name}-${index}`}>
             <div
-              className="flex items-center leading-5"
+              className="flex items-center"
               style={{ paddingLeft: `${depth * 16}px` }}
             >
-              <span className="mr-1 text-slate-500">
+              <span className="mr-1.5 select-none text-slate-600">
                 {isLast ? "└─" : "├─"}
               </span>
 
               <span
                 className={
                   hasChildren
-                    ? "font-medium text-blue-300"
-                    : "text-slate-200"
+                    ? "font-medium text-[#93A8FF]"
+                    : "text-slate-300"
                 }
               >
                 {hasChildren ? "▾ " : ""}
@@ -621,83 +635,94 @@ export default function CreateProjectModal({
   if (!isProjectModalVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/40 px-4 py-6 backdrop-blur-sm">
-      <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[26px] border border-blue-100 bg-white shadow-2xl">
-        <div className="border-b border-blue-50 px-6 py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
-                Work Folder Create
-              </p>
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]">
+      {/* 두 단계의 모달 높이를 같게 고정해 단계를 바꿔도 헤더·버튼 위치가 움직이지 않게 한다.
+          스크롤은 본문 안의 각 영역(템플릿 목록·입력 폼 등)이 따로 갖는다. */}
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-work-folder-title"
+        className="flex h-[min(86dvh,880px)] w-full max-w-[1320px] flex-col overflow-hidden rounded-[18px] border border-[#E5EAF3] bg-white shadow-[0_16px_48px_rgba(15,23,42,0.12)]"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E5EAF3] px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5873F9]">
+              Work Folder Create
+            </p>
 
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-                작업 폴더 생성
-              </h1>
+            <h1
+              id="create-work-folder-title"
+              className="mt-1 text-xl font-bold tracking-tight text-[#111827]"
+            >
+              작업 폴더 생성
+            </h1>
 
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                현재 프로젝트 안에서 사용할 개발 작업 폴더와 템플릿을
-                선택하세요.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <StepBadge step={step} />
-
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={isSubmitting}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-blue-100 bg-white text-slate-500 transition hover:bg-blue-50 disabled:opacity-50"
-                aria-label="작업 폴더 생성 닫기"
-              >
-                <X size={18} />
-              </button>
-            </div>
+            <p className="mt-0.5 truncate text-[13px] text-[#64748B]">
+              현재 프로젝트 안에서 사용할 개발 작업 폴더를 생성합니다.
+            </p>
           </div>
-        </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex shrink-0 items-center gap-4">
+            <StepBadge step={step} />
+
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={isSubmitting}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-[#94A3B8] transition-colors hover:bg-slate-100 hover:text-[#475569] disabled:opacity-50"
+              aria-label="작업 폴더 생성 닫기"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto lg:overflow-hidden">
           {step === 1 ? (
-            <div className="grid grid-cols-1 gap-0 lg:grid-cols-[330px_1fr]">
-              <aside className="border-b border-blue-50 bg-blue-50/40 p-5 lg:border-b-0 lg:border-r">
-                <div className="relative mb-3">
-                  <Search
-                    size={16}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+            <div className="grid grid-cols-1 lg:h-full lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+              <aside className="flex min-h-0 flex-col border-b border-[#E5EAF3] bg-[#FAFBFC] lg:border-b-0 lg:border-r">
+                <div className="shrink-0 space-y-2.5 px-4 pb-3 pt-4">
+                  <div className="relative">
+                    <Search
+                      size={15}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]"
+                    />
 
-                  <input
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                    placeholder="템플릿 또는 기술 검색"
-                    className="h-10 w-full rounded-xl border border-blue-100 bg-white pl-10 pr-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
-                  />
+                    <input
+                      value={keyword}
+                      onChange={(event) => setKeyword(event.target.value)}
+                      placeholder="템플릿 또는 기술 검색"
+                      aria-label="템플릿 검색"
+                      className="h-10 w-full rounded-lg border border-[#E5EAF3] bg-white pl-9 pr-3 text-sm text-[#111827] outline-none transition-colors placeholder:text-[#94A3B8] focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/15"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {FILTERS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={filter === item.id}
+                        onClick={() => {
+                          setFilter(item.id);
+                          setSelectedTemplateId(null);
+                        }}
+                        className={[
+                          "h-8 rounded-lg text-xs font-semibold transition-colors",
+                          filter === item.id
+                            ? "bg-[#5873F9] text-white"
+                            : "border border-[#E5EAF3] bg-white text-[#475569] hover:border-[#C9D4FF] hover:text-[#5873F9]",
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="mb-4 grid grid-cols-2 gap-2">
-                  {FILTERS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setFilter(item.id);
-                        setSelectedTemplateId(null);
-                      }}
-                      className={[
-                        "h-9 rounded-xl text-xs font-black transition",
-                        filter === item.id
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "border border-blue-100 bg-white text-slate-500 hover:bg-blue-50",
-                      ].join(" ")}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                <div className="max-h-[320px] min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 pb-4 lg:max-h-none">
                   {filteredTemplates.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-blue-100 bg-white px-4 py-8 text-center text-sm font-bold text-slate-400">
+                    <div className="px-4 py-10 text-center text-[13px] text-[#94A3B8]">
                       조건에 맞는 템플릿이 없습니다.
                     </div>
                   ) : (
@@ -708,36 +733,35 @@ export default function CreateProjectModal({
                         <button
                           key={template.id}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => setSelectedTemplateId(template.id)}
                           className={[
-                            "relative flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-all",
+                            "flex h-[70px] w-full items-center gap-3 rounded-xl border px-3 text-left transition-colors",
                             isSelected
-                              ? "border-blue-500 bg-white shadow-sm ring-4 ring-blue-100"
-                              : "border-blue-100 bg-white hover:border-blue-300 hover:bg-blue-50/60",
+                              ? "border-[#5873F9] bg-[#F5F8FF]"
+                              : "border-[#E5EAF3] bg-white hover:border-[#C9D4FF]",
                           ].join(" ")}
                         >
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-50 bg-blue-50">
-                            {template.icon}
-                          </div>
+                          <TemplateIcon template={template} />
 
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-sm font-black text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <p className="truncate text-sm font-semibold text-[#111827]">
                                 {template.name}
                               </p>
 
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">
+                              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#64748B] ring-1 ring-inset ring-[#E5EAF3]">
                                 {template.lang}
                               </span>
                             </div>
 
-                            <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-slate-500">
+                            <p className="mt-0.5 truncate text-xs text-[#64748B]">
                               {template.desc}
                             </p>
                           </div>
 
                           {isSelected && (
-                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#5873F9] text-white">
                               <VscCheck size={12} />
                             </div>
                           )}
@@ -748,148 +772,151 @@ export default function CreateProjectModal({
                 </div>
               </aside>
 
-              <main className="p-5">
+              <main className="min-h-0 lg:overflow-hidden">
                 {!selectedTemplate ? (
-                  <div className="flex min-h-[430px] items-center justify-center rounded-2xl border border-dashed border-blue-100 bg-blue-50/40">
-                    <div className="max-w-sm text-center">
-                      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
-                        <Code2 size={24} />
+                  <div className="flex h-full min-h-[280px] items-center justify-center px-6 py-10">
+                    <div className="max-w-xs text-center">
+                      <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F8FF] text-[#5873F9]">
+                        <Code2 size={20} />
                       </div>
 
-                      <h3 className="text-base font-black text-slate-900">
+                      <h3 className="text-[15px] font-semibold text-[#111827]">
                         템플릿을 선택해주세요
                       </h3>
 
-                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                        왼쪽 목록에서 템플릿을 선택하면 설명, 파일 구조,
-                        실행 명령어가 표시됩니다.
+                      <p className="mt-1.5 text-[13px] leading-5 text-[#64748B]">
+                        왼쪽에서 템플릿을 선택하면 생성 파일 구조와 실행 방법을
+                        확인할 수 있습니다.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50">
-                          {selectedTemplate.icon}
+                  <div className="flex flex-col lg:h-full">
+                    {/* A. 선택한 템플릿 요약 */}
+                    <div className="flex shrink-0 items-center gap-4 border-b border-[#E5EAF3] px-6 py-4">
+                      <TemplateIcon template={selectedTemplate} size="lg" />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <h2 className="text-[17px] font-bold tracking-tight text-[#111827]">
+                            {selectedTemplate.name}
+                          </h2>
+
+                          <span className="rounded-md bg-[#EEF3FF] px-2 py-0.5 text-[11px] font-semibold text-[#5873F9]">
+                            {selectedTemplate.lang}
+                          </span>
+
+                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-[#64748B]">
+                            {selectedTemplate.type}
+                          </span>
                         </div>
 
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-xl font-black tracking-tight text-slate-950">
-                              {selectedTemplate.name}
-                            </h2>
-
-                            <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-700">
-                              {selectedTemplate.lang}
-                            </span>
-
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-500">
-                              {selectedTemplate.type}
-                            </span>
-                          </div>
-
-                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                            {selectedTemplate.detail}
-                          </p>
-                        </div>
+                        <p
+                          className="mt-1 truncate text-[13px] text-[#64748B]"
+                          title={selectedTemplate.detail}
+                        >
+                          {selectedTemplate.detail}
+                        </p>
                       </div>
-                    </section>
+                    </div>
 
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_0.85fr]">
-                      <section className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-                        <SectionTitle
-                          icon={Code2}
+                    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,58fr)_minmax(0,42fr)] lg:grid-rows-[minmax(0,1fr)]">
+                      {/* B. 생성 파일 구조 — 이 단계에서 가장 비중이 큰 정보 */}
+                      <section className="flex min-h-0 flex-col border-b border-[#E5EAF3] px-6 py-5 lg:border-b-0 lg:border-r">
+                        <PaneTitle
+                          icon={FolderTree}
                           title="생성 파일 구조"
-                          description="템플릿 적용 시 생성되는 기본 디렉터리입니다."
+                          hint="템플릿 적용 시 만들어지는 기본 디렉터리"
                         />
 
-                        <div className="mt-3 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-[12px] leading-5 text-slate-200">
-                          <div className="mb-1 font-semibold text-blue-300">
+                        <div className="mt-3 min-h-[180px] overflow-auto rounded-xl bg-[#0F172A] px-4 py-3 font-mono text-[12.5px] leading-6 text-slate-200 lg:min-h-0 lg:flex-1">
+                          <div className="font-semibold text-[#93A8FF]">
                             ▾ work-folder
                           </div>
                           {renderFileTree(selectedTemplate.structure)}
                         </div>
                       </section>
 
-                      <div className="space-y-4">
-                        <section className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-                          <SectionTitle
+                      {/* C. 기술 스택 · 실행 방법 */}
+                      <section className="min-h-0 space-y-6 px-6 py-5 lg:overflow-y-auto">
+                        <div>
+                          <PaneTitle
                             icon={Cpu}
                             title="기술 스택"
-                            description="초기 작업 폴더에 포함되는 주요 기술입니다."
+                            hint="초기 작업 폴더에 포함"
                           />
 
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mt-3 flex flex-wrap gap-1.5">
                             {selectedTemplate.stack.map((item) => (
                               <span
                                 key={item}
-                                className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700"
+                                className="rounded-full bg-[#F5F8FF] px-2.5 py-1 text-xs font-medium text-[#4A63E0] ring-1 ring-inset ring-[#DCE4FF]"
                               >
                                 {item}
                               </span>
                             ))}
                           </div>
-                        </section>
+                        </div>
 
-                        <section className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-                          <SectionTitle
+                        <div>
+                          <PaneTitle
                             icon={PlayCircle}
                             title="실행 방법"
-                            description="생성 후 터미널에서 사용할 명령어입니다."
+                            hint="생성 후 터미널에서 실행"
                           />
 
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-3 divide-y divide-[#E5EAF3] overflow-hidden rounded-lg border border-[#E5EAF3] bg-[#F7F8FA]">
                             {selectedTemplate.commands.map((command) => (
                               <div
                                 key={command}
-                                className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-2.5 font-mono text-xs font-bold text-slate-700"
+                                className="truncate px-3 py-2 font-mono text-[12.5px] text-[#334155]"
                               >
-                                $ {command}
+                                <span className="mr-2 select-none text-[#94A3B8]">
+                                  $
+                                </span>
+                                {command}
                               </div>
                             ))}
                           </div>
-                        </section>
-                      </div>
+                        </div>
+                      </section>
                     </div>
                   </div>
                 )}
               </main>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-0 lg:grid-cols-[1fr_0.95fr]">
-              <main className="border-b border-blue-50 p-5 lg:border-b-0 lg:border-r">
-                <section className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-blue-700">
+            <div className="grid grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,58fr)_minmax(0,42fr)] lg:grid-rows-[minmax(0,1fr)]">
+              <main className="min-h-0 border-b border-[#E5EAF3] px-6 py-5 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+                <div className="mx-auto max-w-[680px] space-y-4">
+                  {/* A. 선택한 템플릿 — 오른쪽에 자세히 나오므로 여기서는 한 줄 */}
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                    <span className="mr-1 text-[#94A3B8]">선택한 템플릿</span>
+
+                    <span className="rounded-md bg-[#EEF3FF] px-2 py-0.5 font-semibold text-[#5873F9]">
                       {selectedTemplate?.lang}
                     </span>
 
-                    <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600">
-                      {selectedTemplate?.name}
-                    </span>
-
-                    <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600">
-                      {selectedTemplate?.type}
-                    </span>
+                    {selectedTemplate?.stack.map((item) => (
+                      <span
+                        key={item}
+                        className="text-[#475569] before:mr-1.5 before:text-[#CBD5E1] before:content-['·']"
+                      >
+                        {item}
+                      </span>
+                    ))}
                   </div>
-                </section>
 
-                <div className="space-y-4">
+                  {/* B. 작업 폴더 이름 */}
                   <label className="block">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-sm font-black text-slate-700">
-                        작업 폴더 이름
-                      </span>
-                      <span className="text-[11px] font-black text-blue-600">
-                        Required
-                      </span>
-                    </div>
+                    <span className="mb-1.5 block text-sm font-semibold text-[#334155]">
+                      작업 폴더 이름 <span className="text-[#5873F9]">*</span>
+                    </span>
 
                     <input
                       autoFocus
                       placeholder="예: backend-auth-server"
-                      className="h-11 w-full rounded-2xl border border-blue-100 bg-blue-50/50 px-4 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                      className="h-11 w-full min-w-0 rounded-lg border border-[#E5EAF3] bg-white px-3.5 text-sm font-medium text-[#111827] outline-none transition-colors placeholder:text-[#94A3B8] focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/15"
                       value={formData.name}
                       onChange={(event) =>
                         setFormData({
@@ -900,14 +927,19 @@ export default function CreateProjectModal({
                     />
                   </label>
 
+                  {/* C. 작업 설명 */}
                   <label className="block">
-                    <div className="mb-1.5 text-sm font-black text-slate-700">
-                      작업 설명
-                    </div>
+                    <span className="mb-1.5 block text-sm font-semibold text-[#334155]">
+                      작업 설명{" "}
+                      <span className="text-xs font-normal text-[#94A3B8]">
+                        (선택)
+                      </span>
+                    </span>
 
                     <textarea
                       placeholder="이 작업 폴더에서 구현할 기능을 입력하세요."
-                      className="min-h-[96px] w-full resize-none rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-sm font-semibold leading-6 text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                      rows={2}
+                      className="h-[76px] w-full resize-none rounded-lg border border-[#E5EAF3] bg-white px-3.5 py-2.5 text-sm leading-6 text-[#111827] outline-none transition-colors placeholder:text-[#94A3B8] focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/15"
                       value={formData.description}
                       onChange={(event) =>
                         setFormData({
@@ -926,13 +958,17 @@ export default function CreateProjectModal({
                     />
                   )}
 
-                  <section className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-base font-black tracking-tight text-slate-950">
-                          GitHub 저장소 연결
+                  {/* D. GitHub 저장소 연결 — 선택 사항이라 입력 흐름을 막지 않게 낮게 둔다 */}
+                  <section className="border-t border-[#E5EAF3] pt-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-semibold text-[#334155]">
+                          GitHub 저장소 연결{" "}
+                          <span className="text-xs font-normal text-[#94A3B8]">
+                            (선택)
+                          </span>
                         </h2>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                        <p className="mt-0.5 text-xs text-[#94A3B8]">
                           GitHub 계정은 사용자 단위, 저장소는 작업 폴더 단위로
                           연결합니다.
                         </p>
@@ -942,209 +978,206 @@ export default function CreateProjectModal({
                         type="button"
                         onClick={loadGithubStatus}
                         disabled={githubLoading}
-                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-blue-100 bg-white px-3 text-xs font-black text-slate-600 transition hover:bg-blue-50 disabled:opacity-50"
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#E5EAF3] bg-white px-2.5 text-xs font-semibold text-[#475569] transition-colors hover:border-[#C9D4FF] hover:text-[#5873F9] disabled:opacity-50"
                       >
                         <RefreshCw
                           size={13}
                           className={githubLoading ? "animate-spin" : ""}
                         />
-                        확인
+                        연결 확인
                       </button>
                     </div>
 
                     <div
                       className={[
-                        "mb-4 rounded-2xl border p-4",
-                        isGithubConnected
-                          ? "border-emerald-200 bg-emerald-50"
-                          : "border-amber-200 bg-amber-50",
+                        "mt-3 flex items-start gap-2.5 rounded-lg px-3 py-2.5",
+                        githubLoading
+                          ? "bg-[#F7F8FA]"
+                          : isGithubConnected
+                            ? "bg-emerald-50"
+                            : "bg-amber-50/70",
                       ].join(" ")}
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={[
-                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                            isGithubConnected
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-amber-100 text-amber-700",
-                          ].join(" ")}
-                        >
-                          {isGithubConnected ? (
-                            <CheckCircle2 size={20} />
-                          ) : (
-                            <AlertCircle size={20} />
-                          )}
-                        </div>
+                      <span
+                        className={[
+                          "mt-0.5 shrink-0",
+                          githubLoading
+                            ? "text-[#94A3B8]"
+                            : isGithubConnected
+                              ? "text-emerald-600"
+                              : "text-amber-600",
+                        ].join(" ")}
+                      >
+                        {isGithubConnected ? (
+                          <CheckCircle2 size={15} />
+                        ) : (
+                          <AlertCircle size={15} />
+                        )}
+                      </span>
 
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-950">
-                            {githubLoading
-                              ? "GitHub 계정 연결 상태 확인 중"
-                              : isGithubConnected
-                                ? `GitHub 계정: ${githubName || "연결됨"}`
-                                : "GitHub 계정 연결이 필요합니다"}
+                      <div className="min-w-0 text-xs leading-5">
+                        <p className="font-semibold text-[#111827]">
+                          {githubLoading
+                            ? "GitHub 계정 연결 상태 확인 중"
+                            : isGithubConnected
+                              ? `GitHub 계정: ${githubName || "연결됨"}`
+                              : "GitHub 계정 연결이 필요합니다."}
+                        </p>
+
+                        <p className="text-[#64748B]">
+                          {isGithubConnected
+                            ? "작업 폴더에 저장소 URL을 연결할 수 있습니다."
+                            : "연결하지 않아도 작업 폴더를 생성할 수 있습니다."}
+                        </p>
+
+                        {githubError && (
+                          <p className="mt-0.5 font-semibold text-amber-700">
+                            {githubError}
                           </p>
-
-                          <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
-                            {isGithubConnected
-                              ? "작업 폴더에 저장소 URL을 연결할 수 있습니다."
-                              : "연결하지 않아도 작업 폴더 생성은 가능합니다."}
-                          </p>
-
-                          {githubError && (
-                            <p className="mt-2 text-xs font-black text-amber-700">
-                              {githubError}
-                            </p>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
 
-                    {isGithubConnected ? (
-                      <div className="grid grid-cols-1 gap-2">
-                        <GithubOptionCard
-                          selected={gitConnectMode === "repo"}
-                          icon={Link2}
-                          title="기존 저장소 연결"
-                          description="Repository URL을 입력해 생성 즉시 연결합니다."
-                          onClick={() => setGitConnectMode("repo")}
-                        />
+                    <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {isGithubConnected ? (
+                        <>
+                          <GithubOptionCard
+                            selected={gitConnectMode === "repo"}
+                            icon={Link2}
+                            title="기존 저장소 연결"
+                            description="Repository URL을 입력해 생성 즉시 연결합니다."
+                            onClick={() => setGitConnectMode("repo")}
+                          />
 
-               
-
-                        <GithubOptionCard
-                          selected={gitConnectMode === "later"}
-                          icon={Github}
-                          title="나중에 연결"
-                          description="IDE의 Source Control에서 나중에 연결합니다."
-                          onClick={() => {
-                            setGitConnectMode("later");
-                            setGitUrl("");
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-2">
-                        <GithubOptionCard
-                          selected={false}
-                          icon={Github}
-                          title="GitHub 연결하기"
-                          description="GitHub 인증 후 이 화면으로 돌아옵니다."
-                          onClick={openGithubAccountOAuth}
-                        />
-
-                        <GithubOptionCard
-                          selected={gitConnectMode === "later"}
-                          icon={Link2}
-                          title="나중에 연결"
-                          description="저장소 없이 작업 폴더를 먼저 생성합니다."
-                          onClick={() => {
-                            setGitConnectMode("later");
-                            setGitUrl("");
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-                      <label className="block">
-                        <div className="mb-1.5 flex items-center justify-between gap-3">
-                          <span className="text-sm font-black text-slate-700">
-                            GitHub 저장소 URL
-                          </span>
-
-                          <span className="text-[11px] font-black text-slate-500">
-                            선택 입력
-                          </span>
-                        </div>
-
-                        <input
-                          className={[
-                            "h-11 w-full rounded-2xl px-4 font-mono text-sm font-bold outline-none transition",
-                            !isGithubConnected
-                              ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400"
-                              : isGitUrlInvalid
-                                ? "border border-red-300 bg-red-50 text-red-700 focus:ring-4 focus:ring-red-50"
-                                : "border border-blue-100 bg-white text-slate-800 focus:border-blue-400 focus:ring-4 focus:ring-blue-50",
-                          ].join(" ")}
-                          placeholder={
-                            isGithubConnected
-                              ? "https://github.com/username/repository.git"
-                              : "GitHub 계정 연결 후 입력할 수 있습니다."
-                          }
-                          value={gitUrl}
-                          disabled={!isGithubConnected}
-                          onFocus={() => {
-                            if (isGithubConnected) {
-                              setGitConnectMode("repo");
-                            }
-                          }}
-                          onChange={(event) => {
-                            setGitConnectMode("repo");
-                            setGitUrl(event.target.value);
-                          }}
-                          onBlur={(event) =>
-                            setGitUrl(
-                              normalizeGitHubRepoUrl(event.target.value),
-                            )
-                          }
-                        />
-                      </label>
-
-                      {isGitUrlInvalid ? (
-                        <p className="mt-2 text-xs font-bold text-red-600">
-                          GitHub 저장소 주소는
-                          https://github.com/username/repository.git
-                          형식이어야 합니다.
-                        </p>
-                      ) : isGithubConnected ? (
-                        <p className="mt-2 text-xs font-semibold text-slate-500">
-                          SSH 주소를 입력하면 가능한 경우 HTTPS 주소로 자동
-                          변환합니다.
-                        </p>
+                          <GithubOptionCard
+                            selected={gitConnectMode === "later"}
+                            icon={Github}
+                            title="나중에 연결"
+                            description="IDE의 Source Control에서 나중에 연결합니다."
+                            onClick={() => {
+                              setGitConnectMode("later");
+                              setGitUrl("");
+                            }}
+                          />
+                        </>
                       ) : (
-                        <p className="mt-2 text-xs font-semibold text-slate-500">
-                          GitHub 계정을 먼저 연결하면 저장소 URL을 입력할 수
-                          있습니다.
-                        </p>
+                        <>
+                          <GithubOptionCard
+                            selected={false}
+                            icon={Github}
+                            title="GitHub 연결하기"
+                            description="GitHub 인증 후 이 화면으로 돌아옵니다."
+                            onClick={openGithubAccountOAuth}
+                          />
+
+                          <GithubOptionCard
+                            selected={gitConnectMode === "later"}
+                            icon={Link2}
+                            title="나중에 연결"
+                            description="저장소 없이 작업 폴더를 먼저 생성합니다."
+                            onClick={() => {
+                              setGitConnectMode("later");
+                              setGitUrl("");
+                            }}
+                          />
+                        </>
                       )}
                     </div>
+
+                    <label className="mt-3 block">
+                      <span className="mb-1.5 flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold text-[#475569]">
+                          GitHub 저장소 URL
+                        </span>
+
+                        <span className="text-[11px] text-[#94A3B8]">
+                          선택 입력
+                        </span>
+                      </span>
+
+                      <input
+                        className={[
+                          "h-10 w-full rounded-lg px-3.5 font-mono text-[13px] outline-none transition-colors",
+                          !isGithubConnected
+                            ? "cursor-not-allowed border border-[#E5EAF3] bg-[#F7F8FA] text-[#94A3B8]"
+                            : isGitUrlInvalid
+                              ? "border border-red-300 bg-red-50 text-red-700 focus:ring-2 focus:ring-red-100"
+                              : "border border-[#E5EAF3] bg-white text-[#111827] placeholder:text-[#94A3B8] focus:border-[#5873F9] focus:ring-2 focus:ring-[#5873F9]/15",
+                        ].join(" ")}
+                        placeholder={
+                          isGithubConnected
+                            ? "https://github.com/username/repository.git"
+                            : "GitHub 계정 연결 후 입력할 수 있습니다."
+                        }
+                        value={gitUrl}
+                        disabled={!isGithubConnected}
+                        onFocus={() => {
+                          if (isGithubConnected) {
+                            setGitConnectMode("repo");
+                          }
+                        }}
+                        onChange={(event) => {
+                          setGitConnectMode("repo");
+                          setGitUrl(event.target.value);
+                        }}
+                        onBlur={(event) =>
+                          setGitUrl(normalizeGitHubRepoUrl(event.target.value))
+                        }
+                      />
+                    </label>
+
+                    {isGitUrlInvalid ? (
+                      <p className="mt-1.5 text-xs font-semibold text-red-600">
+                        GitHub 저장소 주소는
+                        https://github.com/username/repository.git 형식이어야
+                        합니다.
+                      </p>
+                    ) : isGithubConnected ? (
+                      <p className="mt-1.5 text-xs text-[#94A3B8]">
+                        SSH 주소를 입력하면 가능한 경우 HTTPS 주소로 자동
+                        변환합니다.
+                      </p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-[#94A3B8]">
+                        GitHub 계정을 먼저 연결하면 저장소 URL을 입력할 수
+                        있습니다.
+                      </p>
+                    )}
                   </section>
                 </div>
               </main>
 
-              <aside className="p-5">
-                <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50">
-                      {selectedTemplate?.icon}
-                    </div>
+              {/* 읽기 전용 참고 영역 — 입력 폼보다 튀지 않게 배경만 살짝 낮춘다 */}
+              <aside className="flex min-h-0 flex-col bg-[#FAFBFC] px-6 py-5 lg:overflow-y-auto">
+                <p className="text-[11px] font-semibold text-[#94A3B8]">
+                  선택한 템플릿
+                </p>
 
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-wider text-blue-500">
-                        Selected Template
-                      </p>
+                <div className="mt-2 flex items-start gap-3">
+                  {selectedTemplate && (
+                    <TemplateIcon template={selectedTemplate} />
+                  )}
 
-                      <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                        {selectedTemplate?.name}
-                      </h2>
+                  <div className="min-w-0">
+                    <h2 className="text-[15px] font-semibold text-[#111827]">
+                      {selectedTemplate?.name}
+                    </h2>
 
-                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                        {selectedTemplate?.detail}
-                      </p>
-                    </div>
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-[#64748B]">
+                      {selectedTemplate?.detail}
+                    </p>
                   </div>
-                </section>
+                </div>
 
-                <section className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-                  <SectionTitle
-                    icon={Code2}
+                <div className="mt-5 flex min-h-0 flex-col lg:flex-1">
+                  <PaneTitle
+                    icon={FolderTree}
                     title="생성 파일 구조"
-                    description="생성될 작업 폴더의 기본 구조입니다."
+                    hint="생성될 작업 폴더의 기본 구조"
                   />
 
-                  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 p-4 font-mono text-[12px] leading-5 text-slate-200">
-                    <div className="mb-1 font-semibold text-blue-300">
+                  <div className="mt-3 overflow-auto rounded-xl bg-[#0F172A] px-4 py-3 font-mono text-[12.5px] leading-6 text-slate-200 lg:min-h-0">
+                    <div className="font-semibold text-[#93A8FF]">
                       ▾ {formData.name.trim() || "work-folder"}
                     </div>
 
@@ -1152,39 +1185,29 @@ export default function CreateProjectModal({
                       ? renderFileTree(selectedTemplate.structure)
                       : null}
                   </div>
-                </section>
-
-                <section className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-                  <SectionTitle
-                    icon={Github}
-                    title="저장소 연결"
-                    description={
-                      gitConnectMode === "repo" && normalizedGitUrl
-                        ? "GitHub 저장소 URL이 입력되었습니다."
-                        : "저장소 없이 작업 폴더를 먼저 생성합니다."
-                    }
-                  />
-                </section>
+                </div>
               </aside>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-blue-50 bg-slate-50/80 px-6 py-4">
-          <div className="hidden items-center gap-2 text-xs font-bold text-slate-500 sm:flex">
-            <CheckCircle2 size={15} className="text-blue-600" />
-            현재 선택된 프로젝트 안에 작업 폴더가 생성됩니다.
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[#E5EAF3] bg-[#FAFBFC] px-6 py-4">
+          <div className="hidden min-w-0 items-center gap-2 text-xs text-[#64748B] sm:flex">
+            <CheckCircle2 size={15} className="shrink-0 text-[#5873F9]" />
+            <span className="truncate">
+              현재 선택된 프로젝트 안에 작업 폴더가 생성됩니다.
+            </span>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             {step === 2 && (
               <button
                 type="button"
                 onClick={() => setStep(1)}
                 disabled={isSubmitting}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[#E5EAF3] bg-white px-4 text-sm font-semibold text-[#475569] transition-colors hover:bg-slate-50 disabled:opacity-50"
               >
-                <ArrowLeft size={16} />
+                <ArrowLeft size={15} />
                 이전
               </button>
             )}
@@ -1193,7 +1216,7 @@ export default function CreateProjectModal({
               type="button"
               onClick={handleClose}
               disabled={isSubmitting}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              className="h-10 rounded-lg border border-[#E5EAF3] bg-white px-4 text-sm font-semibold text-[#475569] transition-colors hover:bg-slate-50 disabled:opacity-50"
             >
               취소
             </button>
@@ -1203,24 +1226,24 @@ export default function CreateProjectModal({
                 type="button"
                 onClick={handleNext}
                 disabled={!selectedTemplateId}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                className="inline-flex h-10 min-w-[128px] items-center justify-center gap-1.5 rounded-lg bg-[#5873F9] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4965E8] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
               >
                 다음 단계
-                <Rocket size={16} />
+                <ArrowRight size={15} />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={isCreateDisabled}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                className="inline-flex h-10 min-w-[128px] items-center justify-center gap-1.5 rounded-lg bg-[#5873F9] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4965E8] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
               >
                 {isSubmitting ? "생성 중..." : "작업 폴더 만들기"}
-                <FolderPlus size={16} />
+                <FolderPlus size={15} />
               </button>
             )}
           </div>
-        </div>
+        </footer>
       </section>
     </div>
   );
@@ -1228,51 +1251,63 @@ export default function CreateProjectModal({
 
 function StepBadge({ step }) {
   return (
-    <div className="hidden items-center gap-2 md:flex">
+    <ol className="hidden items-center gap-1.5 md:flex">
       {["템플릿 선택", "작업 폴더 설정"].map((label, index) => {
         const stepNumber = index + 1;
         const isActive = step === stepNumber;
         const isDone = step > stepNumber;
 
         return (
-          <div key={label} className="flex items-center gap-2">
+          <li key={label} className="flex items-center gap-1.5">
             <div
+              aria-current={isActive ? "step" : undefined}
               className={[
-                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-black",
+                "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold",
                 isActive
-                  ? "bg-blue-600 text-white shadow-sm"
+                  ? "bg-[#5873F9] text-white"
                   : isDone
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-slate-100 text-slate-400",
+                    ? "bg-[#EEF3FF] text-[#5873F9]"
+                    : "bg-slate-100 text-[#94A3B8]",
               ].join(" ")}
             >
-              {isDone ? <CheckCircle2 size={13} /> : <span>{stepNumber}</span>}
+              {isDone ? (
+                <Check size={13} strokeWidth={3} />
+              ) : (
+                <span>{stepNumber}</span>
+              )}
               <span>{label}</span>
             </div>
 
-            {index === 0 && (
-              <div className="hidden h-px w-5 bg-slate-200 sm:block" />
-            )}
-          </div>
+            {index === 0 && <div className="h-px w-4 bg-[#E5EAF3]" />}
+          </li>
         );
       })}
+    </ol>
+  );
+}
+
+// 템플릿 아이콘을 같은 크기의 상자에 담는다. 목록·요약·참고 영역이 함께 쓴다.
+function TemplateIcon({ template, size = "md" }) {
+  return (
+    <div
+      className={[
+        "flex shrink-0 items-center justify-center rounded-lg border border-[#EEF1F6] bg-[#F7F8FA]",
+        size === "lg" ? "h-12 w-12" : "h-10 w-10",
+      ].join(" ")}
+    >
+      {template.icon}
     </div>
   );
 }
 
-function SectionTitle({ icon: Icon, title, description }) {
+function PaneTitle({ icon: Icon, title, hint }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-        <Icon size={17} />
-      </div>
-
-      <div>
-        <h3 className="text-sm font-black text-slate-950">{title}</h3>
-        <p className="mt-0.5 text-xs font-semibold leading-5 text-slate-500">
-          {description}
-        </p>
-      </div>
+    <div className="flex items-center gap-2">
+      <Icon size={15} className="shrink-0 text-[#5873F9]" />
+      <h3 className="text-[13px] font-semibold text-[#111827]">{title}</h3>
+      {hint && (
+        <span className="truncate text-xs text-[#94A3B8]">{hint}</span>
+      )}
     </div>
   );
 }
@@ -1291,43 +1326,41 @@ function GithubOptionCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={selected}
       className={[
-        "relative flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition-all",
+        "flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
         disabled
-          ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"
+          ? "cursor-not-allowed border-[#E5EAF3] bg-[#F7F8FA] opacity-60"
           : selected
-            ? "border-blue-500 bg-blue-50 shadow-sm ring-4 ring-blue-100"
-            : "border-blue-100 bg-white hover:border-blue-300 hover:bg-blue-50/60",
+            ? "border-[#5873F9] bg-[#F5F8FF]"
+            : "border-[#E5EAF3] bg-white hover:border-[#C9D4FF]",
       ].join(" ")}
     >
-      <div
+      <Icon
+        size={16}
         className={[
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-          selected ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700",
+          "shrink-0",
+          selected ? "text-[#5873F9]" : "text-[#64748B]",
         ].join(" ")}
-      >
-        <Icon size={17} />
-      </div>
+      />
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-black text-slate-950">{title}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[13px] font-semibold text-[#111827]">{title}</p>
           {badge && (
-            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-500">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-[#64748B]">
               {badge}
             </span>
           )}
         </div>
 
-        <p className="mt-0.5 text-xs font-semibold leading-5 text-slate-500">
+        <p className="truncate text-[11px] text-[#94A3B8]" title={description}>
           {description}
         </p>
       </div>
 
       {selected && (
-        <div className="absolute right-3 top-3 text-blue-600">
-          <CheckCircle2 size={17} />
-        </div>
+        <CheckCircle2 size={15} className="shrink-0 text-[#5873F9]" />
       )}
     </button>
   );

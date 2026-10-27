@@ -3,7 +3,13 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "next/navigation";
-import { VscSend, VscChevronLeft, VscChevronRight } from "react-icons/vsc";
+import {
+  VscSend,
+  VscChevronRight,
+  VscSparkle,
+  VscCommentDiscussion,
+  VscDebugAlt,
+} from "react-icons/vsc";
 
 import MenuBar from "@/components/ide/MenuBar";
 import ActivityBar from "@/components/ide/ActivityBar";
@@ -22,6 +28,7 @@ import CreateProjectModal from "@/components/ide/CreateProjectModal";
 import WebPreview from "@/components/ide/WebPreview";
 import MyPageShell from "../mypage/MyPageShell";
 import SafeRunStatusBar from "@/components/ide/SafeRunStatusBar";
+import { PanelResizeHandle, RightPanelRail } from "@/components/ide/IdePanelChrome";
 
 import {
   fetchChatHistoryApi,
@@ -36,7 +43,7 @@ import {
   closeAllFiles,
   clearVirtualTree,
 } from "@/store/slices/fileSystemSlice";
-import { toggleSidebar, toggleRightPanel } from "@/store/slices/uiSlice";
+import { toggleRightPanel } from "@/store/slices/uiSlice";
 
 // const MyPagePanel = () => (
 //   <div className="flex-1 flex items-center justify-center text-gray-500 font-bold">
@@ -45,16 +52,21 @@ import { toggleSidebar, toggleRightPanel } from "@/store/slices/uiSlice";
 // );
 
 const LEFT_SIDEBAR_DEFAULT_WIDTH = 260;
-const LEFT_SIDEBAR_MIN_WIDTH = 220;
-const LEFT_SIDEBAR_MAX_WIDTH = 420;
+const LEFT_SIDEBAR_MIN_WIDTH = 200;
+const LEFT_SIDEBAR_MAX_WIDTH = 400;
 
 const RIGHT_PANEL_DEFAULT_WIDTH = 320;
-const RIGHT_PANEL_MIN_WIDTH = 300;
-const RIGHT_PANEL_MAX_WIDTH = 560;
+const RIGHT_PANEL_MIN_WIDTH = 280;
+const RIGHT_PANEL_MAX_WIDTH = 450;
 
-const TERMINAL_DEFAULT_HEIGHT = 250;
-const TERMINAL_MIN_HEIGHT = 140;
-const TERMINAL_MAX_HEIGHT = 520;
+const TERMINAL_DEFAULT_HEIGHT = 220;
+const TERMINAL_MIN_HEIGHT = 120;
+// 터미널 최대 높이는 고정값이 아니라 편집 영역 높이의 비율이다(작은 화면에서도 에디터가 남게).
+const TERMINAL_MAX_HEIGHT_RATIO = 0.65;
+
+// 창이 좁을 때 양쪽 패널이 에디터를 밀어내지 않도록 비율로도 막는다.
+const LEFT_SIDEBAR_MAX_RATIO = "30%";
+const RIGHT_PANEL_MAX_RATIO = "35%";
 
 const clampPanelSize = (value, min, max) => {
   return Math.min(max, Math.max(min, value));
@@ -201,8 +213,8 @@ function CollaborationPanel({ workspaceId }) {
   });
 
   return (
-    <div className="flex flex-col h-full bg-white font-sans">
-      <div className="flex-1 overflow-y-auto p-4 bg-[#fbfbfc] space-y-4 custom-scrollbar">
+    <div className="flex flex-col h-full bg-[#F8FAFC] font-sans">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
         {displayMessages.length === 0 && (
           <div className="text-center text-gray-400 text-xs font-bold py-10">
             {chatMode === "ALL"
@@ -241,7 +253,7 @@ function CollaborationPanel({ workspaceId }) {
         <div ref={endRef} />
       </div>
 
-      <div className="p-3 bg-white border-t border-gray-200 shrink-0 flex flex-col gap-2.5">
+      <div className="p-3 bg-[#F8FAFC] border-t border-gray-200 shrink-0 flex flex-col gap-2.5">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold text-gray-500 whitespace-nowrap pl-1">
             수신:
@@ -250,7 +262,7 @@ function CollaborationPanel({ workspaceId }) {
           <select
             value={chatMode}
             onChange={(e) => setChatMode(e.target.value)}
-            className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-[12px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-green-400 focus:bg-white transition-colors cursor-pointer"
+            className="w-full bg-white border border-gray-200 text-gray-700 text-[12px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-green-400 focus:bg-white transition-colors cursor-pointer"
           >
             <option value="ALL">📢 모두에게 (Public)</option>
 
@@ -264,7 +276,7 @@ function CollaborationPanel({ workspaceId }) {
           </select>
         </div>
 
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg focus-within:border-green-400 focus-within:bg-white px-3 py-2 transition-all shadow-inner">
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg focus-within:border-green-400 px-3 py-2 transition-all">
           <input
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
@@ -373,6 +385,22 @@ export default function TeamIdeMain() {
         `${workspaceId}:${activeProject}:${activeBranch || "master"}`,
   );
 
+  // 패널 사이 구분선. 샌드박스일 때는 남색으로 "지금 개인 레이어"임을 계속 보여 준다.
+  const panelBorderClass = isSandboxMode ? "border-indigo-300" : "border-gray-200";
+
+  const hasRightPanel = isAgentVisible || isDebugMode;
+  const rightRailItems = isDebugMode
+    ? [{ id: "debug", label: "디버그", icon: <VscDebugAlt size={20} /> }]
+    : [
+        { id: "ai", label: "AI 어시스트", icon: <VscSparkle size={20} /> },
+        { id: "chat", label: "팀 채팅", icon: <VscCommentDiscussion size={20} /> },
+      ];
+
+  const openRightPanelTab = (tabId) => {
+    if (tabId === "ai" || tabId === "chat") setRightTab(tabId);
+    if (!isRightPanelVisible) dispatch(toggleRightPanel());
+  };
+
   const startLeftSidebarResize = (event) => {
     event.preventDefault();
     setResizingPanel("left");
@@ -427,12 +455,12 @@ export default function TeamIdeMain() {
           ? layoutRect.bottom - event.clientY
           : window.innerHeight - event.clientY;
 
+        const maxHeight = layoutRect
+          ? Math.max(TERMINAL_MIN_HEIGHT, layoutRect.height * TERMINAL_MAX_HEIGHT_RATIO)
+          : window.innerHeight * TERMINAL_MAX_HEIGHT_RATIO;
+
         setTerminalHeight(
-          clampPanelSize(
-            nextHeight,
-            TERMINAL_MIN_HEIGHT,
-            TERMINAL_MAX_HEIGHT,
-          ),
+          clampPanelSize(nextHeight, TERMINAL_MIN_HEIGHT, maxHeight),
         );
       }
     };
@@ -480,70 +508,49 @@ export default function TeamIdeMain() {
         return (
           <div
             ref={editorLayoutRef}
-            className={`flex-1 min-h-0 flex overflow-hidden p-2 gap-2 transition-colors duration-300 ${
+            className={`flex-1 min-h-0 min-w-0 flex overflow-hidden transition-colors duration-300 ${
               isSandboxMode ? "bg-[#E0E7FF]" : "bg-[#f0f2f5]"
             }`}
           >
-            {/* 왼쪽 탐색기 패널 */}
+            {/* 왼쪽 탐색기 패널. 접어도 Sidebar 를 언마운트하지 않는다 —
+                파일 트리 이벤트 소켓(/ws/workspace-events)이 Sidebar 안에 있다. */}
             <div
-              className={`relative rounded-2xl shadow-sm overflow-hidden flex flex-col shrink-0 ${
+              className={`relative overflow-hidden flex flex-col shrink-0 bg-[#F8FAFC] ${
                 resizingPanel === "left"
                   ? "transition-none"
-                  : "transition-all duration-300 ease-in-out"
-              } ${
-                isSandboxMode
-                  ? "bg-white border border-indigo-400 shadow-[0_0_0_1px_rgba(99,102,241,0.14)]"
-                  : "bg-white border border-gray-200"
+                  : "transition-[width,opacity] duration-200 ease-out"
               } ${
                 isSidebarVisible
-                  ? "opacity-100"
-                  : "opacity-0 border-transparent"
+                  ? `opacity-100 border-r ${panelBorderClass}`
+                  : "opacity-0"
               }`}
               style={{
                 width: isSidebarVisible ? `${leftSidebarWidth}px` : "0px",
+                maxWidth: LEFT_SIDEBAR_MAX_RATIO,
               }}
+              aria-hidden={!isSidebarVisible}
             >
               {isSidebarVisible && (
-                <div
-                  role="separator"
-                  aria-orientation="vertical"
+                <PanelResizeHandle
+                  orientation="vertical"
+                  edge="right"
+                  active={resizingPanel === "left"}
                   title="탐색기 너비 조절"
                   onPointerDown={startLeftSidebarResize}
-                  className="absolute right-0 top-0 z-[700] h-full w-3 translate-x-1/2 cursor-col-resize touch-none"
-                >
-                  <div className="mx-auto h-full w-px bg-transparent transition hover:bg-blue-400" />
-                </div>
+                />
               )}
 
               <div
-                className="h-full flex flex-col shrink-0"
-                style={{
-                  width: `${leftSidebarWidth}px`,
-                }}
+                className="h-full w-full flex flex-col"
+                style={{ minWidth: `${LEFT_SIDEBAR_MIN_WIDTH}px` }}
               >
                 <Sidebar />
               </div>
             </div>
 
-            {/* 탐색기가 닫혀 있을 때 열기 버튼 */}
-            {!isSidebarVisible && (
-              <div className="relative flex items-center justify-center -ml-4 z-10 w-0">
-                <button
-                  onClick={() => dispatch(toggleSidebar())}
-                  className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center shadow-md text-gray-500 hover:text-blue-600 hover:scale-110 transition-all z-20"
-                  title="탐색기 열기"
-                >
-                  <VscChevronRight size={14} />
-                </button>
-              </div>
-            )}
-
-            {/* 중앙 에디터 영역 */}
-            <div className={`flex-1 min-h-0 flex flex-col min-w-0 bg-white rounded-2xl shadow-sm border overflow-hidden transition-all duration-300 z-0 relative ${
-              isSandboxMode
-                ? "border-indigo-400 shadow-[0_0_0_1px_rgba(99,102,241,0.14)]"
-                : "border-gray-200"
-            }`}>
+            {/* 중앙 에디터 영역 — 남은 가로 공간을 전부 차지한다.
+                Monaco 는 automaticLayout, xterm 은 ResizeObserver 로 크기를 따라간다. */}
+            <div className="flex-1 min-h-0 min-w-[240px] flex flex-col bg-white overflow-hidden relative z-0">
               <FileTabs />
 
               <div className="flex-1 min-h-0 flex relative overflow-hidden">
@@ -555,120 +562,104 @@ export default function TeamIdeMain() {
 
               {isTerminalVisible && (
                 <div
-                  className={`relative border-t bg-white shrink-0 z-[600] ${
-                    isSandboxMode ? "border-indigo-100" : "border-gray-200"
-                  }`}
+                  className={`relative border-t bg-white shrink-0 z-[600] ${panelBorderClass}`}
                   style={{
                     height: `${terminalHeight}px`,
+                    minHeight: `${TERMINAL_MIN_HEIGHT}px`,
+                    maxHeight: `${TERMINAL_MAX_HEIGHT_RATIO * 100}%`,
                   }}
                 >
-                  <div
-                    role="separator"
-                    aria-orientation="horizontal"
+                  <PanelResizeHandle
+                    orientation="horizontal"
+                    edge="top"
+                    active={resizingPanel === "terminal"}
                     title="터미널 높이 조절"
                     onPointerDown={startTerminalResize}
-                    className="absolute left-0 top-0 z-[700] h-3 w-full -translate-y-1/2 cursor-row-resize touch-none"
-                  >
-                    <div className="h-px w-full bg-transparent transition hover:bg-blue-400" />
-                  </div>
+                  />
 
                   <BottomPanel />
                 </div>
               )}
             </div>
 
-            {/* 우측 패널이 닫혀 있을 때 열기 버튼 */}
-            {(isAgentVisible || isDebugMode) && !isRightPanelVisible && (
-              <div className="relative flex items-center justify-center -mr-4 z-10 w-0">
-                <button
-                  onClick={() => dispatch(toggleRightPanel())}
-                  className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center shadow-md text-gray-500 hover:text-blue-600 hover:scale-110 transition-all z-20"
-                  title="AI/채팅창 열기"
-                >
-                  <VscChevronLeft size={14} />
-                </button>
-              </div>
-            )}
-
-            {/* 오른쪽 AI/채팅 패널 */}
-            {(isAgentVisible || isDebugMode) && (
+            {/* 오른쪽 AI/채팅 패널. 접어도 언마운트하지 않는다 —
+                팀 채팅 소켓과 메시지 상태가 CollaborationPanel 안에 있다. */}
+            {hasRightPanel && (
               <div
-                className={`relative rounded-2xl shadow-sm overflow-hidden flex flex-col z-[600] shrink-0 ${
+                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
                   resizingPanel === "right"
                     ? "transition-none"
-                    : "transition-all duration-300 ease-in-out"
-                } ${
-                  isSandboxMode
-                    ? "bg-white border border-indigo-400 shadow-[0_0_0_1px_rgba(99,102,241,0.14)]"
-                    : "bg-white border border-gray-200"
+                    : "transition-[width,opacity] duration-200 ease-out"
                 } ${
                   isRightPanelVisible
-                    ? "opacity-100"
-                    : "opacity-0 border-transparent"
+                    ? `opacity-100 border-l ${panelBorderClass}`
+                    : "opacity-0"
                 }`}
                 style={{
                   width: isRightPanelVisible ? `${rightPanelWidth}px` : "0px",
+                  maxWidth: RIGHT_PANEL_MAX_RATIO,
                 }}
+                aria-hidden={!isRightPanelVisible}
               >
                 {isRightPanelVisible && (
-                  <div
-                    role="separator"
-                    aria-orientation="vertical"
+                  <PanelResizeHandle
+                    orientation="vertical"
+                    edge="left"
+                    active={resizingPanel === "right"}
                     title="AI/채팅 패널 너비 조절"
                     onPointerDown={startRightPanelResize}
-                    className="absolute left-0 top-0 z-[700] h-full w-3 -translate-x-1/2 cursor-col-resize touch-none"
-                  >
-                    <div className="mx-auto h-full w-px bg-transparent transition hover:bg-blue-400" />
-                  </div>
+                  />
                 )}
 
                 <div
-                  className="h-full flex flex-col shrink-0 bg-white"
-                  style={{
-                    width: `${rightPanelWidth}px`,
-                  }}
+                  className="h-full w-full flex flex-col bg-[#F8FAFC]"
+                  style={{ minWidth: `${RIGHT_PANEL_MIN_WIDTH}px` }}
                 >
                   {isDebugMode ? (
                     <DebugPanel />
                   ) : (
                     <div className="flex flex-col h-full">
-                      <div
-                        className="flex items-center justify-between h-11 border-b border-gray-200 bg-[#f8f9fa] shrink-0 px-2 pt-1"
-                      >
-                        <div className="flex h-full flex-1">
+                      <div className="flex items-center justify-between h-9 border-b border-gray-200 bg-[#F8FAFC] shrink-0 pl-1 pr-1.5">
+                        <div className="flex h-full flex-1 min-w-0">
                           <button
+                            type="button"
                             onClick={() => setRightTab("ai")}
-                            className={`flex-1 h-full text-[13px] font-bold transition-colors rounded-t-lg ${
+                            className={`flex items-center gap-1.5 h-full px-3 text-[12px] font-bold border-b-2 transition-colors ${
                               rightTab === "ai"
-                                ? "text-blue-600 bg-white shadow-[0_-2px_5px_rgba(0,0,0,0.03)]"
-                                : "text-gray-500 hover:bg-gray-100"
+                                ? "border-[#5873F9] text-[#5873F9]"
+                                : "border-transparent text-gray-500 hover:text-gray-700"
                             }`}
                           >
+                            <VscSparkle size={14} />
                             AI 어시스트
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => setRightTab("chat")}
-                            className={`flex-1 h-full text-[13px] font-bold transition-colors rounded-t-lg ${
+                            className={`flex items-center gap-1.5 h-full px-3 text-[12px] font-bold border-b-2 transition-colors ${
                               rightTab === "chat"
-                                ? "text-green-600 bg-white shadow-[0_-2px_5px_rgba(0,0,0,0.03)]"
-                                : "text-gray-500 hover:bg-gray-100"
+                                ? "border-[#5873F9] text-[#5873F9]"
+                                : "border-transparent text-gray-500 hover:text-gray-700"
                             }`}
                           >
+                            <VscCommentDiscussion size={14} />
                             팀 채팅
                           </button>
                         </div>
 
                         <button
+                          type="button"
                           onClick={() => dispatch(toggleRightPanel())}
-                          className="mb-1 ml-2 p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-md transition-all"
-                          title="패널 닫기"
+                          className="shrink-0 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                          title="패널 접기"
+                          aria-label="AI/채팅 패널 접기"
                         >
-                          <VscChevronRight size={18} />
+                          <VscChevronRight size={16} />
                         </button>
                       </div>
 
-                      <div className="flex-1 overflow-hidden relative bg-white">
+                      <div className="flex-1 min-h-0 overflow-hidden relative bg-[#F8FAFC]">
                         <div
                           className={`absolute inset-0 ${
                             rightTab === "ai" ? "block" : "hidden"
@@ -690,6 +681,15 @@ export default function TeamIdeMain() {
                 </div>
               </div>
             )}
+
+            {/* 오른쪽 패널을 접었을 때의 세로 아이콘 바 */}
+            {hasRightPanel && !isRightPanelVisible && (
+              <RightPanelRail
+                items={rightRailItems}
+                activeId={isDebugMode ? "debug" : rightTab}
+                onSelect={openRightPanelTab}
+              />
+            )}
           </div>
         );
     }
@@ -697,7 +697,7 @@ export default function TeamIdeMain() {
 
   return (
     <div
-      className={`w-full h-[calc(100dvh-68px)] min-h-0 flex flex-col text-[#333] overflow-hidden font-sans transition-colors duration-700 ${
+      className={`w-full h-full flex-1 min-h-0 min-w-0 flex flex-col text-[#333] overflow-hidden font-sans transition-colors duration-700 ${
         isSandboxMode ? "bg-[#E0E7FF]" : "bg-white"
       }`}
     >
