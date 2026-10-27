@@ -213,8 +213,8 @@ function CollaborationPanel({ workspaceId }) {
   });
 
   return (
-    <div className="flex flex-col h-full bg-white font-sans">
-      <div className="flex-1 overflow-y-auto p-4 bg-[#fbfbfc] space-y-4 custom-scrollbar">
+    <div className="flex flex-col h-full bg-[#F8FAFC] font-sans">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
         {displayMessages.length === 0 && (
           <div className="text-center text-gray-400 text-xs font-bold py-10">
             {chatMode === "ALL"
@@ -253,7 +253,7 @@ function CollaborationPanel({ workspaceId }) {
         <div ref={endRef} />
       </div>
 
-      <div className="p-3 bg-white border-t border-gray-200 shrink-0 flex flex-col gap-2.5">
+      <div className="p-3 bg-[#F8FAFC] border-t border-gray-200 shrink-0 flex flex-col gap-2.5">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold text-gray-500 whitespace-nowrap pl-1">
             수신:
@@ -262,7 +262,7 @@ function CollaborationPanel({ workspaceId }) {
           <select
             value={chatMode}
             onChange={(e) => setChatMode(e.target.value)}
-            className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-[12px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-green-400 focus:bg-white transition-colors cursor-pointer"
+            className="w-full bg-white border border-gray-200 text-gray-700 text-[12px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-green-400 focus:bg-white transition-colors cursor-pointer"
           >
             <option value="ALL">📢 모두에게 (Public)</option>
 
@@ -276,7 +276,7 @@ function CollaborationPanel({ workspaceId }) {
           </select>
         </div>
 
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg focus-within:border-green-400 focus-within:bg-white px-3 py-2 transition-all shadow-inner">
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg focus-within:border-green-400 px-3 py-2 transition-all">
           <input
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
@@ -515,7 +515,7 @@ export default function TeamIdeMain() {
             {/* 왼쪽 탐색기 패널. 접어도 Sidebar 를 언마운트하지 않는다 —
                 파일 트리 이벤트 소켓(/ws/workspace-events)이 Sidebar 안에 있다. */}
             <div
-              className={`relative overflow-hidden flex flex-col shrink-0 bg-white ${
+              className={`relative overflow-hidden flex flex-col shrink-0 bg-[#F8FAFC] ${
                 resizingPanel === "left"
                   ? "transition-none"
                   : "transition-[width,opacity] duration-200 ease-out"
@@ -586,7 +586,7 @@ export default function TeamIdeMain() {
                 팀 채팅 소켓과 메시지 상태가 CollaborationPanel 안에 있다. */}
             {hasRightPanel && (
               <div
-                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-white ${
+                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
                   resizingPanel === "right"
                     ? "transition-none"
                     : "transition-[width,opacity] duration-200 ease-out"
@@ -612,14 +612,14 @@ export default function TeamIdeMain() {
                 )}
 
                 <div
-                  className="h-full w-full flex flex-col bg-white"
+                  className="h-full w-full flex flex-col bg-[#F8FAFC]"
                   style={{ minWidth: `${RIGHT_PANEL_MIN_WIDTH}px` }}
                 >
                   {isDebugMode ? (
                     <DebugPanel />
                   ) : (
                     <div className="flex flex-col h-full">
-                      <div className="flex items-center justify-between h-9 border-b border-gray-200 bg-white shrink-0 pl-1 pr-1.5">
+                      <div className="flex items-center justify-between h-9 border-b border-gray-200 bg-[#F8FAFC] shrink-0 pl-1 pr-1.5">
                         <div className="flex h-full flex-1 min-w-0">
                           <button
                             type="button"
@@ -627,7 +627,7 @@ export default function TeamIdeMain() {
                             className={`flex items-center gap-1.5 h-full px-3 text-[12px] font-bold border-b-2 transition-colors ${
                               rightTab === "ai"
                                 ? "border-[#5873F9] text-[#5873F9]"
-                                : "border-transparent text-gray-500 hover:text-gray-800"
+                                : "border-transparent text-gray-500 hover:text-gray-700"
                             }`}
                           >
                             <VscSparkle size={14} />
@@ -640,7 +640,7 @@ export default function TeamIdeMain() {
                             className={`flex items-center gap-1.5 h-full px-3 text-[12px] font-bold border-b-2 transition-colors ${
                               rightTab === "chat"
                                 ? "border-[#5873F9] text-[#5873F9]"
-                                : "border-transparent text-gray-500 hover:text-gray-800"
+                                : "border-transparent text-gray-500 hover:text-gray-700"
                             }`}
                           >
                             <VscCommentDiscussion size={14} />
@@ -659,7 +659,7 @@ export default function TeamIdeMain() {
                         </button>
                       </div>
 
-                      <div className="flex-1 min-h-0 overflow-hidden relative bg-white">
+                      <div className="flex-1 min-h-0 overflow-hidden relative bg-[#F8FAFC]">
                         <div
                           className={`absolute inset-0 ${
                             rightTab === "ai" ? "block" : "hidden"

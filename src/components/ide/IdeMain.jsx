@@ -322,7 +322,7 @@ export default function IdeMain() {
 
             <div
 
-              className={`relative overflow-hidden flex flex-col shrink-0 bg-white ${
+              className={`relative overflow-hidden flex flex-col shrink-0 bg-[#F8FAFC] ${
 
                 resizingPanel === "left"
 
@@ -449,7 +449,7 @@ export default function IdeMain() {
 
               <div
 
-                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-white ${
+                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
 
                   resizingPanel === "right"
 
@@ -505,7 +505,7 @@ export default function IdeMain() {
 
                 >
 
-                  <div className="flex items-center justify-between h-9 border-b border-gray-200 shrink-0 pl-1 pr-1.5 bg-white">
+                  <div className="flex items-center justify-between h-9 border-b border-gray-200 shrink-0 pl-1 pr-1.5 bg-[#F8FAFC]">
 
                     <div className="flex items-center gap-1.5 h-full px-3 text-[12px] font-bold border-b-2 border-[#5873F9] text-[#5873F9] select-none cursor-default">
 
@@ -535,7 +535,7 @@ export default function IdeMain() {
 
                   </div>
 
-                  <div className="flex-1 min-h-0 overflow-hidden relative bg-white">
+                  <div className="flex-1 min-h-0 overflow-hidden relative bg-[#F8FAFC]">
 
                     {isDebugMode ? <DebugPanel /> : <AgentPanel />}
 

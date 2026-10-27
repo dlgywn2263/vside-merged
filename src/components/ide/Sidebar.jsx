@@ -1422,18 +1422,17 @@ export default function Sidebar() {
     : tree?.children || [];
 
   return (
-    <div className="h-full w-full bg-white flex flex-col font-sans">
-      <div className="flex items-center justify-between gap-3 px-4 h-[44px] border-b border-gray-100 shrink-0 bg-white">
-        {/* 헤더에는 이름과 접기 버튼만 둔다. 새로고침·새 파일·새 폴더·모두 접기 버튼이
+    <div className="h-full w-full bg-[#F8FAFC] flex flex-col font-sans">
+      <div className="flex items-center justify-between gap-3 px-4 h-[44px] border-b border-gray-200 shrink-0 bg-[#F8FAFC]">
+        {/* 헤더에는 제목과 접기 버튼만 둔다. 새로고침·새 파일·새 폴더·모두 접기 버튼이
             이름 자리를 먹어 "병원 예..." 처럼 잘렸다. 파일·폴더 만들기는 트리 우클릭 메뉴에 그대로 있다.
-            이름은 넘칠 때만 말줄임하고 전체 이름은 툴팁으로 보여 준다. */}
+            트리 첫 줄에 작업 폴더가 바로 보이므로 제목은 "탐색기"로 줄이고,
+            워크스페이스 전체 이름은 툴팁으로 보여 준다. */}
         <span
           className="min-w-0 flex-1 text-[12px] font-black text-gray-800 tracking-wider"
-          title={workspaceName ? `${workspaceName} 탐색기` : "탐색기"}
+          title={workspaceName || undefined}
         >
-          <span className="block truncate whitespace-nowrap">
-            {workspaceName ? `${workspaceName} 탐색기` : "탐색기"}
-          </span>
+          <span className="block truncate whitespace-nowrap">탐색기</span>
         </span>
 
         <button
@@ -1470,7 +1469,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar bg-[#fafafa]">
+      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar bg-[#F8FAFC]">
         {displayTreeChildren.length > 0 ? (
           displayTreeChildren.map((node, idx) => (
             <FileTreeItem

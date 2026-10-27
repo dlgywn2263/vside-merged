@@ -1010,16 +1010,16 @@ if (tree && tree.children) {
             </div>
           </div>
           {/* 2. 오른쪽 액션 영역 - 폭이 줄수록 텍스트를 먼저 접는다. */}
-          <div className="flex min-w-0 shrink-0 items-center whitespace-nowrap gap-1 min-[1120px]:gap-1.5 min-[1320px]:gap-3">
+          <div className="flex min-w-0 shrink-0 items-center whitespace-nowrap gap-1 min-[1120px]:gap-1.5 min-[1320px]:gap-2">
             {/* Run / Stop: 좁은 화면에서는 Run 글자만 숨기고 아이콘은 유지 */}
-            <div className="flex shrink-0 items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            <div className="flex h-8 shrink-0 items-center rounded-lg border border-gray-200 bg-white p-0.5">
               <button
                 onClick={handleQuickRun}
                 disabled={isRunning || isDebugMode}
                 className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-[12px] font-bold transition-all min-[1000px]:px-3 ${
                   isRunning || isDebugMode
                     ? "cursor-not-allowed text-gray-400"
-                    : "text-emerald-600 hover:bg-white hover:shadow-sm active:scale-95"
+                    : "text-emerald-600 hover:bg-emerald-50 active:scale-95"
                 }`}
                 title={isWaitingForSlot ? "다른 실행이 끝나기를 기다리는 중입니다" : "빠른 실행"}
               >
@@ -1032,31 +1032,30 @@ if (tree && tree.children) {
                   </>
                 )}
               </button>
-              <div className="mx-0.5 h-3 w-px bg-gray-300"></div>
+              <div className="mx-0.5 h-3.5 w-px bg-gray-200"></div>
               <button
                 onClick={handleQuickStop}
                 disabled={!isRunning && !isDebugMode}
                 className={`flex h-7 shrink-0 items-center justify-center rounded-md px-2 transition-all ${
                   !isRunning && !isDebugMode
                     ? "cursor-not-allowed text-gray-400"
-                    : "text-rose-500 hover:bg-white hover:shadow-sm active:scale-95"
+                    : "text-rose-500 hover:bg-rose-50 active:scale-95"
                 }`}
                 title="강제 중지"
               >
                 <VscDebugStop size={14} />
               </button>
             </div>
-            <div className="hidden h-4 w-px bg-gray-200 min-[1120px]:block"></div>
             {/* 새 작업폴더: 중간 폭에서는 + 아이콘만 표시 */}
             <button
               onClick={() => dispatch(openProjectModal())}
-              className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-800 px-2 text-[12px] font-bold text-white shadow-sm transition-all hover:bg-black active:scale-95 min-[1320px]:px-3"
+              className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[12px] font-bold text-gray-700 transition-colors hover:bg-gray-50 hover:border-gray-300 active:scale-95 min-[1320px]:px-3"
               title="새 작업폴더"
             >
               <VscAdd size={14} />
               <span className="hidden min-[1320px]:inline">새 작업폴더</span>
             </button>
-            <div className="hidden h-4 w-px bg-gray-200 min-[1120px]:block"></div>
+            <div className="mx-0.5 hidden h-4 w-px bg-gray-200 min-[1120px]:block"></div>
             {/* 샌드박스는 브랜치가 아니라 개인 레이어다. 브랜치 버튼과 따로 둔다. */}
             {mode === "team" && <SandboxControls />}
             {/* Git 브랜치는 작업 맥락상 가능한 오래 유지 */}
@@ -1076,7 +1075,7 @@ if (tree && tree.children) {
               <span className="truncate">{activeBranch || "master"}</span>
             </div>
             {mode === "team" && (
-              <div className="hidden h-4 w-px bg-gray-200 min-[1320px]:block"></div>
+              <div className="mx-0.5 hidden h-4 w-px bg-gray-200 min-[1320px]:block"></div>
             )}
             {/* Team / VoiceChat: 화면이 좁아지면 아바타와 라벨부터 숨긴다. */}
             {mode === "team" && (
@@ -1095,7 +1094,7 @@ if (tree && tree.children) {
                       key={member.userId}
                       className={`relative flex h-7 w-7 items-center justify-center rounded-full ${
                         avatarColors[idx % avatarColors.length]
-                      } text-[10px] font-bold text-white shadow-sm ring-2 ring-white`}
+                      } text-[10px] font-bold text-white ring-2 ring-white`}
                       title={`${member.nickname || member.email || "User"} 접속 중`}
                     >
                       {(member.nickname || member.email || "U")?.[0]?.toUpperCase()}
@@ -1103,7 +1102,7 @@ if (tree && tree.children) {
                     </div>
                   ))}
                   {onlineTeamMembers.length > 3 && (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-600 shadow-sm ring-2 ring-white">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-600 ring-2 ring-white">
                       +{onlineTeamMembers.length - 3}
                     </div>
                   )}
