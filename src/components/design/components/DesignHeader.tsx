@@ -145,6 +145,10 @@ export interface DesignHeaderProps {
   switcher: ReactNode;
   /** OWNER / MEMBER. 모르면 표시하지 않는다. */
   roleLabel?: string;
+  /** 서버가 알려 준 워크스페이스 모드. 모르면 주소의 ?mode 를 쓴다. */
+  mode?: "personal" | "team";
+  /** 워크스페이스 목록을 아직 받는 중이면 true. 그동안은 모드를 몰라 IDE 이동을 막는다. */
+  modeLoading?: boolean;
   state: DesignDocState;
   errorCount: number;
   progressPercent: number;
@@ -164,6 +168,8 @@ export interface DesignHeaderProps {
 export function DesignHeader({
   switcher,
   roleLabel,
+  mode,
+  modeLoading,
   state,
   errorCount,
   progressPercent,
@@ -200,10 +206,12 @@ export function DesignHeader({
     ? params.workspaceId[0] ?? ""
     : params?.workspaceId ?? "";
 
+  // 설계 초안 알림처럼 ?mode 없이 들어오는 경로가 있어 서버 값을 먼저 본다.
   const currentMode =
-    searchParams.get("mode") === "team"
+    mode ??
+    (searchParams.get("mode") === "team"
       ? "team"
-      : "personal";
+      : "personal");
 
   const isTeam = currentMode === "team";
 
@@ -306,9 +314,9 @@ export function DesignHeader({
 
           <button
             type="button"
-            disabled={!workspaceId}
+            disabled={!workspaceId || modeLoading}
             onClick={() => {
-              if (!workspaceId) {
+              if (!workspaceId || modeLoading) {
                 return;
               }
 

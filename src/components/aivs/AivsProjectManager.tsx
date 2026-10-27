@@ -762,11 +762,6 @@ export function AivsProjectManager({
 
   const modeFromUrl = searchParams.get("mode");
 
-  const currentMode: WorkspaceMode =
-    modeFromUrl === "team" || modeFromUrl === "personal"
-      ? modeFromUrl
-      : modeProp ?? "personal";
-
   /* =======================================================
 
      WORKSPACE
@@ -874,6 +869,18 @@ export function AivsProjectManager({
     );
 
   }, [allWorkspaces, currentWorkspaceId]);
+
+  // 서버가 알려 준 모드를 먼저 쓴다. 알림·상단 메뉴 링크는 ?mode 가 빠지거나
+  // personal 로 잘못 붙을 수 있어, 주소만 믿으면 팀 워크스페이스의 에디터가 개인 모드로 열렸다.
+  const currentMode: WorkspaceMode =
+    selectedWorkspace?.mode ??
+    (modeFromUrl === "team" || modeFromUrl === "personal"
+      ? modeFromUrl
+      : modeProp ?? "personal");
+
+  // 목록이 오기 전에는 위 값이 주소 기준이라, 그동안 에디터로 가는 버튼을 막는다.
+  // 목록 조회가 실패하면 sidebarLoading 이 풀리므로 주소 기준으로라도 갈 수 있다.
+  const modeLoading = sidebarLoading && !selectedWorkspace;
 
   /* =======================================================
 
@@ -1614,7 +1621,7 @@ export function AivsProjectManager({
 
           {/* 헤더 배경(#F4F6FA) 위에서 묻히지 않도록 보조 버튼은 흰 바탕 + 진한 테두리 */}
           <div className="flex shrink-0 items-center gap-2">
-            {currentWorkspaceId ? (
+            {currentWorkspaceId && !modeLoading ? (
               <Link
                 href={getIdeHref(String(currentWorkspaceId), currentMode)}
                 onClick={rememberWorkspace}
@@ -1654,7 +1661,7 @@ export function AivsProjectManager({
               {/* ===============================================
                   최근 작업 이어하기
               =============================================== */}
-              {!loading && !error && continueProject ? (
+              {!loading && !modeLoading &&!error && continueProject ? (
                 <ContinueWorkPanel
                   project={continueProject}
                   source={lastOpenedProject ? "opened" : "updated"}
@@ -1772,20 +1779,20 @@ export function AivsProjectManager({
               {/* ===============================================
                   FOLDER LIST
               =============================================== */}
-              {loading ? (
+              {loading || modeLoading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-xs text-slate-400">
                   <Clock3 size={15} />
                   작업 폴더를 불러오는 중입니다.
                 </div>
               ) : null}
 
-              {!loading && error ? (
+              {!loading && !modeLoading &&error ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-4 text-sm font-medium text-red-600">
                   {error}
                 </div>
               ) : null}
 
-              {!loading && !error && filteredProjects.length === 0 ? (
+              {!loading && !modeLoading &&!error && filteredProjects.length === 0 ? (
                 <div className="rounded-md border border-dashed border-slate-200 px-5 py-12 text-center">
                   <div className="mx-auto grid h-10 w-10 place-items-center rounded-md bg-[#EEF3FF] text-[#5873F9]">
                     <Code2 size={20} />
@@ -1803,7 +1810,7 @@ export function AivsProjectManager({
                 </div>
               ) : null}
 
-              {!loading && !error && filteredProjects.length > 0 ? (
+              {!loading && !modeLoading &&!error && filteredProjects.length > 0 ? (
                 <div>
                   {filteredProjects.length !== allSubProjectCount ? (
                     <p className="mb-3 text-xs text-slate-500">

@@ -305,6 +305,8 @@ export function DesignWorkspace() {
               <DesignHeader
                 switcher={switcher}
                 roleLabel={roleLabel}
+                mode={currentWorkspace?.mode}
+                modeLoading={loadingWorkspaces && !currentWorkspace}
                 state={state}
                 errorCount={report.errorCount}
                 progressPercent={report.progress.percent}

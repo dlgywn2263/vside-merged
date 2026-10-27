@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import {
@@ -55,6 +55,7 @@ import {
   getMyWorkspacesByTokenApi,
   saveFileApi,
   renameFileApi,
+  moveFileApi,
 } from "@/lib/ide/api";
 import { getWsBase } from "@/lib/ide/wsBase";
 import { setSafeRunStatus } from "@/store/slices/safeRunSlice";
@@ -168,6 +169,9 @@ const getFileIcon = (name) => {
   }
 };
 
+// 탐색기 노드 드래그에만 쓰는 형식. 바깥에서 끌어온 파일·텍스트와 구분한다.
+const DRAG_NODE_MIME = "application/x-waivs-tree-node";
+
 const FileTreeItem = ({
   node,
   depth,
@@ -181,7 +185,9 @@ const FileTreeItem = ({
   renameTarget,
   confirmRename,
   cancelRename,
+  onMoveNode,
 }) => {
+  const [isDragOver, setIsDragOver] = useState(false);
   const { activeFileId, activeProject, expandedFolders } = useSelector(
     (state) => state.fileSystem,
   );
@@ -265,6 +271,49 @@ const FileTreeItem = ({
   const isSelected = activeFileId === (node.realPath || node.id);
   const isStartupProject = isProject && activeProject === node.name;
 
+  // 드래그 이동: 파일·폴더를 끌어 폴더나 프로젝트(최상위)에 놓는다. onMoveNode 가 없으면(코드맵) 끈다.
+  const canDrag = Boolean(onMoveNode) && !isProject && !isRenaming;
+  const canDrop = Boolean(onMoveNode) && (isFolder || isProject);
+
+  const dragProps = {
+    draggable: canDrag,
+    onDragStart: canDrag
+      ? (e) => {
+          e.stopPropagation();
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData(
+            DRAG_NODE_MIME,
+            JSON.stringify({
+              path: nodePath,
+              name: node.name,
+              type: nodeType,
+              projectName: currentProjectName,
+            }),
+          );
+        }
+      : undefined,
+    onDragOver: canDrop
+      ? (e) => {
+          if (!e.dataTransfer.types.includes(DRAG_NODE_MIME)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          if (!isDragOver) setIsDragOver(true);
+        }
+      : undefined,
+    onDragLeave: canDrop ? () => setIsDragOver(false) : undefined,
+    onDrop: canDrop
+      ? (e) => {
+          setIsDragOver(false);
+          const raw = e.dataTransfer.getData(DRAG_NODE_MIME);
+          if (!raw) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onMoveNode(JSON.parse(raw), isProject ? "" : nodePath, currentProjectName);
+        }
+      : undefined,
+  };
+
   return (
     <div className="select-none font-sans mt-[1px]">
       <div
@@ -275,8 +324,10 @@ const FileTreeItem = ({
               : "border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900 font-medium"
           }
           ${isStartupProject && !isSelected ? "bg-slate-50 border-slate-200" : ""}
+          ${isDragOver ? "!bg-blue-100 ring-1 ring-inset ring-blue-400" : ""}
         `}
         style={{ paddingLeft: `${depth * 12 + 10}px` }}
+        {...dragProps}
         onClick={handleClick}
         onContextMenu={(e) => onContextMenu(e, node, currentProjectName)}
       >
@@ -394,6 +445,7 @@ const FileTreeItem = ({
                 renameTarget={renameTarget}
                 confirmRename={confirmRename}
                 cancelRename={cancelRename}
+                onMoveNode={onMoveNode}
               />
             ))}
         </div>
@@ -472,6 +524,20 @@ export default function Sidebar() {
   const renameCancelledRef = useRef(false);
 
   const [contextMenu, setContextMenu] = useState(null);
+  const contextMenuRef = useRef(null);
+
+  // 클릭한 자리에 그대로 띄우면 탐색기 아래쪽에서는 메뉴가 화면 밖으로 잘린다.
+  // 그리기 직후(화면에 보이기 전) 실제 크기를 재서 화면 안으로 당긴다.
+  useLayoutEffect(() => {
+    const el = contextMenuRef.current;
+    if (!contextMenu || !el) return;
+
+    const margin = 8;
+    const { width, height } = el.getBoundingClientRect();
+
+    el.style.top = `${Math.max(margin, Math.min(contextMenu.y, window.innerHeight - height - margin))}px`;
+    el.style.left = `${Math.max(margin, Math.min(contextMenu.x, window.innerWidth - width - margin))}px`;
+  }, [contextMenu]);
   const [renameTarget, setRenameTarget] = useState(null);
 
   const getBranchForProject = useCallback(
@@ -1061,6 +1127,11 @@ export default function Sidebar() {
         skeletonCode = getFileTemplate(finalName, parentId);
       }
 
+      // 시작 프로젝트가 아닌 프로젝트는 탐색기가 master 로 보여 주므로(handleFileClick 과 같은 기준) master 에 만든다.
+      const targetProject = pendingCreation.projectName || activeProject;
+      const isActiveTarget = targetProject === activeProject;
+      const targetBranch = isActiveTarget ? activeBranch || "master" : "master";
+
       let path = finalName;
 
       if (parentId !== "root-folder" && parentId !== "") {
@@ -1071,7 +1142,7 @@ export default function Sidebar() {
       // 팀 폴더에 만들면 샌드박스 안이라고 생각하고 만든 파일이 팀원에게 바로 보인다.
       // (워크스페이스 최상위에 폴더를 만드는 것은 새 프로젝트를 만드는 일이라 샌드박스와 무관하다.)
       const sandbox =
-        parentId === "root-folder" ? null : await getSandbox(activeProject);
+        parentId === "root-folder" ? null : await getSandbox(targetProject);
 
       if (sandbox) {
         if (apiType !== "file") {
@@ -1104,8 +1175,8 @@ export default function Sidebar() {
 
       await createFileApi(
         workspaceId,
-        activeProject,
-        activeBranch || "master",
+        targetProject,
+        targetBranch,
         path,
         apiType,
       );
@@ -1119,10 +1190,12 @@ export default function Sidebar() {
         );
         handleExpandProject(finalName);
       } else {
-        handleExpandProject(activeProject);
+        handleExpandProject(targetProject);
       }
 
-      if (apiType === "file") {
+      // 탭 키에 프로젝트가 없어 다른 프로젝트 파일을 열면 시작 프로젝트의 협업 방에 붙는다.
+      // 그래서 시작 프로젝트일 때만 연다. 템플릿 저장은 아래에서 프로젝트와 상관없이 한다.
+      if (apiType === "file" && isActiveTarget) {
         dispatch(
           openFile({
             id: path,
@@ -1145,30 +1218,30 @@ export default function Sidebar() {
             content: skeletonCode || "",
           }),
         );
+      }
 
-        if (skeletonCode) {
-          try {
-            await saveFileApi(
-              workspaceId,
-              activeProject,
-              activeBranch || "master",
-              path,
-              skeletonCode,
-            );
+      if (apiType === "file" && skeletonCode) {
+        try {
+          await saveFileApi(
+            workspaceId,
+            targetProject,
+            targetBranch,
+            path,
+            skeletonCode,
+          );
 
-            dispatch(
-              writeToTerminal(
-                `[System] ${finalName} 템플릿 생성 및 자동 저장 완료!\n`,
-              ),
-            );
-          } catch (saveError) {
-            console.error("자동 저장 에러:", saveError);
-            dispatch(
-              writeToTerminal(
-                `[System] 파일은 생성되었으나 자동 저장에 실패했습니다. (직접 저장해주세요)\n`,
-              ),
-            );
-          }
+          dispatch(
+            writeToTerminal(
+              `[System] ${finalName} 템플릿 생성 및 자동 저장 완료!\n`,
+            ),
+          );
+        } catch (saveError) {
+          console.error("자동 저장 에러:", saveError);
+          dispatch(
+            writeToTerminal(
+              `[System] 파일은 생성되었으나 자동 저장에 실패했습니다. (직접 저장해주세요)\n`,
+            ),
+          );
         }
       }
     } catch (e) {
@@ -1382,6 +1455,65 @@ export default function Sidebar() {
     }
   };
 
+  const handleMoveNode = async (source, targetFolder, targetProject) => {
+    const sourceParent = source.path.includes("/")
+      ? source.path.slice(0, source.path.lastIndexOf("/"))
+      : "";
+
+    if (sourceParent === targetFolder) return;
+
+    if (source.projectName !== targetProject) {
+      alert("다른 프로젝트로는 옮길 수 없어요.");
+      return;
+    }
+
+    if (
+      source.type === "folder" &&
+      (targetFolder === source.path || targetFolder.startsWith(source.path + "/"))
+    ) {
+      alert("폴더를 자기 안으로 옮길 수 없어요.");
+      return;
+    }
+
+    // 이름 변경과 같은 이유로 샌드박스에서는 막는다(이동은 팀 폴더에 바로 적용된다).
+    const sandboxState = store.getState().sandbox;
+    if (isTeamMode && sandboxState.enabled && targetProject === activeProject) {
+      alert("샌드박스에서는 파일을 옮길 수 없어요.\n샌드박스를 끄고 옮겨 주세요.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `'${source.name}' 을(를) '${targetFolder || targetProject}' (으)로 옮길까요?\n팀원 화면에도 바로 반영됩니다.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await moveFileApi(
+        workspaceId,
+        targetProject,
+        getBranchForProject(targetProject),
+        source.path,
+        targetFolder,
+      );
+
+      // 옛 경로 탭은 닫는다(이름 변경과 같다). 서버는 없는 파일을 자동 저장으로 되살리지 않는다.
+      dispatch(closeFilesByPath(source.path));
+
+      await handleExpandProject(targetProject);
+
+      dispatch(
+        writeToTerminal(
+          `[System] 이동 완료: ${source.path} → ${targetFolder ? `${targetFolder}/` : ""}${source.name}\n`,
+        ),
+      );
+    } catch (e) {
+      alert("파일 이동 실패: " + e.message);
+    }
+  };
+
   const handleSetStartup = () => {
     if (!contextMenu) return;
 
@@ -1412,6 +1544,8 @@ export default function Sidebar() {
       startCreation({
         type: creationType,
         parentId,
+        // 우클릭한 프로젝트에 만든다. 없으면 시작 프로젝트에 만들어져 팀원이 그 프로젝트를 새로고침해도 안 보였다.
+        projectName: contextMenu.projectName,
       }),
     );
 
@@ -1510,6 +1644,7 @@ export default function Sidebar() {
               renameTarget={renameTarget}
               confirmRename={confirmRename}
               cancelRename={cancelRename}
+              onMoveNode={isVirtualMode ? undefined : handleMoveNode}
             />
           ))
         ) : (
@@ -1540,7 +1675,8 @@ export default function Sidebar() {
 
       {contextMenu && !isVirtualMode && (
         <div
-          className="fixed bg-white border border-gray-100 shadow-[0_10px_30px_rgba(0,0,0,0.15)] rounded-xl py-2 w-56 z-[9999]"
+          ref={contextMenuRef}
+          className="fixed bg-white border border-gray-100 shadow-[0_10px_30px_rgba(0,0,0,0.15)] rounded-xl py-2 w-56 z-[9999] max-h-[calc(100vh-16px)] overflow-y-auto"
           style={{
             top: contextMenu.y,
             left: contextMenu.x,
