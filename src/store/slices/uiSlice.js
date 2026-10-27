@@ -9,7 +9,12 @@ const initialState = {
   isCommandPaletteVisible: false,
 
   // 오른쪽 패널 (팀채팅 & AI) 접힘 상태 관리
+  // isRightPanelVisible 은 사용자가 고른 값이다. 창이 좁을 때(isRightPanelCompact) 자동으로 접는 것은
+  // 이 값을 건드리지 않고 화면에서만 접어서, 다시 넓히면 사용자가 고른 상태로 돌아온다.
   isRightPanelVisible: true,
+  isRightPanelCompact: false,
+  // 좁은 창에서 아이콘 바로 연 패널. 에디터를 밀지 않고 위에 겹쳐 띄운다.
+  isRightPanelOverlayOpen: false,
 
   codeMapMode: null,
 
@@ -56,8 +61,22 @@ export const uiSlice = createSlice({
       state.isSidebarVisible = !state.isSidebarVisible;
     },
 
+    // 접기 버튼·아이콘 바·Ctrl+Shift+P 가 모두 이 액션을 쓰므로, 좁은 창이면 겹쳐 띄운 패널을 여닫는다.
     toggleRightPanel: (state) => {
-      state.isRightPanelVisible = !state.isRightPanelVisible;
+      if (state.isRightPanelCompact) {
+        state.isRightPanelOverlayOpen = !state.isRightPanelOverlayOpen;
+      } else {
+        state.isRightPanelVisible = !state.isRightPanelVisible;
+      }
+    },
+
+    setRightPanelCompact: (state, action) => {
+      const compact = Boolean(action.payload);
+      if (state.isRightPanelCompact === compact) return;
+      // 좁은 창에서 열어 둔 채로 넓히면 쓰던 패널을 그대로 붙여 보여 준다.
+      if (!compact && state.isRightPanelOverlayOpen) state.isRightPanelVisible = true;
+      state.isRightPanelCompact = compact;
+      state.isRightPanelOverlayOpen = false;
     },
 
     toggleTerminal: (state) => {
@@ -229,6 +248,7 @@ export const uiSlice = createSlice({
 export const {
   toggleSidebar,
   toggleRightPanel,
+  setRightPanelCompact,
   toggleTerminal,
   toggleAgent,
   toggleAbout,

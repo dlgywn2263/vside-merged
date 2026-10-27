@@ -40,6 +40,11 @@ import WebPreview from "@/components/ide/WebPreview";
 
 import { useWorkspaceEntry } from "@/hooks/ide/useWorkspaceEntry";
 
+import {
+  RIGHT_PANEL_RAIL_WIDTH,
+  useRightPanelAutoCollapse,
+} from "@/hooks/ide/useRightPanelAutoCollapse";
+
 import MyPageShell from "../mypage/MyPageShell";
 
 import { toggleRightPanel } from "@/store/slices/uiSlice";
@@ -94,8 +99,6 @@ export default function IdeMain() {
 
     isSidebarVisible,
 
-    isRightPanelVisible,
-
     isAgentVisible,
 
     isDebugMode,
@@ -125,6 +128,8 @@ export default function IdeMain() {
   const [resizingPanel, setResizingPanel] = useState(null);
 
   const hasRightPanel = isAgentVisible || isDebugMode;
+
+  const rightPanel = useRightPanelAutoCollapse();
 
   const rightRailItems = isDebugMode
     ? [{ id: "debug", label: "디버그", icon: <VscDebugAlt size={20} /> }]
@@ -188,11 +193,14 @@ export default function IdeMain() {
 
       if (resizingPanel === "right") {
 
+        // 겹쳐 띄운 패널은 아이콘 바 왼쪽에 붙어 있다.
+        const railOffset = rightPanel.isCompact ? RIGHT_PANEL_RAIL_WIDTH : 0;
+
         const nextWidth = layoutRect
 
-          ? layoutRect.right - event.clientX
+          ? layoutRect.right - railOffset - event.clientX
 
-          : window.innerWidth - event.clientX;
+          : window.innerWidth - railOffset - event.clientX;
 
         setRightPanelWidth(
 
@@ -260,7 +268,7 @@ export default function IdeMain() {
 
     };
 
-  }, [resizingPanel]);
+  }, [resizingPanel, rightPanel.isCompact]);
 
   useEffect(() => {
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -313,7 +321,7 @@ export default function IdeMain() {
 
             ref={editorLayoutRef}
 
-            className="flex-1 min-h-0 min-w-0 flex overflow-hidden bg-[#f0f2f5]"
+            className="relative flex-1 min-h-0 min-w-0 flex overflow-hidden bg-[#f0f2f5]"
 
           >
 
@@ -443,13 +451,18 @@ export default function IdeMain() {
 
             </div>
 
-            {/* 오른쪽 AI 패널. 접어도 언마운트하지 않아 대화 내용이 남는다. */}
+            {/* 오른쪽 AI 패널. 접어도 언마운트하지 않아 대화 내용이 남는다.
+                좁은 창에서는 같은 요소를 absolute 로 바꿔 에디터 위에 겹쳐 띄운다(구조를 바꾸면 리마운트된다). */}
 
             {hasRightPanel && (
 
               <div
 
-                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
+                className={`${
+
+                  rightPanel.isCompact ? "absolute inset-y-0" : "relative"
+
+                } overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
 
                   resizingPanel === "right"
 
@@ -459,27 +472,33 @@ export default function IdeMain() {
 
                 } ${
 
-                  isRightPanelVisible
+                  rightPanel.isShown
 
                     ? "opacity-100 border-l border-gray-200"
 
                     : "opacity-0"
 
-                }`}
+                } ${rightPanel.isOverlay ? "shadow-[-8px_0_24px_rgba(15,23,42,0.08)]" : ""}`}
 
                 style={{
 
-                  width: isRightPanelVisible ? `${rightPanelWidth}px` : "0px",
+                  width: rightPanel.isShown ? `${rightPanelWidth}px` : "0px",
 
-                  maxWidth: RIGHT_PANEL_MAX_RATIO,
+                  maxWidth: rightPanel.isCompact
+
+                    ? `calc(100% - ${RIGHT_PANEL_RAIL_WIDTH}px)`
+
+                    : RIGHT_PANEL_MAX_RATIO,
+
+                  right: rightPanel.isCompact ? `${RIGHT_PANEL_RAIL_WIDTH}px` : undefined,
 
                 }}
 
-                aria-hidden={!isRightPanelVisible}
+                aria-hidden={!rightPanel.isShown}
 
               >
 
-                {isRightPanelVisible && (
+                {rightPanel.isShown && (
 
                   <PanelResizeHandle
 
@@ -547,9 +566,10 @@ export default function IdeMain() {
 
             )}
 
-            {/* 오른쪽 패널을 접었을 때의 세로 아이콘 바 */}
+            {/* 오른쪽 패널을 접었을 때(좁은 창에서는 항상)의 세로 아이콘 바.
+                패널이 하나뿐이라 아이콘을 누르면 열고, 겹쳐 띄운 상태에서 다시 누르면 닫는다. */}
 
-            {hasRightPanel && !isRightPanelVisible && (
+            {hasRightPanel && rightPanel.showRail && (
 
               <RightPanelRail
 

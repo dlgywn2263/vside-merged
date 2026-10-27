@@ -38,6 +38,10 @@ import {
 import { ChatSocket } from "@/lib/ide/chatSocket";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspaceEntry } from "@/hooks/ide/useWorkspaceEntry";
+import {
+  RIGHT_PANEL_RAIL_WIDTH,
+  useRightPanelAutoCollapse,
+} from "@/hooks/ide/useRightPanelAutoCollapse";
 
 import {
   closeAllFiles,
@@ -323,7 +327,6 @@ export default function TeamIdeMain() {
     isSidebarVisible,
     isAgentVisible,
     isDebugMode,
-    isRightPanelVisible,
   } = useSelector((state) => state.ui);
 
  const { workspaceId, activeProject, activeBranch } = useSelector(
@@ -389,6 +392,7 @@ export default function TeamIdeMain() {
   const panelBorderClass = isSandboxMode ? "border-indigo-300" : "border-gray-200";
 
   const hasRightPanel = isAgentVisible || isDebugMode;
+  const rightPanel = useRightPanelAutoCollapse();
   const rightRailItems = isDebugMode
     ? [{ id: "debug", label: "디버그", icon: <VscDebugAlt size={20} /> }]
     : [
@@ -397,8 +401,12 @@ export default function TeamIdeMain() {
       ];
 
   const openRightPanelTab = (tabId) => {
+    const isSameTab = isDebugMode ? tabId === "debug" : tabId === rightTab;
     if (tabId === "ai" || tabId === "chat") setRightTab(tabId);
-    if (!isRightPanelVisible) dispatch(toggleRightPanel());
+    // 좁은 창에서 겹쳐 띄운 패널은 같은 아이콘을 다시 누르면 닫는다(디버그 패널에는 닫기 버튼이 없다).
+    if (!rightPanel.isShown || (rightPanel.isOverlay && isSameTab)) {
+      dispatch(toggleRightPanel());
+    }
   };
 
   const startLeftSidebarResize = (event) => {
@@ -437,9 +445,11 @@ export default function TeamIdeMain() {
       }
 
       if (resizingPanel === "right") {
+        // 겹쳐 띄운 패널은 아이콘 바 왼쪽에 붙어 있다.
+        const railOffset = rightPanel.isCompact ? RIGHT_PANEL_RAIL_WIDTH : 0;
         const nextWidth = layoutRect
-          ? layoutRect.right - event.clientX
-          : window.innerWidth - event.clientX;
+          ? layoutRect.right - railOffset - event.clientX
+          : window.innerWidth - railOffset - event.clientX;
 
         setRightPanelWidth(
           clampPanelSize(
@@ -483,7 +493,7 @@ export default function TeamIdeMain() {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [resizingPanel]);
+  }, [resizingPanel, rightPanel.isCompact]);
 
   useWorkspaceEntry(id);
 
@@ -508,7 +518,7 @@ export default function TeamIdeMain() {
         return (
           <div
             ref={editorLayoutRef}
-            className={`flex-1 min-h-0 min-w-0 flex overflow-hidden transition-colors duration-300 ${
+            className={`relative flex-1 min-h-0 min-w-0 flex overflow-hidden transition-colors duration-300 ${
               isSandboxMode ? "bg-[#E0E7FF]" : "bg-[#f0f2f5]"
             }`}
           >
@@ -583,25 +593,31 @@ export default function TeamIdeMain() {
             </div>
 
             {/* 오른쪽 AI/채팅 패널. 접어도 언마운트하지 않는다 —
-                팀 채팅 소켓과 메시지 상태가 CollaborationPanel 안에 있다. */}
+                팀 채팅 소켓과 메시지 상태가 CollaborationPanel 안에 있다.
+                좁은 창에서는 같은 요소를 absolute 로 바꿔 에디터 위에 겹쳐 띄운다(구조를 바꾸면 리마운트된다). */}
             {hasRightPanel && (
               <div
-                className={`relative overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
+                className={`${
+                  rightPanel.isCompact ? "absolute inset-y-0" : "relative"
+                } overflow-hidden flex flex-col z-[600] shrink-0 bg-[#F8FAFC] ${
                   resizingPanel === "right"
                     ? "transition-none"
                     : "transition-[width,opacity] duration-200 ease-out"
                 } ${
-                  isRightPanelVisible
+                  rightPanel.isShown
                     ? `opacity-100 border-l ${panelBorderClass}`
                     : "opacity-0"
-                }`}
+                } ${rightPanel.isOverlay ? "shadow-[-8px_0_24px_rgba(15,23,42,0.08)]" : ""}`}
                 style={{
-                  width: isRightPanelVisible ? `${rightPanelWidth}px` : "0px",
-                  maxWidth: RIGHT_PANEL_MAX_RATIO,
+                  width: rightPanel.isShown ? `${rightPanelWidth}px` : "0px",
+                  maxWidth: rightPanel.isCompact
+                    ? `calc(100% - ${RIGHT_PANEL_RAIL_WIDTH}px)`
+                    : RIGHT_PANEL_MAX_RATIO,
+                  right: rightPanel.isCompact ? `${RIGHT_PANEL_RAIL_WIDTH}px` : undefined,
                 }}
-                aria-hidden={!isRightPanelVisible}
+                aria-hidden={!rightPanel.isShown}
               >
-                {isRightPanelVisible && (
+                {rightPanel.isShown && (
                   <PanelResizeHandle
                     orientation="vertical"
                     edge="left"
@@ -682,8 +698,8 @@ export default function TeamIdeMain() {
               </div>
             )}
 
-            {/* 오른쪽 패널을 접었을 때의 세로 아이콘 바 */}
-            {hasRightPanel && !isRightPanelVisible && (
+            {/* 오른쪽 패널을 접었을 때(좁은 창에서는 항상)의 세로 아이콘 바 */}
+            {hasRightPanel && rightPanel.showRail && (
               <RightPanelRail
                 items={rightRailItems}
                 activeId={isDebugMode ? "debug" : rightTab}
