@@ -439,7 +439,7 @@ export default function SandboxControls() {
         }}
         aria-expanded={isPanelOpen}
         aria-label={`샌드박스 작업 파일 ${pendingCount}개 목록`}
-        className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border-2 border-indigo-800 bg-indigo-600 px-2.5 text-[12px] font-black text-white shadow-sm transition-colors hover:bg-indigo-700"
+        className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#047857] bg-[#047857] px-2.5 text-[12px] font-black text-white shadow-[0_0_0_3px_rgba(5,150,105,0.18)] transition-colors hover:border-[#065F46] hover:bg-[#065F46]"
         title="샌드박스에서 고친 파일 목록"
       >
         <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-300" />
@@ -463,7 +463,7 @@ export default function SandboxControls() {
         aria-expanded={isActionsOpen}
         aria-label="샌드박스 작업 메뉴"
         title="샌드박스 작업 메뉴 (반영, 버리기, 끄기)"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-lg font-bold leading-none text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#6EE7B7] bg-[#ECFDF5] text-lg font-bold leading-none text-[#047857] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-50"
       >
         ⋯
       </button>
@@ -513,9 +513,9 @@ export default function SandboxControls() {
 
       {isPanelOpen && (
         <div className="absolute right-0 top-10 z-[1000] w-[min(420px,calc(100vw-24px))] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-          <div className="border-b border-indigo-800 bg-indigo-600 px-4 py-2.5 text-[13px] font-black text-white">
+          <div className="border-b border-[#047857] bg-[#059669] px-4 py-2.5 text-[13px] font-black text-white">
             샌드박스에서 고친 파일
-            <span className="ml-2 font-bold text-indigo-100">팀원에게는 아직 보이지 않아요</span>
+            <span className="ml-2 font-bold text-[#D1FAE5]">팀원에게는 아직 보이지 않아요</span>
           </div>
 
           <div className="max-h-[320px] overflow-y-auto">
@@ -539,7 +539,7 @@ export default function SandboxControls() {
                   disabled={file.kind === "DELETED"}
                   className="flex w-full items-center gap-2 border-b border-gray-100 px-4 py-2 text-left hover:bg-gray-50 disabled:cursor-default disabled:hover:bg-white"
                 >
-                  <span className="shrink-0 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                  <span className="shrink-0 rounded border border-[#6EE7B7] bg-[#D1FAE5] px-1.5 py-0.5 text-[10px] font-black text-[#047857]">
                     {KIND_LABEL[file.kind]}
                   </span>
                   <span className="min-w-0 flex-1">

@@ -334,7 +334,7 @@ const FileTreeItem = ({
         {/* 내 샌드박스에서 고쳤거나 새로 만든 파일. 팀원에게는 아직 보이지 않는다. */}
         {node.sandboxKind && (
           <span
-            className="shrink-0 ml-2 rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white"
+            className="shrink-0 ml-2 rounded border border-[#6EE7B7] bg-[#D1FAE5] px-1.5 py-0.5 text-[10px] font-black text-[#047857]"
             title="내 샌드박스에만 있는 변경입니다. 반영하기 전까지 팀원에게 보이지 않아요."
           >
             {node.sandboxKind === "NEW" ? "새 파일" : "수정"}

@@ -10,6 +10,7 @@ import {
   VscCommentDiscussion,
   VscDebugAlt,
 } from "react-icons/vsc";
+import { ShieldCheck } from "lucide-react";
 
 import MenuBar from "@/components/ide/MenuBar";
 import ActivityBar from "@/components/ide/ActivityBar";
@@ -38,6 +39,7 @@ import {
 import { ChatSocket } from "@/lib/ide/chatSocket";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspaceEntry } from "@/hooks/ide/useWorkspaceEntry";
+import { isSandboxFile } from "@/store/slices/sandboxSlice";
 import {
   RIGHT_PANEL_RAIL_WIDTH,
   useRightPanelAutoCollapse,
@@ -378,9 +380,11 @@ export default function TeamIdeMain() {
   const editorLayoutRef = useRef(null);
   const previousBranchRef = useRef(activeBranch || "master");
 
-  // 샌드박스(개인 레이어)가 켜져 있으면 화면을 어둡게 해서 "지금 고치는 것은 팀원에게
-  // 안 보인다"는 것을 한눈에 알게 한다. 예전에는 브랜치 이름(focus-…)으로 가렸지만,
-  // 샌드박스는 이제 브랜치가 아니라서 서버가 알려 준 켜짐 여부를 본다.
+  // 샌드박스(개인 레이어)가 켜져 있으면 중앙 편집기와 터미널을 에메랄드로 감싸 "지금 고치는 것은
+  // 팀원에게 안 보인다"는 것을 한눈에 알게 한다. 탐색기·AI/채팅 패널과 바탕은 그대로 둔다 —
+  // IDE 전체를 칠하면 오히려 어디가 개인 작업 영역인지 흐려진다.
+  // 예전에는 브랜치 이름(focus-…)으로 가렸지만, 샌드박스는 이제 브랜치가 아니라서
+  // 서버가 알려 준 켜짐 여부를 본다.
   const isSandboxMode = useSelector(
     (state) =>
       state.sandbox.enabled &&
@@ -388,8 +392,14 @@ export default function TeamIdeMain() {
         `${workspaceId}:${activeProject}:${activeBranch || "master"}`,
   );
 
-  // 패널 사이 구분선. 샌드박스일 때는 남색으로 "지금 개인 레이어"임을 계속 보여 준다.
-  const panelBorderClass = isSandboxMode ? "border-indigo-300" : "border-gray-200";
+  // 상태바에 "지금 탭이 내 개인 사본인지"를 같이 보인다. CodeEditor 가 파일마다 띄우던
+  // "개인 샌드박스 작업 중" 띠를 이것으로 대신해 안내가 두 줄로 겹치지 않게 한다.
+  const isActiveFileInSandbox = useSelector(
+    (state) => isSandboxMode && isSandboxFile(state.sandbox, state.fileSystem.activeFileId),
+  );
+
+  // 중앙 작업 영역 경계선. 샌드박스일 때는 에메랄드로 "지금 개인 레이어"임을 계속 보여 준다.
+  const panelBorderClass = isSandboxMode ? "border-[#6EE7B7]" : "border-gray-200";
 
   const hasRightPanel = isAgentVisible || isDebugMode;
   const rightPanel = useRightPanelAutoCollapse();
@@ -518,9 +528,7 @@ export default function TeamIdeMain() {
         return (
           <div
             ref={editorLayoutRef}
-            className={`relative flex-1 min-h-0 min-w-0 flex overflow-hidden transition-colors duration-300 ${
-              isSandboxMode ? "bg-[#E0E7FF]" : "bg-[#f0f2f5]"
-            }`}
+            className="relative flex-1 min-h-0 min-w-0 flex overflow-hidden bg-[#f0f2f5]"
           >
             {/* 왼쪽 탐색기 패널. 접어도 Sidebar 를 언마운트하지 않는다 —
                 파일 트리 이벤트 소켓(/ws/workspace-events)이 Sidebar 안에 있다. */}
@@ -561,7 +569,27 @@ export default function TeamIdeMain() {
             {/* 중앙 에디터 영역 — 남은 가로 공간을 전부 차지한다.
                 Monaco 는 automaticLayout, xterm 은 ResizeObserver 로 크기를 따라간다. */}
             <div className="flex-1 min-h-0 min-w-[240px] flex flex-col bg-white overflow-hidden relative z-0">
-              <FileTabs />
+              {/* 샌드박스 상태바. 파일이 없어도 보이도록 탭바 위(편집 영역 맨 위)에 둔다.
+                  꺼지면 렌더하지 않아 일반 IDE 에서는 자리를 차지하지 않는다. */}
+              {isSandboxMode && (
+                <div
+                  role="status"
+                  className="flex h-10 shrink-0 items-center gap-2.5 overflow-hidden bg-[#059669] px-3 text-white"
+                >
+                  <ShieldCheck size={18} strokeWidth={2.25} className="shrink-0" aria-hidden="true" />
+                  <span className="shrink-0 text-[13px] font-bold">샌드박스 모드 활성화</span>
+                  <span className="min-w-0 truncate text-[12px] text-[#D1FAE5]">
+                    현재 변경사항은 팀 작업 공간에 바로 반영되지 않습니다.
+                  </span>
+                  {isActiveFileInSandbox && (
+                    <span className="ml-auto shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold ring-1 ring-white/30">
+                      이 파일: 개인 사본에서 수정 중
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <FileTabs isSandboxMode={isSandboxMode} />
 
               <div className="flex-1 min-h-0 flex relative overflow-hidden">
                 <div className="flex-1 min-h-0 flex flex-col min-w-0 relative">
@@ -587,7 +615,7 @@ export default function TeamIdeMain() {
                     onPointerDown={startTerminalResize}
                   />
 
-                  <BottomPanel />
+                  <BottomPanel isSandboxMode={isSandboxMode} />
                 </div>
               )}
             </div>
@@ -713,9 +741,7 @@ export default function TeamIdeMain() {
 
   return (
     <div
-      className={`w-full h-full flex-1 min-h-0 min-w-0 flex flex-col text-[#333] overflow-hidden font-sans transition-colors duration-700 ${
-        isSandboxMode ? "bg-[#E0E7FF]" : "bg-white"
-      }`}
+      className="w-full h-full flex-1 min-h-0 min-w-0 flex flex-col text-[#333] overflow-hidden font-sans bg-white"
     >
       <CommandPalette />
 

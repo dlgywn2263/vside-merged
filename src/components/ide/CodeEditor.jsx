@@ -2729,19 +2729,22 @@ useEffect(() => {
         }
       `}} />
 
-      {/* 샌드박스 상태 안내: 코드 영역을 가리지 않는 36px 단일 행 */}
+      {/* 아직 개인 사본이 없는 파일 안내. 샌드박스가 켜졌다는 사실은 TeamIdeMain 의 상태바가 알리므로,
+          여기서는 이 파일이 읽기 전용인 이유와 전환 버튼만 보인다. 개인 사본을 고치는 중이라는 표시도 상태바에 있다. */}
       {isSandboxViewOnly && (
-        <div className="flex h-9 min-h-9 shrink-0 items-center justify-between gap-3 border-b border-sky-200 bg-sky-50 px-3">
-          <div className="flex min-w-0 items-center gap-2 text-[12px]">
-            <VscLock size={13} className="shrink-0 text-sky-600" />
-            <span className="shrink-0 font-bold text-sky-800">팀 실시간 보기</span>
-            <span className="min-w-0 truncate text-sky-700">· 아직 개인 사본이 없는 파일입니다. 수정하려면 샌드박스로 전환하세요.</span>
+        <div className="flex h-9 min-h-9 shrink-0 items-center justify-between gap-3 border-b border-[#6EE7B7] bg-[#ECFDF5] pl-2.5 pr-2 text-[#065F46]">
+          <div className="flex min-w-0 items-center gap-2 text-[12px] leading-none">
+            <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded border border-[#6EE7B7] bg-white px-1.5 text-[11px] font-bold">
+              <VscLock size={12} className="shrink-0" />
+              팀 실시간 보기
+            </span>
+            <span className="min-w-0 truncate font-medium">아직 개인 사본이 없는 파일입니다. 수정하려면 샌드박스로 전환하세요.</span>
           </div>
           <button
             type="button"
             onClick={() => enterSandboxEdit()}
             disabled={isSandboxSwitching || isDocumentLoading}
-            className="h-7 shrink-0 rounded-md border border-indigo-200 bg-white px-3 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-7 shrink-0 rounded-md bg-[#059669] px-3 text-[11px] font-bold text-white transition-colors hover:bg-[#047857] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSandboxSwitching ? "전환하는 중…" : "샌드박스에서 고치기"}
           </button>
@@ -2767,15 +2770,6 @@ useEffect(() => {
         </div>
       )}
 
-      {isSandboxEditing && !isSandboxConflict && !hasTeamChanges && (
-        <div className="flex h-9 min-h-9 shrink-0 items-center gap-2 overflow-hidden border-b border-indigo-300 border-l-[4px] border-l-indigo-600 bg-[#C7D2FE] pl-2.5 pr-3 text-[12px]">
-          <VscLock size={14} className="shrink-0 text-indigo-700" />
-          <span className="shrink-0 font-extrabold text-indigo-950">개인 샌드박스 작업 중</span>
-          <span className="min-w-0 truncate font-medium text-indigo-800">· 수정 내용은 팀에 반영하기 전까지 공유되지 않습니다.</span>
-          <span className="ml-auto shrink-0 rounded bg-indigo-600 px-2 py-0.5 text-[10px] font-bold text-white">PRIVATE</span>
-        </div>
-      )}
-
       {isSandboxConflict && (
         <div className="flex h-9 min-h-9 shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 text-[12px]">
           <VscWarning size={13} className="shrink-0 text-amber-700" />
@@ -2785,7 +2779,7 @@ useEffect(() => {
       )}
 
       {sandboxToast && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[99999] rounded-full border-2 border-indigo-700 bg-indigo-600 px-5 py-2 text-[13px] font-black text-white shadow-lg">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[99999] rounded-full border-2 border-[#047857] bg-[#059669] px-5 py-2 text-[13px] font-black text-white shadow-lg">
           {sandboxToast}
         </div>
       )}
@@ -3062,7 +3056,7 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={handleResolveSandboxConflict}
-                  className="h-9 px-4 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-black flex items-center gap-1.5 shadow-sm"
+                  className="h-9 px-4 rounded-xl bg-[#059669] text-white hover:bg-[#047857] text-xs font-black flex items-center gap-1.5 shadow-sm"
                 >
                   <VscCheck size={14} />
                   샌드박스 충돌 해결 완료

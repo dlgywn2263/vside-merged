@@ -18,7 +18,9 @@ import Terminal from "@/components/ide/Terminal";
 import { SafeRunVersionPanel } from "@/components/ide/SafeRunStatusBar";
 import { buildGuiPreviewUrl } from "@/lib/ide/previewUrl";
 
-export default function BottomPanel() {
+// isSandboxMode 는 팀 셸만 넘긴다. 헤더만 연한 에메랄드로 칠해 에디터와 같은 작업 영역임을 보이고,
+// 출력·터미널 본문은 읽기 쉽도록 흰 바탕 그대로 둔다.
+export default function BottomPanel({ isSandboxMode = false }) {
   const dispatch = useDispatch();
   const { activeBottomTab, terminalOutput, isRunning, isDebugMode, previewUrl } =
     useSelector((state) => state.ui);
@@ -98,7 +100,9 @@ export default function BottomPanel() {
 
   return (
     <div className="h-full flex flex-col bg-white font-sans text-[#333]">
-      <div className="flex items-center justify-between gap-2 bg-[#fafbfc] h-9 border-b border-gray-200 select-none pl-3 pr-1.5 shrink-0">
+      <div className={`flex items-center justify-between gap-2 h-9 border-b select-none pl-3 pr-1.5 shrink-0 ${
+        isSandboxMode ? "bg-[#D1FAE5] border-[#6EE7B7]" : "bg-[#fafbfc] border-gray-200"
+      }`}>
         <div className="flex gap-4 h-full min-w-0 overflow-x-auto overflow-y-hidden">
           {tabs.map((tab) => {
             const isActive = activeBottomTab === tab.id;
@@ -107,7 +111,13 @@ export default function BottomPanel() {
                 key={tab.id}
                 type="button"
                 className={`h-full shrink-0 flex items-center gap-1.5 text-[11px] font-medium border-b-[2px] transition-colors outline-none px-1 tracking-wide ${
-                  isActive ? "border-[#5873F9] text-gray-800 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"
+                  isActive
+                    ? isSandboxMode
+                      ? "border-[#059669] text-[#065F46] font-bold"
+                      : "border-[#5873F9] text-gray-800 font-bold"
+                    : isSandboxMode
+                      ? "border-transparent text-slate-600 hover:text-[#065F46]"
+                      : "border-transparent text-gray-400 hover:text-gray-600"
                 }`}
                 onClick={() => dispatch(setActiveBottomTab(tab.id))}
               >
