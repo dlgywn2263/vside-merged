@@ -1,3 +1,5 @@
+import { normalizeUserId } from "@/lib/messages/identity";
+
 import type { ScheduleStatus, WorkspaceLike } from "./devlog.types";
 
 export const scheduleStatusLabel: Record<ScheduleStatus, string> = {
@@ -53,4 +55,15 @@ export function normalizeWorkspaceId(value: string | null) {
   if (!value) return "";
   if (value === "undefined" || value === "null") return "";
   return value;
+}
+
+// 백엔드 규칙과 같다: 본인 일지만 수정·삭제한다(OWNER 도 남의 일지는 못 고친다).
+// 작성자를 모르면(authorId 없음) 막는다. 닉네임은 겹칠 수 있어 비교에 쓰지 않는다.
+export function canManageDevlog(
+  devlog: { authorId?: unknown } | null | undefined,
+  viewerId: string | null,
+) {
+  const authorId = normalizeUserId(devlog?.authorId);
+
+  return Boolean(viewerId && authorId && authorId === viewerId);
 }

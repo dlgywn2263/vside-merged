@@ -26,6 +26,8 @@ export type DevlogItem = {
   scheduleTitle: string | null;
   status: ScheduleStatus | null;
   tags: string[];
+  /** 작성자 사용자 ID(문자열로 정규화). 수정·삭제 권한 판단의 유일한 기준이다. */
+  authorId?: string | null;
   /** 서버 응답의 authorName. 없으면 화면에 "-" 로 보인다. */
   authorName?: string;
   createdAt?: string;

@@ -436,9 +436,27 @@ const normalizeDevlogFromApi = (item) => {
 
     tags: Array.isArray(item.tags) ? item.tags : [],
 
+    // 수정·삭제 권한은 닉네임이 아니라 authorId 로 가린다. 둘 다 빠뜨리면 화면이 작성자를 모른다.
+    authorId: item.authorId ?? null,
+    authorName: item.authorName ?? "",
+
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+};
+
+// 남의 개발일지를 수정·삭제하면 백엔드가 403 을 준다.
+// 서버 원문 대신 사용자가 이해할 문구로 바꾸고, 호출부가 구분할 수 있게 status 를 싣는다.
+const throwDevlogWriteError = async (response, action) => {
+  if (response.status === 403) {
+    const error = new Error(
+      `본인이 작성한 개발일지만 ${action}할 수 있습니다.`,
+    );
+    error.status = 403;
+    throw error;
+  }
+
+  await throwApiResponseError(response, `개발일지 ${action} 실패`);
 };
 
 export const createWorkspaceDevlogApi = async ({
@@ -500,8 +518,7 @@ export const updateDevlogApi = async ({
   );
 
   if (!response.ok) {
-    const errMsg = await response.text();
-    throw new Error(errMsg || "개발일지 수정 실패");
+    await throwDevlogWriteError(response, "수정");
   }
 
   return normalizeDevlogFromApi(await response.json());
@@ -523,8 +540,7 @@ export const deleteDevlogApi = async (devlogId) => {
   );
 
   if (!response.ok) {
-    const errMsg = await response.text();
-    throw new Error(errMsg || "개발일지 삭제 실패");
+    await throwDevlogWriteError(response, "삭제");
   }
 
   return true;

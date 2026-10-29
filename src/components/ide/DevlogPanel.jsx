@@ -22,6 +22,9 @@ import {
   getMyWorkspacesByTokenApi,
   updateDevlogApi,
 } from "@/lib/ide/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { canManageDevlog } from "@/components/devlogs/devlog.utils";
+import { getViewerId } from "@/lib/messages/identity";
 
 const scheduleStatusLabel = {
   todo: "할 일",
@@ -145,6 +148,8 @@ function normalizeDevlog(item) {
     scheduleTitle: item.scheduleTitle ?? null,
     status: normalizeScheduleStatus(item.scheduleStatus ?? item.status),
     tags: Array.isArray(item.tags) ? item.tags : [],
+    authorId: item.authorId ?? null,
+    authorName: item.authorName ?? "",
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -465,6 +470,7 @@ function DevlogFormModal({
 
 function DevlogDetailModal({
   log,
+  canManage,
   onClose,
   onEdit,
   onDelete,
@@ -545,6 +551,8 @@ function DevlogDetailModal({
           ) : null}
         </div>
 
+        {/* 남의 일지(작성자 미상 포함)는 조회만 한다. 백엔드도 403 으로 막는다. */}
+        {canManage ? (
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
           <button
             type="button"
@@ -564,6 +572,11 @@ function DevlogDetailModal({
             수정
           </button>
         </div>
+        ) : (
+          <div className="flex items-center justify-end border-t border-slate-100 px-6 py-3 text-[11px] font-medium text-slate-400">
+            본인이 작성한 개발일지만 수정·삭제할 수 있습니다.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -574,6 +587,10 @@ export default function DevlogPanel() {
   const { workspaceId } = fileSystem || {};
 
   const pathname = usePathname();
+
+  // 수정·삭제 권한은 닉네임이 아니라 사용자 ID 로 판단한다.
+  const { user } = useAuth();
+  const viewerId = getViewerId(user);
 
   const workspaceNameFromState = useMemo(
     () => getWorkspaceNameFromState(fileSystem),
@@ -818,6 +835,11 @@ export default function DevlogPanel() {
   const openEdit = (log) => {
     if (!log) return;
 
+    if (!canManageDevlog(log, viewerId)) {
+      alert("본인이 작성한 개발일지만 수정할 수 있습니다.");
+      return;
+    }
+
     setFormMode("edit");
     setEditingLog(log);
     setForm({
@@ -863,6 +885,11 @@ export default function DevlogPanel() {
 
     try {
       if (formMode === "edit" && editingLog) {
+        if (!canManageDevlog(editingLog, viewerId)) {
+          alert("본인이 작성한 개발일지만 수정할 수 있습니다.");
+          return;
+        }
+
         await updateDevlogApi({
           devlogId: editingLog.id,
           scheduleId: form.scheduleId || null,
@@ -897,6 +924,11 @@ export default function DevlogPanel() {
 
   const handleDelete = async (log) => {
     if (!log) return;
+
+    if (!canManageDevlog(log, viewerId)) {
+      alert("본인이 작성한 개발일지만 삭제할 수 있습니다.");
+      return;
+    }
 
     const confirmed = window.confirm("이 개발일지를 삭제하시겠습니까?");
     if (!confirmed) return;
@@ -1254,6 +1286,7 @@ export default function DevlogPanel() {
 
       <DevlogDetailModal
         log={selectedLog}
+        canManage={canManageDevlog(selectedLog, viewerId)}
         onClose={() => setSelectedLog(null)}
         onEdit={openEdit}
         onDelete={handleDelete}

@@ -152,8 +152,7 @@ export function DevlogListPanel({
                       <span className="truncate">{item.authorName}</span>
                     </>
                   ) : (
-                    // 개발일지 목록 API(/api/workspaces/{id}/devlogs) 응답에 작성자 필드가 없다.
-                    // 다른 사람 이름으로 채우지 않고 비워 둔다.
+                    // 작성자 정보가 없는 옛 일지. 일정 담당자 등 다른 사람 이름으로 채우지 않고 비워 둔다.
                     <span
                       className="text-[11px] text-slate-300"
                       title="작성자 정보가 제공되지 않습니다."

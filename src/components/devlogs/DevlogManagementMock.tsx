@@ -30,8 +30,12 @@ import {
   deleteDevlogApi,
   fetchWorkspaceDevlogsApi,
   getMyWorkspacesByTokenApi,
+  getWorkspaceMembersApi,
   updateDevlogApi,
 } from "@/lib/ide/api";
+
+import { useAuth } from "@/contexts/AuthContext";
+import { getViewerId, normalizeUserId } from "@/lib/messages/identity";
 
 import { getIdeHref } from "@/components/main-dashboard/dashboard.utils";
 
@@ -47,6 +51,7 @@ import type {
 } from "./devlog.types";
 
 import {
+  canManageDevlog,
   extractWorkspaceList,
   getTodayDateKey,
   normalizeWorkspaceId,
@@ -95,6 +100,14 @@ type WorkspaceSidebarItem = SharedWorkspaceSidebarItem & {
 
 type SortFilter = "all" | "latest" | "oldest";
 
+// "all" | "me" | 팀원 사용자 ID(숫자 문자열)
+type AuthorFilter = string;
+
+type AuthorFilterOption = {
+  userId: string;
+  name: string;
+};
+
 /* =========================================================
    MAPPING
 ========================================================= */
@@ -112,7 +125,32 @@ function mapScheduleFromApi(item: ScheduleApiItem): ScheduleOption {
   };
 }
 
-function mapDevlogFromApi(item: any): DevlogItem {
+// api.js normalizeDevlogFromApi 가 돌려주는 모양. 읽는 필드만 적는다.
+type DevlogApiRecord = Pick<
+  DevlogItem,
+  "id" | "workspaceId" | "date" | "workedDate"
+> &
+  Partial<
+    Pick<
+      DevlogItem,
+      | "projectName"
+      | "title"
+      | "content"
+      | "type"
+      | "scheduleId"
+      | "scheduleTitle"
+      | "status"
+      | "tags"
+      | "authorName"
+      | "createdAt"
+      | "updatedAt"
+    >
+  > & {
+    scheduleStatus?: DevlogItem["status"];
+    authorId?: unknown;
+  };
+
+function mapDevlogFromApi(item: DevlogApiRecord): DevlogItem {
   return {
     id: item.id,
     workspaceId: item.workspaceId,
@@ -133,6 +171,7 @@ function mapDevlogFromApi(item: any): DevlogItem {
 
     tags: Array.isArray(item.tags) ? item.tags : [],
 
+    authorId: normalizeUserId(item.authorId),
     authorName: item.authorName ?? "",
 
     createdAt: item.createdAt,
@@ -275,6 +314,10 @@ export default function DevlogManagementMock() {
 
   const workspaceId = normalizeWorkspaceId(routeWorkspaceId ?? null);
 
+  // 수정·삭제 권한과 "내가 작성한 일지" 필터는 닉네임이 아니라 이 ID 로 판단한다.
+  const { user } = useAuth();
+  const viewerId = getViewerId(user);
+
   /* =====================================================
      WORKSPACE
   ===================================================== */
@@ -320,6 +363,12 @@ export default function DevlogManagementMock() {
 
   const [sortFilter, setSortFilter] =
     useState<SortFilter>("all");
+
+  const [authorFilter, setAuthorFilter] =
+    useState<AuthorFilter>("all");
+
+  // 작성자 필터의 팀원 목록. 팀 프로젝트에서만 채운다.
+  const [members, setMembers] = useState<AuthorFilterOption[]>([]);
 
   const [showNoDevlogPanel, setShowNoDevlogPanel] =
     useState(false);
@@ -674,6 +723,99 @@ export default function DevlogManagementMock() {
       ? "OWNER"
       : "MEMBER";
 
+  const isTeamWorkspace = currentWorkspaceMode === "team";
+
+  /* =====================================================
+     AUTHOR FILTER
+     목록 API 는 전체를 한 번에 받으므로 작성자 필터도 다른 필터처럼 화면에서 거른다.
+     (서버 author 파라미터로 다시 받으면 유형 탭 개수·선택 상태가 매번 새로 계산돼 흔들린다.)
+  ===================================================== */
+
+  // 프로젝트를 바꾸면 이전 프로젝트의 팀원 선택이 남지 않게 되돌린다.
+  useEffect(() => {
+    setAuthorFilter("all");
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !isTeamWorkspace) {
+      setMembers([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    getWorkspaceMembersApi(workspaceId)
+      .then((response: unknown) => {
+        if (cancelled) return;
+
+        const list = Array.isArray(response) ? response : [];
+
+        setMembers(
+          list.flatMap((item: Record<string, unknown>) => {
+            const userId = normalizeUserId(item?.userId ?? item?.id);
+
+            if (!userId) return [];
+
+            const name =
+              [item.nickname, item.name, item.email].find(
+                (value): value is string =>
+                  typeof value === "string" && value.trim() !== "",
+              ) ?? `사용자 ${userId}`;
+
+            return [{ userId, name }];
+          }),
+        );
+      })
+      .catch(() => {
+        // 팀원 목록이 없어도 일지에 실린 작성자로 필터를 만들 수 있다.
+        if (!cancelled) setMembers([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, isTeamWorkspace]);
+
+  // 팀원 목록 + 이미 나간 팀원처럼 목록에 없지만 일지를 남긴 작성자. 나는 "내가 작성한 일지"로 따로 고른다.
+  const authorOptions = useMemo<AuthorFilterOption[]>(() => {
+    const byId = new Map<string, AuthorFilterOption>();
+
+    members.forEach((member) => byId.set(member.userId, member));
+
+    devlogs.forEach((devlog) => {
+      if (devlog.authorId && !byId.has(devlog.authorId)) {
+        byId.set(devlog.authorId, {
+          userId: devlog.authorId,
+          name: devlog.authorName || `사용자 ${devlog.authorId}`,
+        });
+      }
+    });
+
+    return [...byId.values()].filter(
+      (option) => option.userId !== viewerId,
+    );
+  }, [members, devlogs, viewerId]);
+
+  // 개인 프로젝트에서는 필터를 숨기므로 값도 적용하지 않는다.
+  const effectiveAuthorFilter: AuthorFilter = isTeamWorkspace
+    ? authorFilter
+    : "all";
+
+  const authorScopedDevlogs = useMemo(() => {
+    if (effectiveAuthorFilter === "all") {
+      return devlogs;
+    }
+
+    const targetId =
+      effectiveAuthorFilter === "me" ? viewerId : effectiveAuthorFilter;
+
+    if (!targetId) {
+      return [];
+    }
+
+    return devlogs.filter((item) => item.authorId === targetId);
+  }, [devlogs, effectiveAuthorFilter, viewerId]);
+
   /* =====================================================
      NO DEVLOG SCHEDULE
   ===================================================== */
@@ -695,7 +837,7 @@ export default function DevlogManagementMock() {
   const filteredDevlogs = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
-    const result = devlogs.filter((item) => {
+    const result = authorScopedDevlogs.filter((item) => {
       const matchesFilter =
         filter === "all" ||
         item.type === filter ||
@@ -734,7 +876,7 @@ export default function DevlogManagementMock() {
     }
 
     return result;
-  }, [devlogs, filter, query, sortFilter]);
+  }, [authorScopedDevlogs, filter, query, sortFilter]);
 
   const selectedDevlog =
     filteredDevlogs.find(
@@ -745,16 +887,17 @@ export default function DevlogManagementMock() {
 
   /* =====================================================
      STATISTICS
-     일정관리처럼 전체 데이터 기준
+     검색어와 무관한 전체 데이터 기준. 단 작성자 필터는 반영해
+     "완료 + 특정 팀원"처럼 함께 고를 때 탭 개수와 목록 개수가 맞게 한다.
   ===================================================== */
 
-  const totalDevlogs = devlogs.length;
+  const totalDevlogs = authorScopedDevlogs.length;
 
-  const linkedDevlogs = devlogs.filter(
+  const linkedDevlogs = authorScopedDevlogs.filter(
     (item) => item.type === "linked",
   ).length;
 
-  const generalDevlogs = devlogs.filter(
+  const generalDevlogs = authorScopedDevlogs.filter(
     (item) => item.type === "general",
   ).length;
 
@@ -984,6 +1127,13 @@ export default function DevlogManagementMock() {
   ===================================================== */
 
   const openEditModal = (devlog: DevlogItem) => {
+    // 버튼을 숨겨도 다른 경로로 불릴 수 있어 여기서 한 번 더 막는다.
+    if (!canManageDevlog(devlog, viewerId)) {
+      alert("본인이 작성한 개발일지만 수정할 수 있습니다.");
+
+      return;
+    }
+
     setIsDetailModalOpen(false);
 
     setEditingDevlog(devlog);
@@ -1019,6 +1169,12 @@ export default function DevlogManagementMock() {
 
   const updateDevlog = async () => {
     if (!editingDevlog) {
+      return;
+    }
+
+    if (!canManageDevlog(editingDevlog, viewerId)) {
+      alert("본인이 작성한 개발일지만 수정할 수 있습니다.");
+
       return;
     }
 
@@ -1092,6 +1248,12 @@ export default function DevlogManagementMock() {
   ===================================================== */
 
   const deleteDevlog = async (devlog: DevlogItem) => {
+    if (!canManageDevlog(devlog, viewerId)) {
+      alert("본인이 작성한 개발일지만 삭제할 수 있습니다.");
+
+      return;
+    }
+
     const confirmed = window.confirm(
       `"${devlog.title || "제목 없는 개발일지"}" 개발일지를 삭제할까요?\n삭제 후에는 되돌릴 수 없습니다.`,
     );
@@ -1167,7 +1329,7 @@ export default function DevlogManagementMock() {
     const documentTitle = "개발일지 문서";
 
     const documentDescription =
-      query.trim() || filter !== "all"
+      query.trim() || filter !== "all" || effectiveAuthorFilter !== "all"
         ? "현재 검색/필터 조건에 맞는 개발일지만 문서화합니다."
         : "현재 프로젝트의 전체 개발일지를 문서화합니다.";
 
@@ -1598,12 +1760,12 @@ export default function DevlogManagementMock() {
     {
       value: "progress",
       label: "진행 중",
-      count: devlogs.filter((item) => item.status === "progress").length,
+      count: authorScopedDevlogs.filter((item) => item.status === "progress").length,
     },
     {
       value: "done",
       label: "완료",
-      count: devlogs.filter((item) => item.status === "done").length,
+      count: authorScopedDevlogs.filter((item) => item.status === "done").length,
     },
   ];
 
@@ -1732,6 +1894,39 @@ export default function DevlogManagementMock() {
               일지 미작성
               <span className="tabular-nums">{noDevlogSchedules.length}</span>
             </button>
+
+            {/* AUTHOR: 팀 프로젝트에서만. 정렬 드롭다운과 같은 모양이라 도구 모음 높이가 늘지 않는다. */}
+            {isTeamWorkspace ? (
+              <div className="relative shrink-0">
+                <UserRound
+                  size={13}
+                  className={`pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 ${
+                    authorFilter !== "all" ? "text-[#4058D6]" : "text-slate-400"
+                  }`}
+                />
+
+                <select
+                  value={authorFilter}
+                  onChange={(event) => setAuthorFilter(event.target.value)}
+                  aria-label="작성자"
+                  className={`h-8 w-[136px] truncate rounded-md border pl-7 pr-5 text-xs font-medium outline-none transition-colors focus:border-[#AAB8FF] ${
+                    authorFilter !== "all"
+                      ? "border-[#C9D2FF] bg-[#EEF3FF] text-[#4058D6]"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <option value="all">전체 작성자</option>
+                  <option value="me" disabled={!viewerId}>
+                    내가 작성한 일지
+                  </option>
+                  {authorOptions.map((option) => (
+                    <option key={option.userId} value={option.userId}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
             {/* SORT */}
             <div className="relative shrink-0">
@@ -1970,6 +2165,7 @@ export default function DevlogManagementMock() {
             <DevlogDetailPanel
               selectedDevlog={selectedDevlog}
               deletingDevlogId={deletingDevlogId}
+              canManage={canManageDevlog(selectedDevlog, viewerId)}
               onClose={() => setIsDetailModalOpen(false)}
               onEdit={openEditModal}
               onDelete={deleteDevlog}
@@ -2180,6 +2376,7 @@ function NoDevlogMainPanel({
 function DevlogDetailPanel({
   selectedDevlog,
   deletingDevlogId,
+  canManage,
   onClose,
   onEdit,
   onDelete,
@@ -2187,6 +2384,9 @@ function DevlogDetailPanel({
   selectedDevlog: DevlogItem;
 
   deletingDevlogId: string;
+
+  /** 본인 일지일 때만 true. 남의 일지·작성자 미상 일지는 조회만 한다. */
+  canManage: boolean;
 
   onClose: () => void;
 
@@ -2294,7 +2494,7 @@ function DevlogDetailPanel({
             </DevlogDetailMetaRow>
 
             <DevlogDetailMetaRow icon={<UserRound size={14} />} label="작성자">
-              {/* 개발일지 API 응답에 작성자 필드가 없어 대부분 비어 있다. 다른 이름으로 채우지 않는다. */}
+              {/* 서버가 준 작성자만 보인다. 일정 담당자나 로그인한 나로 대신 채우지 않는다. */}
               <span
                 className={`text-xs ${
                   selectedDevlog.authorName ? "text-slate-700" : "text-slate-400"
@@ -2366,7 +2566,8 @@ function DevlogDetailPanel({
           ) : null}
         </div>
 
-        {/* FOOTER */}
+        {/* FOOTER: 남의 일지에는 수정·삭제 대신 안내만 둔다(패널 높이는 그대로). */}
+        {canManage ? (
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
           <button
             type="button"
@@ -2391,6 +2592,11 @@ function DevlogDetailPanel({
             수정
           </button>
         </footer>
+        ) : (
+          <footer className="flex h-[61px] shrink-0 items-center justify-end border-t border-slate-200 px-5 text-[11px] text-slate-400">
+            본인이 작성한 개발일지만 수정·삭제할 수 있습니다.
+          </footer>
+        )}
         </div>
       </aside>
     </>
