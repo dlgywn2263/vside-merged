@@ -57,12 +57,12 @@ import { toggleRightPanel } from "@/store/slices/uiSlice";
 //   </div>
 // );
 
-const LEFT_SIDEBAR_DEFAULT_WIDTH = 260;
+const LEFT_SIDEBAR_DEFAULT_WIDTH = 280;
 const LEFT_SIDEBAR_MIN_WIDTH = 200;
 const LEFT_SIDEBAR_MAX_WIDTH = 400;
 
 const RIGHT_PANEL_DEFAULT_WIDTH = 270;
-const RIGHT_PANEL_MIN_WIDTH = 240;
+const RIGHT_PANEL_MIN_WIDTH = 200;
 const RIGHT_PANEL_MAX_WIDTH = 450;
 
 const TERMINAL_DEFAULT_HEIGHT = 220;
@@ -72,7 +72,7 @@ const TERMINAL_MAX_HEIGHT_RATIO = 0.65;
 
 // 창이 좁을 때 양쪽 패널이 에디터를 밀어내지 않도록 비율로도 막는다.
 const LEFT_SIDEBAR_MAX_RATIO = "30%";
-const RIGHT_PANEL_MAX_RATIO = "35%";
+const RIGHT_PANEL_MAX_RATIO = "30%";
 
 const clampPanelSize = (value, min, max) => {
   return Math.min(max, Math.max(min, value));

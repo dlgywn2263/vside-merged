@@ -20,7 +20,7 @@ export default function ActivityBar() {
   const router = useRouter();
   const pathname = usePathname() || "";
   const searchParams = useSearchParams();
-  const { activeActivity, isSidebarVisible } = useSelector((state) => state.ui);
+  const { activeActivity, isSidebarVisible, isRightPanelCompact } = useSelector((state) => state.ui);
   const [workspaceName, setWorkspaceName] = useState("");
 
   const workspaceInfo = useMemo(() => {
@@ -117,7 +117,10 @@ export default function ActivityBar() {
   };
 
   return (
-    <div className="z-30 flex h-full w-12 shrink-0 flex-col justify-between border-r border-gray-200 bg-[#f8f8f8]">
+    // 좁은 창(오른쪽 패널 자동 접기와 같은 기준, useRightPanelAutoCollapse)에서는 자리째 숨겨
+    // 탐색기가 왼쪽 끝에서 시작하게 한다. 언마운트하지 않아 ?panel=git 처리 같은 effect 는 그대로 돈다.
+    // 여기 있던 메뉴는 상단 메뉴(보기·Git)와 WAIVS 이동 메뉴로 들어갈 수 있다.
+    <div className={`z-30 ${isRightPanelCompact ? "hidden" : "flex"} h-full w-12 shrink-0 flex-col justify-between border-r border-gray-200 bg-[#f8f8f8]`}>
       <div className="flex flex-col gap-2 pt-2">
         {topItems.map((item) => {
           const active = activeActivity === item.id;

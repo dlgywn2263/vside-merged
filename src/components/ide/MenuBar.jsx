@@ -95,6 +95,7 @@ export default function MenuBar({ mode = "personal" }) {
     isVoiceConnected,
     isRunning,
     isDebugMode,
+    isSidebarVisible,
   } = useSelector((state) => state.ui);
 
   const isWaitingForSlot = useSelector((state) => state.safeRun.isWaitingForSlot);
@@ -543,6 +544,15 @@ if (tree && tree.children) {
         break;
       case "탐색기":
         dispatch(setActiveActivity("editor"));
+        // 좁은 창에서는 액티비티바가 숨겨져, 접힌 탐색기를 여는 길이 이 메뉴뿐이다.
+        if (!isSidebarVisible) dispatch(toggleSidebar());
+        break;
+      // 아래 둘은 액티비티바의 같은 이름 항목과 같은 동작이다(좁은 창에서 액티비티바가 숨겨질 때 쓰는 길).
+      case "API 테스트":
+        dispatch(setActiveActivity("api-test"));
+        break;
+      case "개발일지":
+        dispatch(setActiveActivity("docs"));
         break;
       case "검색":
         dispatch(setActiveActivity("editor"));
@@ -734,6 +744,8 @@ if (tree && tree.children) {
         { label: "탐색기", shortcut: "Ctrl+Shift+E" },
         { label: "검색", shortcut: "Ctrl+Shift+F" },
         { label: "소스 제어", shortcut: "Ctrl+Shift+G" },
+        { label: "API 테스트" },
+        { label: "개발일지" },
         { label: "실행 및 디버그", shortcut: "Ctrl+Shift+D" },
         { label: "확장", shortcut: "Ctrl+Shift+X" },
         { label: "출력", shortcut: "Ctrl+Shift+U" },
