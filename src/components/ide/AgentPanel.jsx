@@ -236,13 +236,13 @@ export default function AgentPanel() {
               }}
               disabled={isLoading}
             />
-            <div className="flex justify-between items-center mt-1">
-              <span className="text-[10px] text-gray-400 font-bold">
+            <div className="flex justify-between items-center gap-2 mt-1">
+              <span className="min-w-0 text-[10px] text-gray-400 font-bold">
                 에디터에서 Ctrl+L 을 누르면 커서가 이동합니다.
               </span>
               <button
                 disabled={isLoading || !input.trim()}
-                className={`cursor-pointer p-1.5 rounded-md transition-colors ${
+                className={`shrink-0 cursor-pointer p-1.5 rounded-md transition-colors ${
                   input.trim()
                     ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
                     : "bg-gray-100 text-gray-400"

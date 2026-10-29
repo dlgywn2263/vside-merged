@@ -61,8 +61,8 @@ const LEFT_SIDEBAR_DEFAULT_WIDTH = 260;
 const LEFT_SIDEBAR_MIN_WIDTH = 200;
 const LEFT_SIDEBAR_MAX_WIDTH = 400;
 
-const RIGHT_PANEL_DEFAULT_WIDTH = 320;
-const RIGHT_PANEL_MIN_WIDTH = 280;
+const RIGHT_PANEL_DEFAULT_WIDTH = 270;
+const RIGHT_PANEL_MIN_WIDTH = 240;
 const RIGHT_PANEL_MAX_WIDTH = 450;
 
 const TERMINAL_DEFAULT_HEIGHT = 220;
@@ -268,7 +268,7 @@ function CollaborationPanel({ workspaceId }) {
           <select
             value={chatMode}
             onChange={(e) => setChatMode(e.target.value)}
-            className="w-full bg-white border border-gray-200 text-gray-700 text-[12px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-green-400 focus:bg-white transition-colors cursor-pointer"
+            className="w-full min-w-0 bg-white border border-gray-200 text-gray-700 text-[12px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-green-400 focus:bg-white transition-colors cursor-pointer"
           >
             <option value="ALL">📢 모두에게 (Public)</option>
 
@@ -292,7 +292,7 @@ function CollaborationPanel({ workspaceId }) {
                 handleSend();
               }
             }}
-            className="flex-1 bg-transparent border-none outline-none text-[13px] placeholder-gray-400"
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] placeholder-gray-400"
             placeholder={
               chatMode === "ALL"
                 ? "모두에게 메시지 보내기..."
@@ -303,7 +303,7 @@ function CollaborationPanel({ workspaceId }) {
           <button
             onClick={handleSend}
             disabled={!chatInput.trim()}
-            className={`cursor-pointer p-1.5 rounded-md transition-colors ${
+            className={`shrink-0 cursor-pointer p-1.5 rounded-md transition-colors ${
               chatInput.trim()
                 ? "bg-green-600 text-white hover:bg-green-700"
                 : "bg-gray-200 text-gray-400"
