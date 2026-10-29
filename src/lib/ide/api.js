@@ -834,6 +834,36 @@ export const renameFileApi = async (
   }
 };
 
+// 탐색기 드래그 이동. 이름 변경과 같은 서버 경로를 쓰고, targetFolder("" = 최상위)로 옮긴다.
+// 서버는 그 자리에 같은 이름이 있으면 덮어쓰지 않고 409 를 준다.
+export const moveFileApi = async (
+  workspaceId,
+  projectName,
+  branchName = "master",
+  filePath,
+  targetFolder,
+) => {
+  const response = await authFetch(`${API_BASE}/files/rename`, {
+    method: "PUT",
+    body: JSON.stringify({
+      workspaceId,
+      projectName,
+      branchName: branchName || "master",
+      filePath,
+      targetFolder,
+    }),
+  });
+
+  if (response.status === 409) {
+    throw new Error("옮길 폴더에 같은 이름이 이미 있습니다.");
+  }
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || "파일 이동 실패");
+  }
+};
+
 export const buildProjectApi = async (
   workspaceId,
   projectName,
