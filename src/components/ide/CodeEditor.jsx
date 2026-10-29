@@ -2708,11 +2708,17 @@ useEffect(() => {
 
         /* 팀원이 잡고 있어 수정할 수 없는 줄. */
         .peer-line-bg {
-          background-color: rgba(245, 158, 11, 0.10) !important;
+          background-color: rgba(239, 68, 68, 0.10) !important;
         }
         .peer-line-margin {
-          border-left: 3px solid rgba(245, 158, 11, 0.75) !important;
+          border-left: 3px solid rgba(239, 68, 68, 0.75) !important;
           z-index: 50 !important;
+        }
+        /* 잠긴 줄에서 입력하면 위쪽 한국어 경고가 이미 뜨므로 Monaco 기본 영어 말풍선
+           ("Cannot edit in read-only editor")은 잠금 중일 때만 숨긴다. readOnlyMessage
+           옵션은 문구만 바꿀 수 있고 빈 값이어도 빈 말풍선이 남는다. */
+        .peer-locked .monaco-editor-overlaymessage {
+          display: none !important;
         }
         /* 팀원 이름표. 배경색은 그 사람 커서 색으로 코드에서 직접 넣는다. */
         .peer-caret-label {
@@ -2792,7 +2798,7 @@ useEffect(() => {
       )}
 
       {peerLockName && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50/95 px-4 py-2 text-[12px] font-bold text-amber-700 shadow-sm backdrop-blur-sm">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-2 rounded-full border border-[#EF4444] bg-[#FEF2F2]/95 px-4 py-2 text-[12px] font-bold text-[#DC2626] shadow-sm backdrop-blur-sm">
           <VscLock size={14} />
           {peerLockName}님이 편집 중인 줄입니다 — 수정할 수 없습니다
         </div>
@@ -3127,7 +3133,7 @@ useEffect(() => {
           </div>
         )}
 
-        <div className={`absolute inset-0 z-10 bg-white ${isDiffMode ? "invisible" : ""}`}>
+        <div className={`absolute inset-0 z-10 bg-white ${isDiffMode ? "invisible" : ""} ${peerLockName ? "peer-locked" : ""}`}>
 {/*
   팀 모드에서는 value 를 넘기지 않는다.
 
