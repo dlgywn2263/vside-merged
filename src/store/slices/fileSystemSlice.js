@@ -158,6 +158,16 @@ const fileSystemSlice = createSlice({
       });
     },
 
+    // 닫았다 다시 연 탭을 원래 자리로 돌린다(샌드박스 반영 뒤). 목록에 없는 탭은 뒤로 간다.
+    reorderOpenFiles: (state, action) => {
+      const order = action.payload;
+      const rank = (id) => {
+        const index = order.indexOf(id);
+        return index === -1 ? order.length : index;
+      };
+      state.openFiles.sort((a, b) => rank(a.id) - rank(b.id));
+    },
+
     closeAllFiles: (state) => {
       state.openFiles = [];
       state.activeFileId = null;
@@ -207,6 +217,7 @@ export const {
   closeFile,
   closeFilesByPath,
   closeAllFiles,
+  reorderOpenFiles,
   updateFileContent,
   toggleFolder,
   setExpandedFolders,

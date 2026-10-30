@@ -38,6 +38,8 @@ import {
   closeAllFiles,
   closeFilesByPath,
   openFile,
+  reorderOpenFiles,
+  setActiveFile,
   updateFileContent,
 } from "@/store/slices/fileSystemSlice";
 import {
@@ -51,7 +53,13 @@ import { writeToTerminal } from "@/store/slices/uiSlice";
 
 interface RootState {
   sandbox: SandboxState;
-  fileSystem: { workspaceId: string | null; activeProject: string | null; activeBranch: string | null };
+  fileSystem: {
+    workspaceId: string | null;
+    activeProject: string | null;
+    activeBranch: string | null;
+    openFiles: { id: string }[];
+    activeFileId: string | null;
+  };
 }
 
 /** 반영을 한 번 눌렀을 때 파일마다 어떻게 됐는지. */
@@ -83,7 +91,9 @@ const baseName = (path: string) => path.split("/").filter(Boolean).pop() || path
 export default function SandboxControls() {
   const dispatch = useDispatch();
 
-  const { workspaceId, activeProject, activeBranch } = useSelector((state: RootState) => state.fileSystem);
+  const { workspaceId, activeProject, activeBranch, openFiles, activeFileId } = useSelector(
+    (state: RootState) => state.fileSystem,
+  );
   const sandbox = useSelector((state: RootState) => state.sandbox);
 
   const [isBusy, setIsBusy] = useState(false);
@@ -356,7 +366,11 @@ export default function SandboxControls() {
       }
 
       // 샌드박스 파일의 탭을 먼저 닫는다. 반영된 파일은 샌드박스에서 빠지므로 다음에
-      // 열 때는 팀 방으로 열려야 한다.
+      // 열 때는 팀 방으로 열려야 한다. 닫기 전 탭 순서와 보던 파일은 기억해 뒀다가 되돌린다.
+      const tabOrder = openFiles.map((file) => file.id);
+      const previousActive = activeFileId;
+      const reopenPaths = files.map((file) => file.filePath).filter((path) => tabOrder.includes(path));
+
       await settleOpenTabs(files.map((file) => file.filePath));
 
       const next: ApplyResult[] = [];
@@ -377,8 +391,39 @@ export default function SandboxControls() {
         setApplyResults({ scopeKey, items: [...next] });
       }
 
-      store(scope, await fetchSandboxStateApi(scope));
+      const after = await fetchSandboxStateApi(scope);
+      store(scope, after);
       setIsPanelOpen(true);
+
+      // 닫았던 탭을 다시 연다. 아직 샌드박스에 남은 파일(충돌·실패)은 내 것으로, 반영된 파일은 팀 것으로.
+      // 내용을 먼저 넣고 연다 — 에디터가 그 내용을 방의 첫 문서 후보로 쓴다.
+      const reopened = new Set<string>();
+
+      for (const filePath of reopenPaths) {
+        const stillMine = after.files.find((file) => file.filePath === filePath);
+
+        if (stillMine?.kind === "DELETED") continue;
+
+        try {
+          if (stillMine) {
+            await openSandboxFile(scope, filePath);
+          } else {
+            const content = await fetchFileContentApi(scope.workspaceId, scope.projectName, scope.branchName, filePath);
+            dispatch(updateFileContent({ filePath, content }));
+            dispatch(openFile({ id: filePath, name: baseName(filePath), type: "file" }));
+          }
+          reopened.add(filePath);
+        } catch {
+          // 그 사이 지워졌으면 다시 열지 않는다.
+        }
+      }
+
+      dispatch(reorderOpenFiles(tabOrder));
+      // 보던 탭이 다시 열리지 못했으면 되돌리지 않는다. setActiveFile 은 없는 탭을 빈 채로 만든다.
+      const closedPaths = files.map((file) => file.filePath);
+      if (previousActive && (!closedPaths.includes(previousActive) || reopened.has(previousActive))) {
+        dispatch(setActiveFile(previousActive));
+      }
 
       const applied = next.filter((item) => item.result === "applied").length;
       const conflicts = next.filter((item) => item.result === "conflict");
