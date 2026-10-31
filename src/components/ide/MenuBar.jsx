@@ -18,6 +18,8 @@ import {
   updateDebugVariables,
   setActiveActivity,
   setGuiPreviewUrl,
+  setGuiAppReady,
+  setIsPreviewVisible,
 } from "@/store/slices/uiSlice";
 import { DebugSocket } from "@/lib/ide/debugSocket";
 import { RunSocket } from "@/lib/ide/runSocket";
@@ -177,6 +179,13 @@ export default function MenuBar({ mode = "personal" }) {
     }
   };
   const handleQuickStop = () => {
+    // 중지하면 서버가 컨테이너째 지워 Spring Boot 와 Swing 창이 함께 꺼진다.
+    // 미리보기를 그대로 두면 꺼진 창의 마지막 화면이 남아 안 꺼진 것처럼 보이므로 같이 닫는다.
+    if (isRunning) {
+      dispatch(setGuiPreviewUrl(""));
+      dispatch(setGuiAppReady(false));
+      dispatch(setIsPreviewVisible(false));
+    }
     dispatch(setRunning(false));
     dispatch(setWaitingForRunSlot(false));
     dispatch(setDebugMode(false));
