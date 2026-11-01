@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { closeProjectModal, writeToTerminal } from "@/store/slices/uiSlice";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 import {
   setProjectList,
   setWorkspaceTree,
@@ -318,6 +319,18 @@ export default function CreateProjectModal({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+  });
+
+  const demoName = useDemoAutoInput({
+    targetId: "aivs.createFolder.name",
+    value: formData.name,
+    onChange: (name) => setFormData((prev) => ({ ...prev, name })),
+  });
+
+  const demoDescription = useDemoAutoInput({
+    targetId: "aivs.createFolder.description",
+    value: formData.description,
+    onChange: (description) => setFormData((prev) => ({ ...prev, description })),
   });
 
   const [gitUrl, setGitUrl] = useState("");
@@ -924,6 +937,7 @@ export default function CreateProjectModal({
                           name: event.target.value,
                         })
                       }
+                      {...demoName.props}
                     />
                   </label>
 
@@ -947,6 +961,7 @@ export default function CreateProjectModal({
                           description: event.target.value,
                         })
                       }
+                      {...demoDescription.props}
                     />
                   </label>
 

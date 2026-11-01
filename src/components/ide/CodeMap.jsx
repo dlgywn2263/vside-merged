@@ -45,6 +45,8 @@ import {
 // 💡 [핵심 수정] 위에서 새로 작성한 싱글톤 인스턴스 훅을 가져옵니다.
 import { globalSyncInstance } from "@/hooks/useWorkspaceGlobalSync";
 import { apiFetch, apiJson } from "@/lib/api/apiClient";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
+import { recordDemoCreatedFile } from "@/lib/demo/demoRunner";
 
 
 
@@ -232,6 +234,11 @@ export default function CodeMap() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCompName, setNewCompName] = useState("");
+  const demoCompName = useDemoAutoInput({
+    targetId: "codemap.createComponent.name",
+    value: newCompName,
+    onChange: setNewCompName,
+  });
   const [newCompType, setNewCompType] = useState("CLASS");
   const [basePath, setBasePath] = useState(""); 
 
@@ -788,7 +795,8 @@ const handleOpenNewComponentModal = (x, y) => {
       const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
       const finalPath = safeBasePath + newCompName;
       await createCodeMapComponentApi(workspaceId, activeProject, activeBranch || "master", finalPath, newCompType);
-      
+      recordDemoCreatedFile(workspaceId, activeProject, finalPath);
+
       setIsModalOpen(false);
       setNewCompName("");
       alert("✨ 컴포넌트가 올바른 패키지에 생성되었습니다!");
@@ -1143,6 +1151,7 @@ const handleOpenNewComponentModal = (x, y) => {
                       onChange={(e) => setNewCompName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
                       className="w-full border border-gray-300 rounded-lg p-2.5 text-[13px] font-mono focus:ring-1 focus:ring-blue-500 outline-none transition-shadow"
                       placeholder="UserService"
+                      {...demoCompName.props}
                     />
                   </div>
                   <div className="col-span-1">
