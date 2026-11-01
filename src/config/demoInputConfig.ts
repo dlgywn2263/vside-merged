@@ -96,11 +96,17 @@ export const DEMO_INPUT_TARGETS = {
   // 프로젝트 생성(/new/workspace). 작업폴더 생성과 다른 화면이다.
   "project.create.name": {
     mode: "typing",
-    text: "병원 예약 관리",
+    text: "병원예약관리",
   },
   "project.create.description": {
     mode: "typing",
-    text: "병원 예약",
+    text: "병원예약",
+  },
+
+  // 팀 채팅. 전송은 발표자가 Enter 나 전송 버튼으로 직접 한다.
+  "ide.teamChat.message": {
+    mode: "typing",
+    text: "안녕하세요",
   },
 
   // 작업폴더 생성(CreateProjectModal)
@@ -113,6 +119,12 @@ export const DEMO_INPUT_TARGETS = {
     text: "병원 예약을 날짜별로 조회하는 Java Swing 관리 프로그램",
   },
 
+  // 코드맵의 새 컴포넌트 경로. 모달을 열면 기본 경로가 이미 차 있어 지우고 입력한다.
+  "codemap.createComponent.path": {
+    mode: "paste",
+    existing: "replace",
+    text: "src/main/java/com/hospital/reservation/gui",
+  },
   // 코드맵의 새 컴포넌트 이름. 영문·숫자·밑줄만 넣을 수 있는 칸이다.
   "codemap.createComponent.name": {
     mode: "typing",
@@ -124,8 +136,7 @@ export const DEMO_INPUT_TARGETS = {
     mode: "paste",
     existing: "replace",
     rerun: true,
-    // 임시 문구. 발표 문구가 확정되면 이 텍스트만 바꾼다.
-    text: "SearchFrame.java에서 예약 조회 버튼을 클릭하면 환자의 예약 정보를 조회하고, 조회 결과를 화면에 표시할 수 있도록 기능을 구현해줘. 기존 GUI 구조는 유지하고 필요한 코드만 수정해줘.",
+    text: "기존 Java Swing 예약 조회 화면은 유지하고, 예약 날짜, 시간, 진료과목, 담당의, 예약 상태를 표시하는 결과 테이블을 추가해줘.",
   },
 
   // Git 브랜치와 커밋
@@ -136,7 +147,7 @@ export const DEMO_INPUT_TARGETS = {
   "git.commit.message": {
     mode: "typing",
     rerun: true,
-    text: "feat: 예약 조회 GUI 구현",
+    text: "예약 조회 GUI 구현",
   },
 
   // API 테스터. 최종 발표 대상과 별개로 유지한다. 쓰지 않으면 enabled 를 false 로 둔다.
@@ -159,7 +170,23 @@ export const DEMO_INPUT_TARGETS = {
     mode: "paste",
     existing: "replace",
     rerun: true,
-    text: "조회 gui 구현하고 충돌을 해결함",
+    text: `1. 개발 목표
+사용자가 예약 내역을 쉽고 편리하게 확인할 수 있도록 예약 조회 GUI를 구현하고, 팀원들과의 협업을 통해 기능이 정상적으로 작동하는지 테스트하는 것을 목표로 하였다.
+
+2. 개발 내용
+예약 정보를 확인할 수 있는 GUI 화면 구성
+예약 날짜, 시간, 예약자 정보, 예약 상태 등을 표시하는 기능 구현
+사용자가 예약 내역을 쉽게 확인할 수 있도록 화면 배치 및 디자인 개선
+예약 데이터가 GUI에 정상적으로 출력되는지 확인
+팀원들과 개발 진행 상황 및 기능 구현 내용 공유
+각 기능을 통합하여 정상적으로 동작하는지 테스트
+
+3. 테스트 및 문제 해결
+예약 조회 화면에서 데이터가 올바르게 표시되는지 확인하고, 예약 정보가 없을 경우와 여러 개의 예약이 존재하는 경우를 테스트하였다. 또한 팀원들이 구현한 기능과 연결하는 과정에서 발생할 수 있는 데이터 전달 및 화면 출력 문제를 점검하였다.
+테스트 과정에서 발견된 오류나 개선 사항은 팀원들과 공유하고 수정 방향을 논의하였다.
+
+4. 개발 결과
+예약 조회 GUI의 기본적인 화면 구성과 예약 정보 출력 기능을 구현하였다. 팀원들과 협업하여 기능 간 연동 상태를 점검하고, 테스트를 통해 프로그램의 안정성과 사용 편의성을 개선할 수 있었다.`,
   },
 } satisfies Record<string, DemoTargetConfig>;
 

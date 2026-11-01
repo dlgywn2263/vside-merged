@@ -241,6 +241,11 @@ export default function CodeMap() {
   });
   const [newCompType, setNewCompType] = useState("CLASS");
   const [basePath, setBasePath] = useState(""); 
+  const demoBasePath = useDemoAutoInput({
+    targetId: "codemap.createComponent.path",
+    value: basePath,
+    onChange: setBasePath,
+  });
 
   const [pendingRelation, setPendingRelation] = useState(null);
   const [relationType, setRelationType] = useState("COMPOSITION");
@@ -1139,6 +1144,7 @@ const handleOpenNewComponentModal = (x, y) => {
                     onChange={(e) => setBasePath(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-2.5 text-[13px] font-mono focus:ring-1 focus:ring-blue-500 outline-none bg-gray-50 text-gray-700 transition-shadow"
                     placeholder="src/main/java/com/example/demo/"
+                    {...demoBasePath.props}
                   />
                 </div>
                 

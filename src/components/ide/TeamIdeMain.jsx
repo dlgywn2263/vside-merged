@@ -37,6 +37,7 @@ import {
   getWorkspaceMembersApi,
 } from "@/lib/ide/api";
 import { ChatSocket } from "@/lib/ide/chatSocket";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspaceEntry } from "@/hooks/ide/useWorkspaceEntry";
 import { isSandboxFile } from "@/store/slices/sandboxSlice";
@@ -82,6 +83,11 @@ function CollaborationPanel({ workspaceId }) {
   const { user } = useAuth();
 
   const [chatInput, setChatInput] = useState("");
+  const demoChatInput = useDemoAutoInput({
+    targetId: "ide.teamChat.message",
+    value: chatInput,
+    onChange: setChatInput,
+  });
   const [messages, setMessages] = useState([]);
   const [myProfile, setMyProfile] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -298,6 +304,7 @@ function CollaborationPanel({ workspaceId }) {
                 ? "모두에게 메시지 보내기..."
                 : "귓속말 보내기..."
             }
+            {...demoChatInput.props}
           />
 
           <button
