@@ -25,6 +25,7 @@ import {
   useGitBranches,
   validateBranchName,
 } from "@/hooks/ide/useGitBranches";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 
 const getBranchMeta = (branchName = "") => {
   const branch = String(branchName || "");
@@ -266,6 +267,12 @@ export default function GitBranchControls({
     branchName: "",
     baseBranch: DEFAULT_BRANCH,
     checkoutAfterCreate: true,
+  });
+
+  const demoBranchName = useDemoAutoInput({
+    targetId: "git.createBranch.name",
+    value: branchDraft.branchName,
+    onChange: (branchName) => setBranchDraft((prev) => ({ ...prev, branchName })),
   });
 
   const [isMergeBranchModalOpen, setIsMergeBranchModalOpen] = useState(false);
@@ -850,6 +857,7 @@ export default function GitBranchControls({
                   placeholder="예) feature/login-ui, hotfix/build-error"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium"
                   autoFocus
+                  {...demoBranchName.props}
                 />
 
                 {branchNameError && (

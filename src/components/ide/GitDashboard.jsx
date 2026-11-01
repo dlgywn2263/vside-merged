@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 import {
   VscArrowDown,
   VscArrowRight,
@@ -375,6 +376,11 @@ export default function GitDashboard() {
 
   const [activeView, setActiveView] = useState("status");
   const [commitMessage, setCommitMessage] = useState("");
+  const demoCommitMessage = useDemoAutoInput({
+    targetId: "git.commit.message",
+    value: commitMessage,
+    onChange: setCommitMessage,
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const [unstagedFiles, setUnstagedFiles] = useState([]);
@@ -2936,6 +2942,7 @@ export default function GitDashboard() {
                       if (event.ctrlKey && event.key === "Enter") handleCommit();
                     }}
                     disabled={isLoading}
+                    {...demoCommitMessage.props}
                   />
                   <div className="flex w-48 flex-col gap-2">
                     <button

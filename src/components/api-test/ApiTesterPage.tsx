@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 import {
   Plus,
   Send,
@@ -688,6 +689,7 @@ export default function ApiTesterPage() {
 
   const [method, setMethod] = useState<HttpMethod>("GET");
   const [url, setUrl] = useState("{{baseUrl}}/api/history");
+  const demoUrl = useDemoAutoInput({ targetId: "apiTester.url", value: url, onChange: setUrl });
   const [activeTab, setActiveTab] = useState("Params");
 
   const [params, setParams] = useState<Param[]>([]);
@@ -1890,6 +1892,7 @@ export default function ApiTesterPage() {
                 }}
                 className="flex-1 rounded-xl border-none bg-slate-100 px-5 py-3 text-sm font-medium text-slate-600 outline-none"
                 placeholder="{{baseUrl}}/api/example"
+                {...demoUrl.props}
               />
 
               <button

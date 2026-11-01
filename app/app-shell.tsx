@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import TopNav from "@/components/landing/TopNav";
+import DemoModeControl from "@/components/demo/DemoModeControl";
 import { useAuth } from "@/contexts/AuthContext";
 import { MessageProvider } from "@/contexts/MessageContext";
 
@@ -63,6 +64,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <MessageProvider>
+      <DemoModeControl />
       <div className={isIdePage
         ? "flex h-dvh min-h-0 flex-col overflow-hidden bg-[#F7F8FA]"
         : "flex min-h-dvh flex-col bg-[#F7F8FA]"

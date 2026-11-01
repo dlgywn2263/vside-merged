@@ -18,6 +18,7 @@ import {
 import WizardShell from "@/components/new/WizardShell";
 import FolderPickerDialog from "@/components/new/FolderPickerDialog";
 import { useWorkspaceWizard } from "@/store/workspaceWizardStore";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 import {
   setWorkspaceId,
   setProjectList,
@@ -45,6 +46,16 @@ export default function Page() {
   const setProjectName = useWorkspaceWizard((s) => s.setProjectName);
   const projectDescription = useWorkspaceWizard((s) => s.projectDescription);
   const setProjectDescription = useWorkspaceWizard((s) => s.setProjectDescription);
+  const demoProjectName = useDemoAutoInput({
+    targetId: "project.create.name",
+    value: projectName,
+    onChange: setProjectName,
+  });
+  const demoProjectDescription = useDemoAutoInput({
+    targetId: "project.create.description",
+    value: projectDescription,
+    onChange: setProjectDescription,
+  });
   const path = useWorkspaceWizard((s) => s.path);
   const setPath = useWorkspaceWizard((s) => s.setPath);
   const teamMembers = useWorkspaceWizard((s) => s.teamMembers);
@@ -181,6 +192,7 @@ export default function Page() {
                       placeholder="예: 학생 성적 관리 시스템"
                       disabled={isCreating}
                       required
+                      {...demoProjectName.props}
                     />
                   </label>
                   <label className="block">
@@ -194,6 +206,7 @@ export default function Page() {
                       placeholder="프로젝트의 목적이나 주요 기능을 입력하세요."
                       disabled={isCreating}
                       rows={2}
+                      {...demoProjectDescription.props}
                     />
                   </label>
                   <div>

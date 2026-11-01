@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import type { ScheduleOption } from "../devlog.types";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 
 type StatusChange =
   | "none"
@@ -179,6 +180,20 @@ export function CreateDevlogModal({
 
   const isEdit =
     mode === "edit";
+
+  const demoTitle = useDemoAutoInput({
+    targetId: "devlog.create.title",
+    value: formTitle,
+    onChange: onChangeTitle,
+    disabled: isEdit,
+  });
+
+  const demoContent = useDemoAutoInput({
+    targetId: "devlog.create.content",
+    value: formContent,
+    onChange: onChangeContent,
+    disabled: isEdit,
+  });
 
   /* =========================================================
      BACKGROUND SCROLL LOCK
@@ -347,6 +362,7 @@ export function CreateDevlogModal({
                   placeholder="오늘 작업한 내용을 한 줄로 정리해주세요."
                   className="mt-1 w-full border-0 border-b border-slate-200 bg-transparent px-0 pb-3 pt-1 text-[19px] font-semibold tracking-tight text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-300 focus:border-[#5873F9]"
                   autoFocus
+                  {...demoTitle.props}
                 />
               </div>
 
@@ -595,6 +611,7 @@ export function CreateDevlogModal({
 - Postman API 테스트 완료`}
                   rows={11}
                   className="w-full resize-none rounded-md border border-slate-200 bg-[#FBFCFE] p-4 text-sm font-medium leading-7 text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#AAB8FF] focus:bg-white focus:ring-2 focus:ring-[#5873F9]/10"
+                  {...demoContent.props}
                 />
               </section>
 

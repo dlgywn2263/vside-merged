@@ -64,6 +64,8 @@ import {
 } from "@/store/slices/uiSlice";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useDemoEditorInput } from "@/hooks/useDemoEditorInput";
+import { useDemoAutoInput } from "@/hooks/useDemoAutoInput";
 
 /** 개인 모드에서 타이핑이 멈추고 이만큼 지나면 디스크에 쓴다. 팀 모드와 같은 간격. */
 const DISK_SAVE_IDLE_MS = 3000;
@@ -561,11 +563,21 @@ export default function CodeEditor() {
   const awarenessChangeListenerRef = useRef(null);
 
   const isTeamMode = pathname?.includes("/team");
-  
+
   const isTeamModeRef = useRef(isTeamMode);
   useEffect(() => {
     isTeamModeRef.current = isTeamMode;
   }, [isTeamMode]);
+
+  // 발표용 자동 입력. 시연 모드가 꺼져 있으면 클릭을 받아도 아무것도 하지 않는다.
+  const attachDemoEditorInput = useDemoEditorInput(() => ({
+    filePath: stateRef.current.activeFileId,
+    workspaceId: stateRef.current.workspaceId,
+    projectName: stateRef.current.activeProject,
+    isTeamMode: isTeamModeRef.current,
+    binding: bindingRef.current,
+    session: sessionRef.current,
+  }));
 
   /*
    * 샌드박스(개인 레이어). 팀 모드에서만 쓴다.
@@ -594,6 +606,14 @@ export default function CodeEditor() {
       });
 
   const isSandboxOn = isTeamMode && isSandboxKnown && sandbox.enabled;
+
+  // 발표용 Ctrl+K AI 요청 문구. 입력창을 클릭해야 들어가고, 전송은 발표자가 직접 한다.
+  const demoAiPrompt = useDemoAutoInput({
+    targetId: "ide.aiPrompt.sandbox",
+    value: aiQuery,
+    onChange: setAiQuery,
+    disabled: !isSandboxOn,
+  });
 
   /** 이 파일을 내 개인 방에서 고치는 중인지. */
   const isSandboxEditing = isSandboxOn && isFileTab && isSandboxFile(sandbox, activeFileId);
@@ -2284,6 +2304,7 @@ useEffect(() => {
     monacoRef.current = monacoInstance;
     setIsEditorReady(true);
     setEditorMountVersion((prev) => prev + 1);
+    attachDemoEditorInput(editor, monacoInstance);
 
     const cmdCurrent = editor.addCommand(0, (_, conflict) => applyConflictResolution("current", conflict));
     const cmdIncoming = editor.addCommand(0, (_, conflict) => applyConflictResolution("incoming", conflict));
@@ -3106,7 +3127,7 @@ useEffect(() => {
       {showAiInput && !isDiffMode && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[500px] bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-200 z-50 p-2 flex items-center gap-3 animate-fade-in-up">
           <div className="bg-indigo-100 p-1.5 rounded-lg ml-1"><VscSparkle className="text-indigo-600" size={18} /></div>
-          <input ref={aiInputRef} type="text" className="flex-1 border-none outline-none text-[13px] bg-transparent font-medium text-gray-800 placeholder-gray-400" placeholder="AI에게 무엇을 만들어 달라고 할까요?" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiSubmit(); } if (e.key === "Escape") setShowAiInput(false); }} disabled={isAiLoading} />
+          <input ref={aiInputRef} type="text" className="flex-1 border-none outline-none text-[13px] bg-transparent font-medium text-gray-800 placeholder-gray-400" placeholder="AI에게 무엇을 만들어 달라고 할까요?" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiSubmit(); } if (e.key === "Escape") setShowAiInput(false); }} disabled={isAiLoading} {...demoAiPrompt.props} />
           {isAiLoading ? <VscLoading className="animate-spin text-indigo-500 mr-2" size={18} /> : <div className="flex items-center gap-2 mr-2 text-[10px] font-bold text-gray-400"><span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">Enter</span><span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">Esc</span></div>}
         </div>
       )}
