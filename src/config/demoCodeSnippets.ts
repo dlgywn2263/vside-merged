@@ -6,4 +6,12 @@
 export const NAME_FIELD_CODE = `private final JTextField nameField = new JTextField("김민수", 16);`;
 
 /** 같은 파일에 보조 시연자가 동시에 입력하는 필드 한 줄. */
-export const SEARCH_BUTTON_FIELD_CODE = `private final JButton searchButton = new JButton("예약 조회");`;
+export const SEARCH_BUTTON_FIELD_CODE = `private final JButton searchButton = new JButton("예약 조회");
+private final JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 8));
+
+{
+    searchButton.setPreferredSize(new Dimension(130, 38));
+    searchButton.setFont(new Font("Malgun Gothic", Font.BOLD, 14));
+    searchButton.setFocusPainted(false);
+    buttonPanel.add(searchButton);
+}`;
