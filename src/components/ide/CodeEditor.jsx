@@ -1819,7 +1819,25 @@ useEffect(() => {
     );
   };
 
-  const handleAcceptAi = () => {
+  const handleAcceptAi = async () => {
+    // 아래 pushEditOperations 는 에디터의 읽기 전용을 무시하고 문서를 바로 고친다. 샌드박스에서 아직
+    // 안 고친 파일은 팀 방에 붙어 있어서, 그대로 넣으면 팀원 화면과 팀 파일에 퍼진다.
+    if (isSandboxSwitching || isSandboxPulling || isSandboxUnknown) {
+      setEditorNotice({
+        title: "잠시 뒤 다시 적용해 주세요",
+        message: "샌드박스 상태를 확인하거나 전환하는 중입니다.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (isSandboxViewOnly && aiSuggestion.targetPath && aiSuggestion.suggestedCode) {
+      // 먼저 샌드박스로 넘기면서 AI 코드를 내 샌드박스 파일로 넣는다. 실패하면 제안을 남겨 둔다.
+      const moved = await enterSandboxEdit({ initialContent: aiSuggestion.suggestedCode });
+      if (moved) dispatch(clearAiSuggestion());
+      return;
+    }
+
     if (
       aiSuggestion.targetPath &&
       aiSuggestion.suggestedCode &&
@@ -2108,14 +2126,14 @@ useEffect(() => {
    *                 쉽다) 이어서 입력하라고 알려 준다
    */
   const enterSandboxEdit = useCallback(
-    async ({ announce = false } = {}) => {
-      if (!sandboxModeRef.current.isSandboxViewOnly) return;
-      if (sandboxSwitchingRef.current) return;
+    async ({ announce = false, initialContent = null } = {}) => {
+      if (!sandboxModeRef.current.isSandboxViewOnly) return false;
+      if (sandboxSwitchingRef.current) return false;
 
       const { activeFileId: fileId, workspaceId: ws, activeProject: project, activeBranch: branch } =
         stateRef.current;
 
-      if (!fileId || !ws || !project) return;
+      if (!fileId || !ws || !project) return false;
 
       sandboxSwitchingRef.current = true;
       setIsSandboxSwitching(true);
@@ -2129,11 +2147,13 @@ useEffect(() => {
 
         const liveContent = session.yText.toString();
 
-        const content = await forkSandboxFileApi(
-          { workspaceId: ws, projectName: project, branchName: branch || "master" },
-          fileId,
-          liveContent,
-        );
+        const scope = { workspaceId: ws, projectName: project, branchName: branch || "master" };
+        const forked = await forkSandboxFileApi(scope, fileId, liveContent);
+
+        // 사본은 팀 내용으로 만들고(반영 때 비교 기준이 된다), 넣을 내용(Ctrl+K 결과)이 있으면
+        // 그 위에 저장한다. 팀 방은 건드리지 않는다.
+        const content = initialContent ?? forked;
+        if (initialContent != null) await saveSandboxFileApi(scope, fileId, initialContent);
 
         // 개인 방의 첫 문서는 이 내용으로 만들어진다. 협업 세션은 Redux 를 먼저 보므로
         // 세션이 새로 만들어지기 전에 넣어 둔다.
@@ -2145,6 +2165,7 @@ useEffect(() => {
         dispatch(addSandboxFile({ filePath: fileId, kind: "MODIFIED" }));
 
         if (announce) setSandboxToast("샌드박스로 전환했어요. 이어서 입력하세요");
+        return true;
       } catch (error) {
         // 실패하면 팀 방 읽기 전용 그대로 둔다.
         sandboxSwitchingRef.current = false;
@@ -2155,6 +2176,7 @@ useEffect(() => {
           message: `${fileId} — ${error.message || "사본을 만들지 못했습니다."} 이 파일은 계속 팀 실시간 보기 상태입니다.`,
           variant: "danger",
         });
+        return false;
       }
     },
     [dispatch],
