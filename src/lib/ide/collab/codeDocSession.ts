@@ -195,6 +195,9 @@ export class CodeDocSession {
     // 그 두 가지를 CollabWebSocket 폴리필이 처리한다.
     const provider = new WebsocketProvider(`${WS_BASE}/ws/collab`, this.room, this.doc, {
       WebSocketPolyfill: CollabWebSocket,
+      // 중계 중 메시지 하나만 빠져도 Yjs 는 그 뒤 편집을 붙이지 못한 채 쌓아 두고, 재접속 전까지 회복하지 못했다.
+      // 10초마다 내 상태를 알려 팀원이 빠진 부분을 다시 보내게 한다.
+      resyncInterval: 10_000,
     });
 
     this.provider = provider;
