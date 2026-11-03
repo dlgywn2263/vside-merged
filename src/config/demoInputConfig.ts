@@ -116,7 +116,8 @@ export const DEMO_INPUT_TARGETS = {
   // 작업폴더 생성(CreateProjectModal)
   "aivs.createFolder.name": {
     mode: "typing",
-    text: "hospital-reservation",
+    // 보조 시연자 에디터 대상(SEARCH_FRAME_PROJECT)도 이 이름을 쓴다. 실제 시연 작업폴더와 같아야 한다.
+    text: "hospital-reservation-demo",
   },
   "aivs.createFolder.description": {
     mode: "typing",

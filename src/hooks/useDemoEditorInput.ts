@@ -113,10 +113,8 @@ async function verifyAssistantFile(
     fileExists: hasFileInTree(projectNode?.children, path),
   };
 
-  let workspace: WorkspaceSummary | null = null;
-  if (Object.values(checks).every(Boolean) && workspaceId != null) {
-    workspace = await loadWorkspace(String(workspaceId));
-  }
+  // 다른 조건이 틀려도 묻는다. 로그에 실제 워크스페이스 이름·종류가 찍혀야 어긋난 곳을 바로 안다.
+  const workspace = workspaceId != null ? await loadWorkspace(String(workspaceId)) : null;
   checks.workspaceName = Boolean(target.workspaceName) && workspace?.name === target.workspaceName;
   checks.teamWorkspace = String(workspace?.mode ?? workspace?.type ?? "").toLowerCase() === "team";
 
@@ -126,6 +124,7 @@ async function verifyAssistantFile(
       checks,
       workspaceId,
       workspaceName: workspace?.name,
+      workspaceMode: workspace?.mode ?? workspace?.type,
       projectName,
       branch: fileSystem?.activeBranch,
       filePath,
