@@ -119,7 +119,11 @@ export type DemoRunOptions = {
   onFinish?: () => void;
 };
 
-export type DemoRun = { cancel: () => void };
+export type DemoRun = {
+  cancel: () => void;
+  /** 일시정지했으면 true, 이어서 시작했으면 false 를 돌려준다. 이미 끝났으면 아무 일도 없다. */
+  togglePause: () => boolean;
+};
 
 let activeRun: DemoRun | null = null;
 
@@ -138,14 +142,26 @@ export function startDemoRun(options: DemoRunOptions): DemoRun | null {
 
   const { sink, targetId, ownerKey } = options;
   let cancelled = false;
+  let paused = false;
   let timerId: ReturnType<typeof setTimeout> | null = null;
   let wakeUp: (() => void) | null = null;
+
+  const interrupt = () => {
+    if (timerId !== null) clearTimeout(timerId);
+    wakeUp?.();
+  };
 
   const run: DemoRun = {
     cancel: () => {
       cancelled = true;
-      if (timerId !== null) clearTimeout(timerId);
-      wakeUp?.();
+      interrupt();
+    },
+    // 타이머는 아래 루프 하나뿐이다. 여기서는 깃발만 바꾸고 기다리던 것을 깨우므로 여러 번 눌러도 타이머가 늘지 않는다.
+    togglePause: () => {
+      if (cancelled || activeRun !== run) return paused;
+      paused = !paused;
+      interrupt();
+      return paused;
     },
   };
 
@@ -195,6 +211,13 @@ export function startDemoRun(options: DemoRunOptions): DemoRun | null {
 
       for (let index = 0; index < chars.length; index += step) {
         if (!canContinue()) return;
+
+        // 일시정지 중에는 아무것도 쓰지 않는다. 풀리면 index 그대로, 다음 글자부터 잇는다.
+        // 그사이 시연 모드를 끄거나 파일·브랜치를 바꾸면 canContinue 에서 끝난다.
+        while (paused) {
+          await wait(200);
+          if (!canContinue()) return;
+        }
 
         const blockedSince = Date.now();
         while (sink.isBlocked?.()) {

@@ -1,12 +1,15 @@
 // 경로: src/hooks/useDemoEditorInput.ts
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useStore } from "react-redux";
 import {
   DEMO_DEFAULTS,
   findDemoEditorTarget,
   resolveDemoText,
+  type DemoEditorTargetConfig,
 } from "@/config/demoInputConfig";
 import { useDemoMode } from "@/hooks/useDemoMode";
+import { getMyWorkspacesByTokenApi } from "@/lib/ide/api";
 import {
   isClassFieldPosition,
   resolveFieldIndent,
@@ -29,41 +32,114 @@ type DemoEditorContext = {
   /** 팀 모드의 MonacoBinding. 없으면 아직 방에 붙지 않은 것이다. */
   binding: unknown;
   /** 지금 붙어 있는 CodeDocSession */
-  session: { awareness?: DemoAwareness | null } | null;
-};
-
-type DemoAwareness = {
-  clientID: number;
-  getStates: () => Map<number, unknown>;
-  getLocalState: () => Record<string, unknown> | null;
-  setLocalStateField: (field: string, value: unknown) => void;
+  session: { awareness?: { getStates: () => Map<number, unknown> } | null } | null;
 };
 
 const DEMO_EDIT_SOURCE = "demo-auto-input";
 
-/*
- * 보조 시연자는 파일을 직접 만들지 않아 자기 브라우저에 코드맵 생성 기록이 없다. 그래서 기록이
- * 확인된 시연자가 같은 협업 방의 awareness 에 "이 파일은 내가 코드맵으로 만들었다"고 알리고,
- * 보조 시연자는 같은 방에서 그 표시와 워크스페이스·작업폴더·경로가 모두 같을 때만 입력한다.
- * 방 이름이 워크스페이스·작업폴더·브랜치·파일로 정해지므로 다른 곳의 표시는 보이지 않는다.
- * awareness 는 저장되지 않아 문서 내용에는 아무것도 남지 않는다.
- */
-const CREATED_FILE_MARK = "waivsDemoCreatedFile";
-
 const normalizePath = (path: string) => path.replace(/\\/g, "/").replace(/^\/+/, "");
 
-const createdFileMark = (workspaceId: unknown, projectName: unknown, filePath: string) =>
-  [String(workspaceId), String(projectName), normalizePath(filePath)].join("|");
+/* 보조 시연자의 파일 확인 ─────────────────────────────────────────────────────────── */
 
-/** 같은 방의 다른 사람(시연자)이 이 파일에 생성 표시를 올려 두었는지 */
-const hasPeerCreatedFileMark = (awareness: DemoAwareness | null | undefined, mark: string) => {
-  if (!awareness) return false;
-  for (const [clientId, state] of awareness.getStates()) {
-    if (clientId === awareness.clientID) continue;
-    if ((state as Record<string, unknown> | null)?.[CREATED_FILE_MARK] === mark) return true;
-  }
-  return false;
+type FileTreeNode = { id?: unknown; name?: unknown; type?: unknown; children?: FileTreeNode[] | null };
+type FileSystemState = {
+  workspaceId?: unknown;
+  activeProject?: unknown;
+  activeBranch?: unknown;
+  tree?: FileTreeNode | null;
 };
+type WorkspaceSummary = { id?: unknown; uuid?: unknown; name?: unknown; mode?: unknown; type?: unknown };
+
+/** Sidebar 의 파일 판정과 같다(type 이 없고 children 도 없으면 파일). */
+const isFileNode = (node: FileTreeNode) => {
+  const type = String(node.type ?? "file").toLowerCase();
+  return type === "file" || (type !== "project" && type !== "folder" && type !== "virtual_folder" && !node.children);
+};
+
+const hasFileInTree = (nodes: FileTreeNode[] | null | undefined, path: string): boolean =>
+  (nodes ?? []).some(
+    (node) =>
+      (isFileNode(node) && typeof node.id === "string" && normalizePath(node.id) === path) ||
+      hasFileInTree(node.children, path),
+  );
+
+// 워크스페이스 이름·종류는 바뀌지 않으므로 페이지에 있는 동안 한 번만 묻는다. 실패하면 다음에 다시 묻는다.
+const workspaceCache = new Map<string, Promise<WorkspaceSummary | null>>();
+
+const loadWorkspace = (workspaceId: string) => {
+  let pending = workspaceCache.get(workspaceId);
+  if (!pending) {
+    pending = getMyWorkspacesByTokenApi()
+      .then((list: unknown) => {
+        const found =
+          (Array.isArray(list) ? (list as WorkspaceSummary[]) : []).find(
+            (item) => String(item?.id) === workspaceId || String(item?.uuid) === workspaceId,
+          ) ?? null;
+        if (!found) workspaceCache.delete(workspaceId);
+        return found;
+      })
+      .catch(() => {
+        workspaceCache.delete(workspaceId);
+        return null;
+      });
+    workspaceCache.set(workspaceId, pending);
+  }
+  return pending;
+};
+
+/**
+ * 보조 시연자는 파일을 직접 만들지 않아 코드맵 생성 기록이 없다. 그 대신 이 계정이 지금 보고 있는 것이
+ * 시연용 팀 워크스페이스·작업폴더의 그 경로이고, 지금 브랜치의 파일 트리(서버에서 받은 것)에 그 파일이
+ * 실제로 있는지를 하나씩 본다. 시연자가 같은 파일을 열고 있을 필요는 없다.
+ */
+async function verifyAssistantFile(
+  target: DemoEditorTargetConfig,
+  context: DemoEditorContext,
+  fileSystem: FileSystemState | undefined,
+) {
+  const { filePath, workspaceId, projectName, isTeamMode } = context;
+  const path = normalizePath(filePath ?? "");
+  const projectNode = (fileSystem?.tree?.children ?? []).find(
+    (node) => node.name === projectName && String(node.type ?? "").toLowerCase() === "project",
+  );
+
+  const checks: Record<string, boolean> = {
+    teamMode: isTeamMode,
+    path: Boolean(target.filePath) && normalizePath(target.filePath ?? "") === path,
+    project: Boolean(target.projectName) && projectName === target.projectName,
+    // 에디터가 보는 워크스페이스·작업폴더가 탐색기(트리를 받은 곳)와 같은지
+    activeContext:
+      String(fileSystem?.workspaceId) === String(workspaceId) && fileSystem?.activeProject === projectName,
+    fileExists: hasFileInTree(projectNode?.children, path),
+  };
+
+  let workspace: WorkspaceSummary | null = null;
+  if (Object.values(checks).every(Boolean) && workspaceId != null) {
+    workspace = await loadWorkspace(String(workspaceId));
+  }
+  checks.workspaceName = Boolean(target.workspaceName) && workspace?.name === target.workspaceName;
+  checks.teamWorkspace = String(workspace?.mode ?? workspace?.type ?? "").toLowerCase() === "team";
+
+  const ok = Object.values(checks).every(Boolean);
+  if (!ok) {
+    console.info("[시연 입력] 시연 대상 파일이 아니라 입력하지 않습니다.", {
+      checks,
+      workspaceId,
+      workspaceName: workspace?.name,
+      projectName,
+      branch: fileSystem?.activeBranch,
+      filePath,
+    });
+  }
+  return ok;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────── */
+
+const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
+
+const isPauseKey = (event: KeyboardEvent) =>
+  event.code === "F8" && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
 
 /**
  * 코드 에디터에 자동 입력을 연결한다. CodeEditor 의 onMount 에서 attach 를 부른다.
@@ -72,16 +148,22 @@ const hasPeerCreatedFileMark = (awareness: DemoAwareness | null | undefined, mar
  * 팀 모드는 y-monaco → Y.Text → 팀원·자동 저장, 개인 모드는 onChange → 디스크 저장을 그대로
  * 탄다. 되돌리기도 y-monaco 의 origin 으로 잡힌다.
  *
- * setValue 는 쓰지 않는다(문서 전체가 갈아 끼워져 팀원 입력이 사라진다). 위치는 매번 지금의
- * 커서에서 읽으므로 팀원이 위쪽을 고쳐 줄이 밀려도 내 자리를 따라간다.
+ * setValue 는 쓰지 않는다(문서 전체가 갈아 끼워져 팀원 입력이 사라진다). 쓰는 자리는 첫 글자 뒤로
+ * 모델 장식(decoration)으로 따라가므로 팀원이 위쪽을 고쳐 줄이 밀려도, 일시정지 중에 커서를 옮겨도
+ * 내가 치던 자리에 잇는다.
+ *
+ * 보조 시연자는 Ctrl+F8 로 타이핑을 멈추고 이어 갈 수 있다. 상태는 메모리에만 있어 새로고침하면
+ * 진행 중이던 입력은 끝난 것이 되고, 이미 들어간 글자는 문서에 그대로 남는다(이어서 치지 않는다).
  */
 export function useDemoEditorInput(getContext: () => DemoEditorContext) {
   const { role, userKey, isActive } = useDemoMode();
+  const store = useStore();
   const runRef = useRef<DemoRun | null>(null);
 
-  const latestRef = useRef({ role, userKey, isActive, getContext });
+  const getFileSystem = () => (store.getState() as { fileSystem?: FileSystemState }).fileSystem;
+  const latestRef = useRef({ role, userKey, isActive, getContext, getFileSystem });
   useLayoutEffect(() => {
-    latestRef.current = { role, userKey, isActive, getContext };
+    latestRef.current = { role, userKey, isActive, getContext, getFileSystem };
   });
 
   useEffect(() => {
@@ -93,6 +175,10 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- monaco 타입은 CodeEditor(JS)에서 넘어온다
   return useCallback((editor: any, monaco: any) => {
     let startTimer: ReturnType<typeof setTimeout> | null = null;
+    // 이 에디터가 시작한 입력과 그 일시정지 상태. Ctrl+F8 은 이 에디터의 입력에만 듣는다.
+    let ownRun: DemoRun | null = null;
+    let ownRunPausable = false;
+    let paused = false;
 
     const stop = () => {
       if (startTimer !== null) clearTimeout(startTimer);
@@ -102,8 +188,8 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
 
     const isReadOnly = () => editor.getOption(monaco.editor.EditorOption.readOnly);
 
-    const tryStart = () => {
-      const { role, userKey, isActive, getContext } = latestRef.current;
+    const tryStart = async () => {
+      const { role, userKey, isActive, getContext, getFileSystem } = latestRef.current;
       if (!isActive || !role || !userKey || isDemoRunActive()) return;
 
       const context = getContext();
@@ -118,23 +204,27 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
       if (!target.rerun && isDemoTargetDone(target.id)) return;
 
       // 이름만 같은 다른 파일에 들어가지 않도록 작업폴더와 상대경로까지 맞춰 본다.
-      // 시연자는 자기 코드맵 기록으로, 보조 시연자는 같은 방에 있는 시연자의 기록 표시로 확인한다.
-      const isCreatedFile =
-        role === "presenter"
-          ? isDemoCreatedFile(userKey, workspaceId, projectName, filePath)
-          : isTeamMode &&
-            Boolean(target.filePath) &&
-            normalizePath(target.filePath ?? "") === normalizePath(filePath) &&
-            hasPeerCreatedFileMark(session?.awareness, createdFileMark(workspaceId, projectName, filePath));
-      if (!isCreatedFile) {
-        console.info("[시연 입력] 코드맵에서 만든 파일이 아니라 입력하지 않습니다.", {
-          role,
-          workspaceId,
-          projectName,
-          filePath,
-          peers: session?.awareness?.getStates().size ?? 0,
-        });
-        return;
+      // 시연자는 자기 코드맵 기록으로, 보조 시연자는 워크스페이스·작업폴더·경로·파일 존재로 확인한다.
+      if (role === "presenter") {
+        if (!isDemoCreatedFile(userKey, workspaceId, projectName, filePath)) {
+          console.info("[시연 입력] 코드맵에서 만든 파일이 아니라 입력하지 않습니다.", { projectName, filePath });
+          return;
+        }
+      } else {
+        if (!(await verifyAssistantFile(target, context, getFileSystem()))) return;
+        // 확인을 기다리는 사이 파일·방을 갈아탔거나 시연 모드를 껐으면 시작하지 않는다.
+        const now = latestRef.current;
+        const after = now.getContext();
+        if (
+          !now.isActive ||
+          now.userKey !== userKey ||
+          isDemoRunActive() ||
+          after.filePath !== filePath ||
+          after.binding !== binding ||
+          after.session !== session
+        ) {
+          return;
+        }
       }
 
       const model = editor.getModel();
@@ -174,15 +264,24 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
         }
 
         // 공백만 있는 줄이면 그 들여쓰기를 그대로 쓰고, 완전히 빈 줄이면 위쪽 코드에 맞춘다.
+        let indent = line;
         if (line === "") {
           const linesAbove: string[] = [];
           for (let number = 1; number < position.lineNumber; number += 1) {
             linesAbove.push(model.getLineContent(number));
           }
-          text = resolveFieldIndent(linesAbove) + baseText;
+          indent = resolveFieldIndent(linesAbove);
         } else {
           editor.setPosition({ lineNumber: position.lineNumber, column: line.length + 1 });
         }
+
+        // 여러 줄 코드는 둘째 줄부터도 같은 들여쓰기를 붙인다. executeEdits 는 자동 들여쓰기를 하지 않는다.
+        text =
+          (line === "" ? indent : "") +
+          baseText
+            .split("\n")
+            .map((codeLine, index) => (index === 0 || codeLine === "" ? codeLine : indent + codeLine))
+            .join("\n");
       }
 
       const existing = target.existing ?? "insert";
@@ -203,9 +302,31 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
       // 비어 있는 파일은 전체 범위에 넣어도, 커서 자리에 넣어도 같다.
       let replaceRangeOnce = replaceExisting;
 
+      // 다음 글자를 넣을 자리. 첫 글자는 커서 자리에, 그다음부터는 이 장식이 가리키는 자리에 넣는다.
+      let anchor: string[] = [];
+      // 지금까지 넣은 글자. 넣기 직전마다 그 자리 바로 앞이 이것으로 끝나는지 본다.
+      let written = "";
+
+      const anchorPosition = () => {
+        const range = anchor.length ? model.getDecorationRange(anchor[0]) : null;
+        return range ? range.getStartPosition() : null;
+      };
+
+      // 팀원이 내가 치던 코드를 고쳤거나 그 자리에 끼어들었으면 이어 쓰면 엉뚱한 곳에 섞인다.
+      const isAnchorIntact = (position: { lineNumber: number; column: number }) => {
+        const tail = written.slice(-40);
+        const lineCount = tail.split("\n").length;
+        const before = model
+          .getValueInRange(
+            new monaco.Range(Math.max(1, position.lineNumber - lineCount), 1, position.lineNumber, position.column),
+          )
+          .replace(/\r\n/g, "\n");
+        return before.endsWith(tail);
+      };
+
       editor.pushUndoStop();
 
-      runRef.current = startDemoRun({
+      const run = startDemoRun({
         targetId: target.id,
         ownerKey: userKey,
         text,
@@ -231,17 +352,18 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
           select: () => editor.setSelection(model.getFullModelRange()),
           // clear 는 두지 않는다. 지우고 넣기를 나누면 문서가 잠깐 비고 그 상태가 팀원에게 퍼진다.
           write: (chunk) => {
-            const position = editor.getPosition();
-            if (!position) return false;
-
-            const range = replaceRangeOnce
-              ? model.getFullModelRange()
-              : new monaco.Range(
-                  position.lineNumber,
-                  position.column,
-                  position.lineNumber,
-                  position.column,
-                );
+            let range;
+            if (replaceRangeOnce) {
+              range = model.getFullModelRange();
+            } else {
+              const position = written ? anchorPosition() : editor.getPosition();
+              if (!position) return false;
+              if (written && !isAnchorIntact(position)) {
+                console.warn("[시연 입력] 입력하던 자리가 바뀌어 멈췄습니다.");
+                return false;
+              }
+              range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+            }
             replaceRangeOnce = false;
 
             // 읽기 전용이면 false 가 돌아온다. 이 경로로는 절대 잠긴 문서에 쓰지 않는다.
@@ -255,17 +377,40 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
             );
 
             if (applied) {
+              written += chunk;
               const next = editor.getPosition();
-              if (next) editor.revealPosition(next, monaco.editor.ScrollType.Immediate);
+              if (next) {
+                anchor = model.deltaDecorations(anchor, [
+                  {
+                    range: new monaco.Range(next.lineNumber, next.column, next.lineNumber, next.column),
+                    options: { stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
+                  },
+                ]);
+                editor.revealPosition(next, monaco.editor.ScrollType.Immediate);
+              }
             }
             return applied;
           },
         },
         onFinish: () => {
           runRef.current = null;
-          if (editor.getModel() === model && !model.isDisposed()) editor.pushUndoStop();
+          if (ownRun === run) {
+            ownRun = null;
+            paused = false;
+          }
+          if (editor.getModel() === model && !model.isDisposed()) {
+            model.deltaDecorations(anchor, []);
+            editor.pushUndoStop();
+          }
         },
       });
+
+      runRef.current = run;
+      if (run) {
+        ownRun = run;
+        ownRunPausable = role === "assistant" && Boolean(target.pausable);
+        paused = false;
+      }
     };
 
     // 팀원 커서가 있던 줄에서 다른 줄을 클릭하면 줄 잠금은 React 렌더 뒤에야 풀린다.
@@ -278,45 +423,23 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
           scheduleStart(retries - 1);
           return;
         }
-        try {
-          tryStart();
-        } catch (error) {
-          console.warn("[시연 입력] 시작하지 못했습니다", error);
-        }
+        tryStart().catch((error) => console.warn("[시연 입력] 시작하지 못했습니다", error));
       }, 60);
     };
 
-    // 시연자 쪽: 지금 붙은 방이 내 코드맵 기록과 맞으면 생성 표시를 올리고, 아니면 내린다.
-    // 방은 파일을 열고 조금 뒤에 붙고 파일·브랜치를 바꾸면 새로 만들어지므로 주기적으로 맞춘다.
-    // 값이 바뀔 때만 보내므로 팀원에게 가는 awareness 알림은 늘지 않는다.
-    const syncCreatedFileMark = () => {
-      try {
-        const { role, userKey, isActive, getContext } = latestRef.current;
-        const { filePath, workspaceId, projectName, isTeamMode, session } = getContext();
-        const awareness = session?.awareness;
-        if (!awareness) return;
+    // Ctrl+F8: 보조 시연자의 타이핑 일시정지/재개. 에디터가 키를 먼저 가져가지 못하도록 capture 로 받는다.
+    // 시작은 하지 않는다(시작은 빈 줄 클릭). 진행 중인 입력이 없으면 키를 그냥 흘려보낸다.
+    const handlePauseKey = (event: KeyboardEvent) => {
+      if (!isPauseKey(event)) return;
+      const { role, isActive } = latestRef.current;
+      if (!isActive || role !== "assistant" || !ownRun || !ownRunPausable || runRef.current !== ownRun) return;
 
-        const mark =
-          isActive &&
-          role === "presenter" &&
-          userKey &&
-          isTeamMode &&
-          filePath &&
-          !filePath.startsWith("virtual:") &&
-          findDemoEditorTarget(filePath, role) &&
-          isDemoCreatedFile(userKey, workspaceId, projectName, filePath)
-            ? createdFileMark(workspaceId, projectName, filePath)
-            : null;
-
-        if ((awareness.getLocalState()?.[CREATED_FILE_MARK] ?? null) !== mark) {
-          awareness.setLocalStateField(CREATED_FILE_MARK, mark);
-        }
-      } catch {
-        // 표시를 못 올리면 보조 시연자의 자동 입력이 시작되지 않을 뿐이다.
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat) return;
+      paused = ownRun.togglePause();
     };
-    syncCreatedFileMark();
-    const markTimer = setInterval(syncCreatedFileMark, 1000);
+    window.addEventListener("keydown", handlePauseKey, true);
 
     const { MouseTargetType } = monaco.editor;
 
@@ -335,8 +458,16 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
         scheduleStart(5);
       }),
       // 사람이 직접 건드리면 바로 멈춘다. 이미 들어간 글자는 그대로 둔다.
-      editor.onMouseDown(stop),
-      editor.onKeyDown(stop),
+      // 일시정지 중의 클릭은 멈추지 않는다. 쓰는 자리는 장식이 따로 기억하므로 커서가 옮겨 가도 된다.
+      editor.onMouseDown(() => {
+        if (!paused) stop();
+      }),
+      // Ctrl+F8·Ctrl+F9 를 누르면 Ctrl 이 먼저 눌린다. 보조키만 누른 것은 입력이 아니므로 멈추지 않는다.
+      editor.onKeyDown((event: { browserEvent: KeyboardEvent }) => {
+        const { browserEvent } = event;
+        if (MODIFIER_KEYS.has(browserEvent.key) || isPauseKey(browserEvent)) return;
+        stop();
+      }),
       editor.onDidPaste(stop),
       editor.onDidCompositionStart(stop),
       editor.onDidChangeModel(stop),
@@ -344,7 +475,7 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
 
     editor.onDidDispose(() => {
       stop();
-      clearInterval(markTimer);
+      window.removeEventListener("keydown", handlePauseKey, true);
       disposables.forEach((disposable) => disposable.dispose());
     });
   }, []);

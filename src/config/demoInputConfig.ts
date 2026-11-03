@@ -54,11 +54,16 @@ export type DemoEditorTargetConfig = DemoTargetBase & {
   id: string;
   /** 파일 이름(경로 제외). 예: SearchFrame.java */
   fileName: string;
-  /**
-   * 브랜치 폴더 기준 전체 경로. 보조 시연자는 자기 코드맵 기록이 없으므로, 이 경로이고 같은 협업
-   * 방에 있는 시연자가 코드맵 생성 기록을 알려 올 때만 입력한다(useDemoEditorInput).
-   */
+  /** 브랜치 폴더 기준 전체 경로. 보조 시연자는 이 경로와 아래 두 이름이 모두 맞아야 입력한다. */
   filePath?: string;
+  /**
+   * 보조 시연자는 파일을 직접 만들지 않아 코드맵 생성 기록이 없다. 대신 이 이름의 팀 워크스페이스,
+   * 이 이름의 작업폴더이고, 지금 브랜치의 파일 트리에 filePath 가 실제로 있을 때만 입력한다.
+   */
+  workspaceName?: string;
+  projectName?: string;
+  /** true 면 보조 시연자가 Ctrl+F8 로 타이핑을 멈추고 이어 갈 수 있다 */
+  pausable?: boolean;
   /** class-field: 클래스 본문의 비어 있는 줄에서만 입력한다 */
   placement?: "class-field";
   /** 코드(주석·문자열 제외)에 이것이 있으면 이미 입력된 것으로 보고 입력하지 않는다 */
@@ -197,15 +202,16 @@ export type DemoTargetId = keyof typeof DEMO_INPUT_TARGETS;
  */
 export const DEMO_INPUT_ROLES: readonly DemoRole[] = ["presenter"];
 
-// 시연자가 코드맵으로 만들고 보조 시연자는 같은 방에서 여는 파일. 경로는
-// codemap.createComponent.path/name 과 맞춘다. 워크스페이스·작업폴더는 시연 때 만들어져
-// 미리 적을 수 없으므로 시연자의 코드맵 기록으로 확인한다.
+// 시연자가 코드맵으로 만들고 보조 시연자는 따로 여는 파일. 경로는 codemap.createComponent.path/name,
+// 워크스페이스·작업폴더 이름은 시연 때 자동 입력하는 문구와 같아야 한다.
+const SEARCH_FRAME_WORKSPACE = DEMO_INPUT_TARGETS["project.create.name"].text;
+const SEARCH_FRAME_PROJECT = DEMO_INPUT_TARGETS["aivs.createFolder.name"].text;
 const SEARCH_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/SearchFrame.java";
 
 /**
  * 코드 에디터. 문구는 계정별로 둔다(여기 없는 계정은 입력되지 않는다). 한 파일에 계정마다
  * 대상을 따로 두어 서로의 코드가 들어가지 않게 하고, 중복 검사도 대상마다 한다.
- * 시연자는 자기 코드맵 기록이 있는 파일에, 보조 시연자는 같은 방의 시연자가 그 기록을 알려 온 filePath 에만 입력한다.
+ * 시연자는 자기 코드맵 기록이 있는 파일에, 보조 시연자는 workspaceName·projectName·filePath 가 모두 맞는 파일에만 입력한다.
  */
 export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
   {
@@ -223,11 +229,15 @@ export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
     id: "ide.searchFrame.searchButton",
     fileName: "SearchFrame.java",
     filePath: SEARCH_FRAME_PATH,
+    workspaceName: SEARCH_FRAME_WORKSPACE,
+    projectName: SEARCH_FRAME_PROJECT,
+    pausable: true,
     mode: "typing",
     charsPerTick: 1,
     typingIntervalMs: 45,
     placement: "class-field",
-    skipIfPresent: /\bsearchButton\b\s*(=|;)/,
+    // 두 선언 중 하나라도 이미 있으면 다시 넣지 않는다.
+    skipIfPresent: /\b(searchButton|buttonPanel)\b\s*(=|;)/,
     text: { assistant: SEARCH_BUTTON_FIELD_CODE },
   },
 ];
