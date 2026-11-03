@@ -54,14 +54,16 @@ export type DemoEditorTargetConfig = DemoTargetBase & {
   id: string;
   /** 파일 이름(경로 제외). 예: SearchFrame.java */
   fileName: string;
-  /** 브랜치 폴더 기준 전체 경로. 보조 시연자는 이 경로와 아래 두 이름이 모두 맞아야 입력한다. */
+  /** 브랜치 폴더 기준 전체 경로. 보조 시연자는 이 경로와 아래 값이 모두 맞아야 입력한다. */
   filePath?: string;
   /**
-   * 보조 시연자는 파일을 직접 만들지 않아 코드맵 생성 기록이 없다. 대신 이 이름의 팀 워크스페이스,
-   * 이 이름의 작업폴더이고, 지금 브랜치의 파일 트리에 filePath 가 실제로 있을 때만 입력한다.
+   * 보조 시연자는 파일을 직접 만들지 않아 코드맵 생성 기록이 없다. 대신 이 id 의 팀 워크스페이스,
+   * 이 이름의 작업폴더·브랜치이고, 그 브랜치의 파일 트리에 filePath 가 실제로 있을 때만 입력한다.
+   * 이름은 같은 것이 여럿일 수 있어 워크스페이스는 id 로 본다.
    */
-  workspaceName?: string;
+  workspaceId?: string;
   projectName?: string;
+  branchName?: string;
   /** true 면 보조 시연자가 Ctrl+F8 로 타이핑을 멈추고 이어 갈 수 있다 */
   pausable?: boolean;
   /** class-field: 클래스 본문의 비어 있는 줄에서만 입력한다 */
@@ -204,15 +206,19 @@ export type DemoTargetId = keyof typeof DEMO_INPUT_TARGETS;
 export const DEMO_INPUT_ROLES: readonly DemoRole[] = ["presenter"];
 
 // 시연자가 코드맵으로 만들고 보조 시연자는 따로 여는 파일. 경로는 codemap.createComponent.path/name,
-// 워크스페이스·작업폴더 이름은 시연 때 자동 입력하는 문구와 같아야 한다.
-const SEARCH_FRAME_WORKSPACE = DEMO_INPUT_TARGETS["project.create.name"].text;
+// 작업폴더 이름은 작업폴더 생성 자동 입력 문구와 같아야 한다.
+// 워크스페이스는 발표에서 IDE 시연에 쓰는 팀 워크스페이스("병원 예약 관리 시스템", 배포 DB)의 id 다.
+// 시연 중에 새로 만드는 워크스페이스(project.create.name)와는 별개라, 그 흐름에는 영향이 없다.
+// 시연 워크스페이스를 바꾸면 이 값도 바꿔야 한다(DB 가 다르면 id 도 다르다).
+const SEARCH_FRAME_WORKSPACE_ID = "189ccc00-6863-47ca-abf6-e4429f7cd286";
+const SEARCH_FRAME_BRANCH = "feature/gui";
 const SEARCH_FRAME_PROJECT = DEMO_INPUT_TARGETS["aivs.createFolder.name"].text;
 const SEARCH_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/SearchFrame.java";
 
 /**
  * 코드 에디터. 문구는 계정별로 둔다(여기 없는 계정은 입력되지 않는다). 한 파일에 계정마다
  * 대상을 따로 두어 서로의 코드가 들어가지 않게 하고, 중복 검사도 대상마다 한다.
- * 시연자는 자기 코드맵 기록이 있는 파일에, 보조 시연자는 workspaceName·projectName·filePath 가 모두 맞는 파일에만 입력한다.
+ * 시연자는 자기 코드맵 기록이 있는 파일에, 보조 시연자는 workspaceId·projectName·branchName·filePath 가 모두 맞는 파일에만 입력한다.
  */
 export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
   {
@@ -230,8 +236,9 @@ export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
     id: "ide.searchFrame.searchButton",
     fileName: "SearchFrame.java",
     filePath: SEARCH_FRAME_PATH,
-    workspaceName: SEARCH_FRAME_WORKSPACE,
+    workspaceId: SEARCH_FRAME_WORKSPACE_ID,
     projectName: SEARCH_FRAME_PROJECT,
+    branchName: SEARCH_FRAME_BRANCH,
     pausable: true,
     mode: "typing",
     charsPerTick: 1,

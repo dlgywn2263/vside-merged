@@ -89,7 +89,7 @@ const loadWorkspace = (workspaceId: string) => {
 
 /**
  * 보조 시연자는 파일을 직접 만들지 않아 코드맵 생성 기록이 없다. 그 대신 이 계정이 지금 보고 있는 것이
- * 시연용 팀 워크스페이스·작업폴더의 그 경로이고, 지금 브랜치의 파일 트리(서버에서 받은 것)에 그 파일이
+ * 시연용 팀 워크스페이스(id)·작업폴더·브랜치의 그 경로이고, 그 브랜치의 파일 트리(서버에서 받은 것)에 그 파일이
  * 실제로 있는지를 하나씩 본다. 시연자가 같은 파일을 열고 있을 필요는 없다.
  */
 async function verifyAssistantFile(
@@ -105,8 +105,11 @@ async function verifyAssistantFile(
 
   const checks: Record<string, boolean> = {
     teamMode: isTeamMode,
+    workspaceId: Boolean(target.workspaceId) && String(workspaceId) === target.workspaceId,
     path: Boolean(target.filePath) && normalizePath(target.filePath ?? "") === path,
     project: Boolean(target.projectName) && projectName === target.projectName,
+    // 파일 트리는 지금 브랜치 것이므로, 브랜치가 맞으면 fileExists 가 그 브랜치에 파일이 있다는 뜻이다.
+    branch: Boolean(target.branchName) && fileSystem?.activeBranch === target.branchName,
     // 에디터가 보는 워크스페이스·작업폴더가 탐색기(트리를 받은 곳)와 같은지
     activeContext:
       String(fileSystem?.workspaceId) === String(workspaceId) && fileSystem?.activeProject === projectName,
@@ -114,8 +117,8 @@ async function verifyAssistantFile(
   };
 
   // 다른 조건이 틀려도 묻는다. 로그에 실제 워크스페이스 이름·종류가 찍혀야 어긋난 곳을 바로 안다.
+  // 내 워크스페이스 목록에 있어야 하고(멤버), 팀 워크스페이스여야 한다.
   const workspace = workspaceId != null ? await loadWorkspace(String(workspaceId)) : null;
-  checks.workspaceName = Boolean(target.workspaceName) && workspace?.name === target.workspaceName;
   checks.teamWorkspace = String(workspace?.mode ?? workspace?.type ?? "").toLowerCase() === "team";
 
   const ok = Object.values(checks).every(Boolean);
