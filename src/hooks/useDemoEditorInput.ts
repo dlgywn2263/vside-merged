@@ -29,10 +29,41 @@ type DemoEditorContext = {
   /** 팀 모드의 MonacoBinding. 없으면 아직 방에 붙지 않은 것이다. */
   binding: unknown;
   /** 지금 붙어 있는 CodeDocSession */
-  session: { awareness?: { getStates: () => Map<number, unknown> } | null } | null;
+  session: { awareness?: DemoAwareness | null } | null;
+};
+
+type DemoAwareness = {
+  clientID: number;
+  getStates: () => Map<number, unknown>;
+  getLocalState: () => Record<string, unknown> | null;
+  setLocalStateField: (field: string, value: unknown) => void;
 };
 
 const DEMO_EDIT_SOURCE = "demo-auto-input";
+
+/*
+ * 보조 시연자는 파일을 직접 만들지 않아 자기 브라우저에 코드맵 생성 기록이 없다. 그래서 기록이
+ * 확인된 시연자가 같은 협업 방의 awareness 에 "이 파일은 내가 코드맵으로 만들었다"고 알리고,
+ * 보조 시연자는 같은 방에서 그 표시와 워크스페이스·작업폴더·경로가 모두 같을 때만 입력한다.
+ * 방 이름이 워크스페이스·작업폴더·브랜치·파일로 정해지므로 다른 곳의 표시는 보이지 않는다.
+ * awareness 는 저장되지 않아 문서 내용에는 아무것도 남지 않는다.
+ */
+const CREATED_FILE_MARK = "waivsDemoCreatedFile";
+
+const normalizePath = (path: string) => path.replace(/\\/g, "/").replace(/^\/+/, "");
+
+const createdFileMark = (workspaceId: unknown, projectName: unknown, filePath: string) =>
+  [String(workspaceId), String(projectName), normalizePath(filePath)].join("|");
+
+/** 같은 방의 다른 사람(시연자)이 이 파일에 생성 표시를 올려 두었는지 */
+const hasPeerCreatedFileMark = (awareness: DemoAwareness | null | undefined, mark: string) => {
+  if (!awareness) return false;
+  for (const [clientId, state] of awareness.getStates()) {
+    if (clientId === awareness.clientID) continue;
+    if ((state as Record<string, unknown> | null)?.[CREATED_FILE_MARK] === mark) return true;
+  }
+  return false;
+};
 
 /**
  * 코드 에디터에 자동 입력을 연결한다. CodeEditor 의 onMount 에서 attach 를 부른다.
@@ -87,15 +118,22 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
       if (!target.rerun && isDemoTargetDone(target.id)) return;
 
       // 이름만 같은 다른 파일에 들어가지 않도록 작업폴더와 상대경로까지 맞춰 본다.
-      // 기록 없이 들어가는 길은 같은 방의 파일을 함께 고치는 팀 모드에서만 연다.
-      const normalizePath = (path: string) => path.replace(/\\/g, "/").replace(/^\/+/, "");
-      const isConfiguredFile =
-        isTeamMode &&
-        Boolean(target.projectName && target.filePath) &&
-        target.projectName === projectName &&
-        normalizePath(target.filePath ?? "") === normalizePath(filePath);
-      if (!isConfiguredFile && !isDemoCreatedFile(userKey, workspaceId, projectName, filePath)) {
-        console.info("[시연 입력] 코드맵에서 만든 파일이 아니라 입력하지 않습니다.", { projectName, filePath });
+      // 시연자는 자기 코드맵 기록으로, 보조 시연자는 같은 방에 있는 시연자의 기록 표시로 확인한다.
+      const isCreatedFile =
+        role === "presenter"
+          ? isDemoCreatedFile(userKey, workspaceId, projectName, filePath)
+          : isTeamMode &&
+            Boolean(target.filePath) &&
+            normalizePath(target.filePath ?? "") === normalizePath(filePath) &&
+            hasPeerCreatedFileMark(session?.awareness, createdFileMark(workspaceId, projectName, filePath));
+      if (!isCreatedFile) {
+        console.info("[시연 입력] 코드맵에서 만든 파일이 아니라 입력하지 않습니다.", {
+          role,
+          workspaceId,
+          projectName,
+          filePath,
+          peers: session?.awareness?.getStates().size ?? 0,
+        });
         return;
       }
 
@@ -248,6 +286,38 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
       }, 60);
     };
 
+    // 시연자 쪽: 지금 붙은 방이 내 코드맵 기록과 맞으면 생성 표시를 올리고, 아니면 내린다.
+    // 방은 파일을 열고 조금 뒤에 붙고 파일·브랜치를 바꾸면 새로 만들어지므로 주기적으로 맞춘다.
+    // 값이 바뀔 때만 보내므로 팀원에게 가는 awareness 알림은 늘지 않는다.
+    const syncCreatedFileMark = () => {
+      try {
+        const { role, userKey, isActive, getContext } = latestRef.current;
+        const { filePath, workspaceId, projectName, isTeamMode, session } = getContext();
+        const awareness = session?.awareness;
+        if (!awareness) return;
+
+        const mark =
+          isActive &&
+          role === "presenter" &&
+          userKey &&
+          isTeamMode &&
+          filePath &&
+          !filePath.startsWith("virtual:") &&
+          findDemoEditorTarget(filePath, role) &&
+          isDemoCreatedFile(userKey, workspaceId, projectName, filePath)
+            ? createdFileMark(workspaceId, projectName, filePath)
+            : null;
+
+        if ((awareness.getLocalState()?.[CREATED_FILE_MARK] ?? null) !== mark) {
+          awareness.setLocalStateField(CREATED_FILE_MARK, mark);
+        }
+      } catch {
+        // 표시를 못 올리면 보조 시연자의 자동 입력이 시작되지 않을 뿐이다.
+      }
+    };
+    syncCreatedFileMark();
+    const markTimer = setInterval(syncCreatedFileMark, 1000);
+
     const { MouseTargetType } = monaco.editor;
 
     const disposables = [
@@ -274,6 +344,7 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
 
     editor.onDidDispose(() => {
       stop();
+      clearInterval(markTimer);
       disposables.forEach((disposable) => disposable.dispose());
     });
   }, []);

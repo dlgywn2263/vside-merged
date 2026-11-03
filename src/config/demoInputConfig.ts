@@ -55,10 +55,9 @@ export type DemoEditorTargetConfig = DemoTargetBase & {
   /** 파일 이름(경로 제외). 예: SearchFrame.java */
   fileName: string;
   /**
-   * 팀 모드에서 이 작업폴더의 이 상대경로면 코드맵 기록이 없어도 대상으로 본다. 다른 계정이 만든
-   * 파일처럼 이 탭의 코드맵을 거치지 않는 경우에 쓴다. 둘 다 적어야 동작한다.
+   * 브랜치 폴더 기준 전체 경로. 보조 시연자는 자기 코드맵 기록이 없으므로, 이 경로이고 같은 협업
+   * 방에 있는 시연자가 코드맵 생성 기록을 알려 올 때만 입력한다(useDemoEditorInput).
    */
-  projectName?: string;
   filePath?: string;
   /** class-field: 클래스 본문의 비어 있는 줄에서만 입력한다 */
   placement?: "class-field";
@@ -198,21 +197,20 @@ export type DemoTargetId = keyof typeof DEMO_INPUT_TARGETS;
  */
 export const DEMO_INPUT_ROLES: readonly DemoRole[] = ["presenter"];
 
-// 시연자가 코드맵으로 만들고 보조 시연자는 같은 방에서 여는 파일. 작업폴더 이름은
-// aivs.createFolder.name, 경로는 codemap.createComponent.path/name 과 맞춘다.
-const SEARCH_FRAME_PROJECT = "hospital-reservation";
+// 시연자가 코드맵으로 만들고 보조 시연자는 같은 방에서 여는 파일. 경로는
+// codemap.createComponent.path/name 과 맞춘다. 워크스페이스·작업폴더는 시연 때 만들어져
+// 미리 적을 수 없으므로 시연자의 코드맵 기록으로 확인한다.
 const SEARCH_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/SearchFrame.java";
 
 /**
  * 코드 에디터. 문구는 계정별로 둔다(여기 없는 계정은 입력되지 않는다). 한 파일에 계정마다
  * 대상을 따로 두어 서로의 코드가 들어가지 않게 하고, 중복 검사도 대상마다 한다.
- * 코드맵에서 만든 파일이나 projectName·filePath 가 정확히 맞는 파일에만 입력한다.
+ * 시연자는 자기 코드맵 기록이 있는 파일에, 보조 시연자는 같은 방의 시연자가 그 기록을 알려 온 filePath 에만 입력한다.
  */
 export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
   {
     id: "ide.searchFrame.nameField",
     fileName: "SearchFrame.java",
-    projectName: SEARCH_FRAME_PROJECT,
     filePath: SEARCH_FRAME_PATH,
     mode: "typing",
     charsPerTick: 1,
@@ -224,7 +222,6 @@ export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
   {
     id: "ide.searchFrame.searchButton",
     fileName: "SearchFrame.java",
-    projectName: SEARCH_FRAME_PROJECT,
     filePath: SEARCH_FRAME_PATH,
     mode: "typing",
     charsPerTick: 1,
