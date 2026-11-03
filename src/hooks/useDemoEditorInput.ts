@@ -63,32 +63,6 @@ const hasFileInTree = (nodes: FileTreeNode[] | null | undefined, path: string): 
       hasFileInTree(node.children, path),
   );
 
-// 콘솔에서 똑같아 보여도 대소문자·앞뒤 공백·보이지 않는 문자(zero-width, BOM)가 다르면 === 가 틀린다.
-// 그런 차이만 없애고, 글자가 하나라도 다르면 그대로 틀리게 둔다.
-const normalizeId = (value: unknown) =>
-  String(value ?? "")
-    .normalize("NFKC")
-    .replace(/[\s​-‍⁠﻿]/g, "")
-    .toLowerCase();
-
-/** workspaceId 가 어긋났을 때 어디가 다른지 보여 준다(UUID 는 비밀이 아니다). */
-const describeIdMismatch = (expected: string, actual: unknown) => {
-  const raw = String(actual ?? "");
-  let index = 0;
-  while (index < raw.length && index < expected.length && raw[index] === expected[index]) index += 1;
-  return {
-    expected: JSON.stringify(expected),
-    actual: JSON.stringify(raw),
-    actualType: typeof actual,
-    expectedLength: expected.length,
-    actualLength: raw.length,
-    firstDiffIndex: index,
-    expectedCharCode: expected.charCodeAt(index) || null,
-    actualCharCode: raw.charCodeAt(index) || null,
-    normalizedEqual: normalizeId(raw) === normalizeId(expected),
-  };
-};
-
 // 워크스페이스 이름·종류는 바뀌지 않으므로 페이지에 있는 동안 한 번만 묻는다. 실패하면 다음에 다시 묻는다.
 const workspaceCache = new Map<string, Promise<WorkspaceSummary | null>>();
 
@@ -115,7 +89,7 @@ const loadWorkspace = (workspaceId: string) => {
 
 /**
  * 보조 시연자는 파일을 직접 만들지 않아 코드맵 생성 기록이 없다. 그 대신 이 계정이 지금 보고 있는 것이
- * 시연용 팀 워크스페이스(id)·작업폴더·브랜치의 그 경로이고, 그 브랜치의 파일 트리(서버에서 받은 것)에 그 파일이
+ * 시연용 팀 워크스페이스·작업폴더·브랜치의 그 경로이고, 그 브랜치의 파일 트리(서버에서 받은 것)에 그 파일이
  * 실제로 있는지를 하나씩 본다. 시연자가 같은 파일을 열고 있을 필요는 없다.
  */
 async function verifyAssistantFile(
@@ -131,7 +105,6 @@ async function verifyAssistantFile(
 
   const checks: Record<string, boolean> = {
     teamMode: isTeamMode,
-    workspaceId: Boolean(target.workspaceId) && normalizeId(workspaceId) === normalizeId(target.workspaceId),
     path: Boolean(target.filePath) && normalizePath(target.filePath ?? "") === path,
     project: Boolean(target.projectName) && projectName === target.projectName,
     // 파일 트리는 지금 브랜치 것이므로, 브랜치가 맞으면 fileExists 가 그 브랜치에 파일이 있다는 뜻이다.
@@ -146,20 +119,20 @@ async function verifyAssistantFile(
   // 내 워크스페이스 목록에 있어야 하고(멤버), 팀 워크스페이스여야 한다.
   const workspace = workspaceId != null ? await loadWorkspace(String(workspaceId)) : null;
   checks.teamWorkspace = String(workspace?.mode ?? workspace?.type ?? "").toLowerCase() === "team";
+  // 워크스페이스는 서버가 준 내 목록의 이름으로 본다. id 는 배포 DB 마다 달라 코드에 박아 둘 수 없다.
+  checks.workspaceName =
+    Boolean(target.workspaceName) && String(workspace?.name ?? "").trim() === target.workspaceName;
 
   const ok = Object.values(checks).every(Boolean);
   if (!ok) {
     console.info("[시연 입력] 시연 대상 파일이 아니라 입력하지 않습니다.", {
       checks,
       workspaceId,
-      workspaceName: workspace?.name,
+      workspaceName: JSON.stringify(workspace?.name ?? null),
       workspaceMode: workspace?.mode ?? workspace?.type,
       projectName,
       branch: fileSystem?.activeBranch,
       filePath,
-      ...(checks.workspaceId
-        ? {}
-        : { workspaceIdDetail: describeIdMismatch(target.workspaceId ?? "", workspaceId) }),
     });
   }
   return ok;
