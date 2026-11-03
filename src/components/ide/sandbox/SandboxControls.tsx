@@ -214,8 +214,20 @@ export default function SandboxControls() {
 
       // 열린 탭을 모두 닫는다. 탭의 내용은 파일 경로만으로 구분돼서, 팀 내용으로 열려
       // 있던 탭이 그대로 내 샌드박스 방에 붙으면 팀 내용이 샌드박스 파일을 덮는다.
+      // 닫기 전 탭 순서와 보던 파일은 기억해 뒀다가, 켠 뒤 새 상태로 다시 연다.
+      const tabOrder = openFiles.map((file) => file.id);
+      const previousActive = activeFileId;
+
       await settleOpenTabs("all");
-      store(scope, await enableSandboxApi(scope));
+      const state = await enableSandboxApi(scope);
+      // 다시 열기 전에 켜진 상태를 먼저 넣는다. 에디터는 이 상태를 보고 방(팀 / 내 샌드박스)을 고른다.
+      store(scope, state);
+
+      // 코드맵 같은 가상 탭은 파일이 아니라 다시 열 수 없다.
+      const reopened = await reopenTabs(scope, state, tabOrder.filter((path) => !path.startsWith("virtual:")));
+      dispatch(reorderOpenFiles(tabOrder));
+      if (previousActive && reopened.has(previousActive)) dispatch(setActiveFile(previousActive));
+
       log("샌드박스를 켰습니다. 이제부터 고치는 파일은 팀원에게 보이지 않습니다.");
     });
 
@@ -223,11 +235,24 @@ export default function SandboxControls() {
     run(async () => {
       if (!scope) return;
 
+      // 켤 때와 같이 탭 순서와 보던 파일을 기억해 뒀다가 다시 연다.
+      const tabOrder = openFiles.map((file) => file.id);
+      const previousActive = activeFileId;
+
       await settleOpenTabs("all");
       const state = await disableSandboxApi(scope);
       store(scope, state);
       setIsPanelOpen(false);
       setIsActionsOpen(false);
+
+      // 끈 뒤에는 보관 중인 샌드박스 파일도 팀 내용으로 열어야 한다. 그래서 내 파일 목록을 비워 넘긴다.
+      const reopened = await reopenTabs(
+        scope,
+        { ...state, files: [] },
+        tabOrder.filter((path) => !path.startsWith("virtual:")),
+      );
+      dispatch(reorderOpenFiles(tabOrder));
+      if (previousActive && reopened.has(previousActive)) dispatch(setActiveFile(previousActive));
 
       log(
         state.files.length > 0
@@ -269,6 +294,44 @@ export default function SandboxControls() {
       dispatch(openFile({ id: filePath, name: baseName(filePath), type: "file" }));
     },
     [dispatch],
+  );
+
+  /**
+   * 닫았던 탭을 다시 연다. 다시 연 경로를 돌려준다.
+   * 샌드박스에 있는 파일은 내 것으로, 나머지는 팀 것으로 연다. 내용을 먼저 넣고 연다 — 에디터가
+   * 그 내용을 방의 첫 문서 후보로 쓴다.
+   */
+  const reopenTabs = useCallback(
+    async (targetScope: SandboxScope, state: SandboxStateResponse, paths: string[]) => {
+      const reopened = new Set<string>();
+
+      for (const filePath of paths) {
+        const mine = state.files.find((file) => file.filePath === filePath);
+
+        if (mine?.kind === "DELETED") continue;
+
+        try {
+          if (mine) {
+            await openSandboxFile(targetScope, filePath);
+          } else {
+            const content = await fetchFileContentApi(
+              targetScope.workspaceId,
+              targetScope.projectName,
+              targetScope.branchName,
+              filePath,
+            );
+            dispatch(updateFileContent({ filePath, content }));
+            dispatch(openFile({ id: filePath, name: baseName(filePath), type: "file" }));
+          }
+          reopened.add(filePath);
+        } catch {
+          // 그 사이 지워졌으면 다시 열지 않는다.
+        }
+      }
+
+      return reopened;
+    },
+    [dispatch, openSandboxFile],
   );
 
   /** 충돌 본문을 내 샌드박스 파일에 넣고, 해결 중으로 표시한다. */
@@ -396,27 +459,7 @@ export default function SandboxControls() {
       setIsPanelOpen(true);
 
       // 닫았던 탭을 다시 연다. 아직 샌드박스에 남은 파일(충돌·실패)은 내 것으로, 반영된 파일은 팀 것으로.
-      // 내용을 먼저 넣고 연다 — 에디터가 그 내용을 방의 첫 문서 후보로 쓴다.
-      const reopened = new Set<string>();
-
-      for (const filePath of reopenPaths) {
-        const stillMine = after.files.find((file) => file.filePath === filePath);
-
-        if (stillMine?.kind === "DELETED") continue;
-
-        try {
-          if (stillMine) {
-            await openSandboxFile(scope, filePath);
-          } else {
-            const content = await fetchFileContentApi(scope.workspaceId, scope.projectName, scope.branchName, filePath);
-            dispatch(updateFileContent({ filePath, content }));
-            dispatch(openFile({ id: filePath, name: baseName(filePath), type: "file" }));
-          }
-          reopened.add(filePath);
-        } catch {
-          // 그 사이 지워졌으면 다시 열지 않는다.
-        }
-      }
+      const reopened = await reopenTabs(scope, after, reopenPaths);
 
       dispatch(reorderOpenFiles(tabOrder));
       // 보던 탭이 다시 열리지 못했으면 되돌리지 않는다. setActiveFile 은 없는 탭을 빈 채로 만든다.
