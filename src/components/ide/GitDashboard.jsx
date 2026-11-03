@@ -119,6 +119,31 @@ const isValidGitHubRepoUrl = (rawUrl = "") => {
   );
 };
 
+/**
+ * Git 상태를 받는다. 병합 중이면 "해결 완료"(스테이징) 뒤에 저장으로 다시 바뀐 파일을 지금 내용으로
+ * 다시 담은 뒤의 상태를 돌려준다.
+ *
+ * 커밋은 스테이징해 둔 내용만 찍는다. 다시 담지 않으면 해결 완료 뒤 팀원이 고쳐 저장한 내용이 병합
+ * 커밋에서 빠지고, 그 파일이 스테이징·변경 목록 양쪽에 함께 보였다. git 인덱스 잠금이 겹치지 않게 하나씩 담는다.
+ */
+const fetchStatusRestagingMerge = async (workspaceId, projectName, branchName) => {
+  const status = await fetchGitStatusApi(workspaceId, projectName, branchName);
+
+  if (!status.isMerging) return status;
+
+  const stagedPaths = new Set((status.staged || []).map((file) => file.path));
+  const editedAfterResolve = (status.unstaged || []).filter((file) => stagedPaths.has(file.path));
+
+  if (editedAfterResolve.length === 0) return status;
+
+  for (const file of editedAfterResolve) {
+    // 이름이 바뀐 파일은 "옛 경로 -> 새 경로"로 온다. 담을 것은 새 경로다.
+    await stageFilesApi(workspaceId, projectName, branchName, file.path.split(" -> ").pop());
+  }
+
+  return fetchGitStatusApi(workspaceId, projectName, branchName);
+};
+
 const hasConflictMarkers = (content = "") => {
   return /(^|\n)<{7}|(^|\n)={7}|(^|\n)>{7}/m.test(String(content || ""));
 };
@@ -550,7 +575,7 @@ export default function GitDashboard() {
       setIsLoading(true);
 
       if (activeView === "status") {
-        const statusData = await fetchGitStatusApi(
+        const statusData = await fetchStatusRestagingMerge(
           workspaceId,
           activeProject,
           currentBranch,
@@ -1083,7 +1108,8 @@ export default function GitDashboard() {
     try {
       setIsLoading(true);
 
-      const latestStatus = await fetchGitStatusApi(
+      // 커밋 직전에 해결 완료 뒤 저장된 내용을 다시 담는다(fetchStatusRestagingMerge).
+      const latestStatus = await fetchStatusRestagingMerge(
         workspaceId,
         activeProject,
         currentBranch,
