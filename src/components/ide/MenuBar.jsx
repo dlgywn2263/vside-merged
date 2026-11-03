@@ -434,6 +434,9 @@ if (tree && tree.children) {
     }
 
     switch (itemName) {
+      case "새 작업폴더":
+        dispatch(openProjectModal());
+        break;
       case "새 파일":
         if (!workspaceId || !activeProject) return alert("프로젝트를 선택해주세요.");
         const fileName = window.prompt("파일 이름을 확장자와 함께 입력하세요 (예: index.js):");
@@ -725,6 +728,7 @@ if (tree && tree.children) {
     {
       name: "파일",
       items: [
+        { label: "새 작업폴더" },
         { label: "새 파일", shortcut: "Ctrl+N" },
         { label: "파일 열기...", shortcut: "Ctrl+O" },
         { label: "폴더 열기...", shortcut: "Ctrl+Shift+O" },
@@ -1067,15 +1071,6 @@ if (tree && tree.children) {
                 <VscDebugStop size={14} />
               </button>
             </div>
-            {/* 새 작업폴더: 중간 폭에서는 + 아이콘만 표시 */}
-            <button
-              onClick={() => dispatch(openProjectModal())}
-              className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[12px] font-bold text-gray-700 transition-colors hover:bg-gray-50 hover:border-gray-300 active:scale-95 min-[1320px]:px-3"
-              title="새 작업폴더"
-            >
-              <VscAdd size={14} />
-              <span className="hidden min-[1320px]:inline">새 작업폴더</span>
-            </button>
             <div className="mx-0.5 hidden h-4 w-px bg-gray-200 min-[1120px]:block"></div>
             {/* 샌드박스는 브랜치가 아니라 개인 레이어다. 브랜치 버튼과 따로 둔다. */}
             {mode === "team" && <SandboxControls />}
