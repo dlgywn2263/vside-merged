@@ -9,7 +9,7 @@
 //   NEXT_PUBLIC_DEMO_ASSISTANT_USER_ID=<회원번호>  보조 시연자
 // 로컬 DB 와 배포 DB 의 회원번호가 달라서 코드가 아니라 환경변수로 둔다.
 
-import { SEARCH_BUTTON_FIELD_CODE } from "./demoCodeSnippets";
+import { NAME_FIELD_CODE, SEARCH_BUTTON_FIELD_CODE } from "./demoCodeSnippets";
 
 export type DemoRole = "presenter" | "assistant";
 
@@ -55,8 +55,8 @@ export type DemoEditorTargetConfig = DemoTargetBase & {
   /** 파일 이름(경로 제외). 예: SearchFrame.java */
   fileName: string;
   /**
-   * 이 작업폴더의 이 상대경로면 코드맵 기록이 없어도 대상으로 본다. 다른 계정이 만든 파일처럼
-   * 이 탭의 코드맵을 거치지 않는 경우에 쓴다. 둘 다 적어야 동작한다.
+   * 팀 모드에서 이 작업폴더의 이 상대경로면 코드맵 기록이 없어도 대상으로 본다. 다른 계정이 만든
+   * 파일처럼 이 탭의 코드맵을 거치지 않는 경우에 쓴다. 둘 다 적어야 동작한다.
    */
   projectName?: string;
   filePath?: string;
@@ -153,7 +153,7 @@ export const DEMO_INPUT_TARGETS = {
   // API 테스터. 최종 발표 대상과 별개로 유지한다. 쓰지 않으면 enabled 를 false 로 둔다.
   // 경로는 실제 예약 API 로 바꿔야 한다.
   "apiTester.url": {
-    enabled: true,
+    enabled: false,
     mode: "paste",
     existing: "replace",
     text: "{{baseUrl}}/api/reservations?date=2026-11-03",
@@ -193,19 +193,45 @@ export const DEMO_INPUT_TARGETS = {
 export type DemoTargetId = keyof typeof DEMO_INPUT_TARGETS;
 
 /**
- * 코드 에디터. 문구는 계정별로 둔다(여기 없는 계정은 입력되지 않는다).
- * 코드맵에서 만든 파일에만 입력하므로, 이름만 같은 다른 파일은 대상이 아니다.
+ * 일반 입력창(DEMO_INPUT_TARGETS)을 자동 입력하는 계정. 보조 시연자는 코드 에디터만 쓴다.
+ * 그래서 DEMO_INPUT_TARGETS 에 보조 시연자 문구를 적어도 입력되지 않는다.
+ */
+export const DEMO_INPUT_ROLES: readonly DemoRole[] = ["presenter"];
+
+// 시연자가 코드맵으로 만들고 보조 시연자는 같은 방에서 여는 파일. 작업폴더 이름은
+// aivs.createFolder.name, 경로는 codemap.createComponent.path/name 과 맞춘다.
+const SEARCH_FRAME_PROJECT = "hospital-reservation";
+const SEARCH_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/SearchFrame.java";
+
+/**
+ * 코드 에디터. 문구는 계정별로 둔다(여기 없는 계정은 입력되지 않는다). 한 파일에 계정마다
+ * 대상을 따로 두어 서로의 코드가 들어가지 않게 하고, 중복 검사도 대상마다 한다.
+ * 코드맵에서 만든 파일이나 projectName·filePath 가 정확히 맞는 파일에만 입력한다.
  */
 export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
   {
+    id: "ide.searchFrame.nameField",
+    fileName: "SearchFrame.java",
+    projectName: SEARCH_FRAME_PROJECT,
+    filePath: SEARCH_FRAME_PATH,
+    mode: "typing",
+    charsPerTick: 1,
+    typingIntervalMs: 45,
+    placement: "class-field",
+    skipIfPresent: /\bnameField\b\s*(=|;)/,
+    text: { presenter: NAME_FIELD_CODE },
+  },
+  {
     id: "ide.searchFrame.searchButton",
     fileName: "SearchFrame.java",
+    projectName: SEARCH_FRAME_PROJECT,
+    filePath: SEARCH_FRAME_PATH,
     mode: "typing",
     charsPerTick: 1,
     typingIntervalMs: 45,
     placement: "class-field",
     skipIfPresent: /\bsearchButton\b\s*(=|;)/,
-    text: { presenter: SEARCH_BUTTON_FIELD_CODE },
+    text: { assistant: SEARCH_BUTTON_FIELD_CODE },
   },
 ];
 
@@ -236,8 +262,12 @@ export function resolveDemoText(
   return text || null;
 }
 
-/** 지금 열린 파일의 이름에 해당하는 에디터 대상. 경로까지 맞는지는 호출하는 쪽에서 본다. */
-export function findDemoEditorTarget(filePath: string): DemoEditorTargetConfig | null {
+/** 지금 열린 파일의 이름에 해당하는, 이 계정의 문구가 있는 에디터 대상. 경로까지 맞는지는 호출하는 쪽에서 본다. */
+export function findDemoEditorTarget(filePath: string, role: DemoRole): DemoEditorTargetConfig | null {
   const fileName = filePath.split(/[\\/]/).pop();
-  return DEMO_EDITOR_TARGETS.find((target) => target.fileName === fileName) ?? null;
+  return (
+    DEMO_EDITOR_TARGETS.find(
+      (target) => target.fileName === fileName && resolveDemoText(target, role) !== null,
+    ) ?? null
+  );
 }

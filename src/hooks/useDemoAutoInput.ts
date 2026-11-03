@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   DEMO_DEFAULTS,
+  DEMO_INPUT_ROLES,
   DEMO_INPUT_TARGETS,
   resolveDemoText,
   type DemoTargetConfig,
@@ -74,6 +75,7 @@ export function useDemoAutoInput({
 
   const props = useMemo(() => {
     if (!isActive || disabled || !role || !userKey) return NO_PROPS;
+    if (!DEMO_INPUT_ROLES.includes(role)) return NO_PROPS;
 
     const target: DemoTargetConfig = DEMO_INPUT_TARGETS[targetId];
     const text = resolveDemoText(target, role);

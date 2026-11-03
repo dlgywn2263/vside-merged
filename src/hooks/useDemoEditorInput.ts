@@ -79,7 +79,7 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
       const { filePath, workspaceId, projectName, isTeamMode, binding, session } = context;
       if (!filePath || filePath.startsWith("virtual:")) return;
 
-      const target = findDemoEditorTarget(filePath);
+      const target = findDemoEditorTarget(filePath, role);
       if (!target) return;
 
       const baseText = resolveDemoText(target, role);
@@ -87,10 +87,13 @@ export function useDemoEditorInput(getContext: () => DemoEditorContext) {
       if (!target.rerun && isDemoTargetDone(target.id)) return;
 
       // 이름만 같은 다른 파일에 들어가지 않도록 작업폴더와 상대경로까지 맞춰 본다.
+      // 기록 없이 들어가는 길은 같은 방의 파일을 함께 고치는 팀 모드에서만 연다.
+      const normalizePath = (path: string) => path.replace(/\\/g, "/").replace(/^\/+/, "");
       const isConfiguredFile =
+        isTeamMode &&
         Boolean(target.projectName && target.filePath) &&
         target.projectName === projectName &&
-        target.filePath === filePath;
+        normalizePath(target.filePath ?? "") === normalizePath(filePath);
       if (!isConfiguredFile && !isDemoCreatedFile(userKey, workspaceId, projectName, filePath)) {
         console.info("[시연 입력] 코드맵에서 만든 파일이 아니라 입력하지 않습니다.", { projectName, filePath });
         return;
