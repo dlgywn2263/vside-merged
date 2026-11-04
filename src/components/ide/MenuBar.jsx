@@ -14,6 +14,8 @@ import {
   toggleRightPanel,
   setCodeMapMode,
   setRunning,
+  startRunServer,
+  clearRunServer,
   setCurrentDebugLine,
   updateDebugVariables,
   setActiveActivity,
@@ -187,6 +189,7 @@ export default function MenuBar({ mode = "personal" }) {
       dispatch(setIsPreviewVisible(false));
     }
     dispatch(setRunning(false));
+    dispatch(clearRunServer());
     dispatch(setWaitingForRunSlot(false));
     dispatch(setDebugMode(false));
     if (DebugSocket && typeof DebugSocket.stopDebug === "function") DebugSocket.stopDebug();
@@ -261,6 +264,8 @@ if (tree && tree.children) {
     // 실행에도 미리보기에 "앱 화면" 탭이 남는다.
     dispatch(setGuiPreviewUrl(""));
     dispatch(setRunning(true));
+    // 앞선 실행의 주소는 여기서 버린다. 새 주소는 서버가 다 켜졌을 때 BottomPanel 이 채운다.
+    dispatch(startRunServer({ workspaceId, projectName: activeProject }));
     const runPayload = {
       type: "RUN",
       workspaceId,
@@ -315,11 +320,13 @@ if (tree && tree.children) {
       () => {
         dispatch(writeToTerminal("\r\n[Error] 실행 중 웹소켓 에러가 발생했습니다.\r\n"));
         dispatch(setRunning(false));
+        dispatch(clearRunServer());
         dispatch(setWaitingForRunSlot(false));
       },
       () => {
         dispatch(writeToTerminal("\r\n[System] 실행이 완전히 종료되었습니다.\r\n"));
         dispatch(setRunning(false));
+        dispatch(clearRunServer());
         dispatch(setWaitingForRunSlot(false));
       }
     );

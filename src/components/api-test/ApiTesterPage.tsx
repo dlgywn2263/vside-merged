@@ -22,7 +22,9 @@ import {
   Upload,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useSelector } from "react-redux";
 import { apiFetch, apiJson } from "@/lib/api/apiClient";
+import { toBrowserPreviewUrl } from "@/lib/ide/previewUrl";
 
 type HttpMethod =
   | "GET"
@@ -172,6 +174,41 @@ interface AssertionResult {
 
 const STORAGE_ENVIRONMENTS = "waivs-api-tester-environments";
 const STORAGE_SELECTED_ENVIRONMENT = "waivs-api-tester-selected-environment";
+
+// IDE 에서 실행한 서버의 주소를 baseUrl 로 가진 환경. 저장하지 않고 실행 상태에서 매번 만든다.
+// 사용자가 만든 환경의 값은 건드리지 않으므로 직접 고친 주소가 덮이지 않는다.
+const RUN_SERVER_ENVIRONMENT_ID = "run-server";
+
+// 실행 중인 서버 환경을 두고 다른 환경을 고른 주소. 화면을 오가도(다시 마운트돼도) 그 선택을 지킨다.
+// 서버를 다시 실행하면 주소(포트)가 바뀌어 다시 실행 중인 서버 환경이 골라진다.
+let dismissedRunServerUrl = "";
+
+const BASE_URL_TOKEN = "{{baseUrl}}";
+
+// 화면(활동)을 오가면 이 컴포넌트가 새로 마운트돼 입력이 처음 값으로 돌아간다. 에디터에서 서버를 다시
+// 실행하고 돌아오면 고른 API 경로를 지킨 채 포트만 바꿔야 하므로, Method·URL 과 그 URL 에 넣은
+// 실행 서버 주소를 이 탭에 있는 동안 기억한다.
+const lastRequestLine: { method: HttpMethod; url: string; runServerBase: string } = {
+  method: "GET",
+  url: "{{baseUrl}}/api/history",
+  runServerBase: "",
+};
+
+/**
+ * url 이 base 로 시작하면 그 뒤(경로·쿼리)를 돌려준다. 아니면 null.
+ * 바로 뒤가 "/", "?", "#" 이거나 끝일 때만 같은 주소로 본다(…:6218 이 …:62186 에 걸리지 않게).
+ */
+function stripUrlBase(url: string, base: string): string | null {
+  if (!base || !url.startsWith(base)) return null;
+  const rest = url.slice(base.length);
+  return rest === "" || /^[/?#]/.test(rest) ? rest : null;
+}
+
+// 스토어(uiSlice·fileSystemSlice)는 JS 라 타입이 없다. 여기서 읽는 값만 적는다.
+type RunServerRootState = {
+  ui?: { runServer?: { workspaceId: string; projectName: string; url: string } | null };
+  fileSystem?: { activeProject?: string | null };
+};
 
 function createId(prefix = "id") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -687,8 +724,8 @@ export default function ApiTesterPage() {
     return match?.[1] ? decodeURIComponent(match[1]) : "";
   }, [pathname]);
 
-  const [method, setMethod] = useState<HttpMethod>("GET");
-  const [url, setUrl] = useState("{{baseUrl}}/api/history");
+  const [method, setMethod] = useState<HttpMethod>(() => lastRequestLine.method);
+  const [url, setUrl] = useState(() => lastRequestLine.url);
   const demoUrl = useDemoAutoInput({ targetId: "apiTester.url", value: url, onChange: setUrl });
   const [activeTab, setActiveTab] = useState("Params");
 
@@ -765,11 +802,81 @@ export default function ApiTesterPage() {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
 
+  // 지금 보고 있는 워크스페이스·작업폴더에서 실행해 다 켜진 서버만 쓴다. 이 탭은 한 번에 하나만 실행하므로
+  // 서버를 고를 일은 없고, 다른 작업폴더에서 실행한 서버라면 아예 쓰지 않는다.
+  const runServer = useSelector((state: RunServerRootState) => state.ui?.runServer);
+  const activeProject = useSelector((state: RunServerRootState) => state.fileSystem?.activeProject);
+  const runServerUrl = useMemo(() => {
+    if (!runServer?.url || !workspaceId || !activeProject) return "";
+    if (runServer.workspaceId !== workspaceId || runServer.projectName !== activeProject) return "";
+    // {{baseUrl}}/api/... 로 붙이므로 끝의 "/" 를 뗀다(배포 주소는 /preview/{포트}/ 로 끝난다).
+    return toBrowserPreviewUrl(runServer.url).replace(/\/+$/, "");
+  }, [runServer, workspaceId, activeProject]);
+
+  const [dismissedRunUrl, setDismissedRunUrl] = useState(() => dismissedRunServerUrl);
+
+  const runEnvironment = useMemo<ApiEnvironment | null>(
+    () =>
+      runServerUrl
+        ? {
+            id: RUN_SERVER_ENVIRONMENT_ID,
+            name: "실행 중인 서버",
+            variables: [
+              { id: "run-server-base-url", key: "baseUrl", value: runServerUrl, enabled: true },
+            ],
+          }
+        : null,
+    [runServerUrl],
+  );
+  const isRunEnvironmentActive = Boolean(runEnvironment) && dismissedRunUrl !== runServerUrl;
+  const environmentOptions = runEnvironment ? [runEnvironment, ...environments] : environments;
+
+  // 실행 중인 서버 환경이면 URL 입력창에 {{baseUrl}} 대신 그 주소를 그대로 넣는다. 보내는 값도 이것이라
+  // 화면과 요청이 같고 치환이 겹치지 않는다. 서버를 다시 실행해 주소가 바뀌거나 다른 환경을 고르면
+  // URL 의 앞부분만 바꾼다(다른 환경이면 다시 {{baseUrl}}). 앞부분을 직접 고친 URL 은 건드리지 않는다.
+  // effect 대신 렌더 중에 맞춘다 — 바뀐 주소가 한 번 그려진 뒤 다시 그려지는 깜빡임이 없다.
+  const activeRunServerUrl = isRunEnvironmentActive ? runServerUrl : "";
+  const [urlRunServerBase, setUrlRunServerBase] = useState(() => lastRequestLine.runServerBase);
+  if (urlRunServerBase !== activeRunServerUrl) {
+    const previousBase = urlRunServerBase;
+    setUrlRunServerBase(activeRunServerUrl);
+    setUrl((prev) => {
+      const rest = stripUrlBase(prev, previousBase) ?? stripUrlBase(prev, BASE_URL_TOKEN);
+      return rest === null ? prev : (activeRunServerUrl || BASE_URL_TOKEN) + rest;
+    });
+  }
+
+  useEffect(() => {
+    lastRequestLine.method = method;
+    lastRequestLine.url = url;
+    lastRequestLine.runServerBase = urlRunServerBase;
+  }, [method, url, urlRunServerBase]);
+
+  // API 목록·저장 테스트에서 가져온 {{baseUrl}}/... 을 입력창에 넣을 때
+  const toRunServerUrl = (value: string) => {
+    const rest = activeRunServerUrl ? stripUrlBase(value, BASE_URL_TOKEN) : null;
+    return rest === null ? value : activeRunServerUrl + rest;
+  };
+
+  // 저장 테스트에는 실행할 때마다 바뀌는 포트 대신 {{baseUrl}} 로 남긴다(예전에 저장하던 모양).
+  const toStoredUrl = (value: string) => {
+    const rest = stripUrlBase(value, activeRunServerUrl);
+    return rest === null ? value : BASE_URL_TOKEN + rest;
+  };
+
+  const handleSelectEnvironment = (id: string) => {
+    const dismissed = id === RUN_SERVER_ENVIRONMENT_ID ? "" : runServerUrl;
+    dismissedRunServerUrl = dismissed;
+    setDismissedRunUrl(dismissed);
+    if (id !== RUN_SERVER_ENVIRONMENT_ID) setSelectedEnvironmentId(id);
+  };
+
   const selectedEnvironment = useMemo(
     () =>
+      (isRunEnvironmentActive ? runEnvironment : null) ??
       environments.find((item) => item.id === selectedEnvironmentId) ??
       environments[0],
-    [environments, selectedEnvironmentId],
+    [environments, selectedEnvironmentId, isRunEnvironmentActive, runEnvironment],
   );
 
   const selectedHistory = useMemo(
@@ -872,7 +979,7 @@ export default function ApiTesterPage() {
 
   const handleSelectSavedTest = (test: SavedTestItem) => {
     setMethod(toUiMethod(test.method));
-    setUrl(test.url);
+    setUrl(toRunServerUrl(test.url));
     setParams(test.params ?? []);
     setHeaders(test.headers ?? [{ key: "", value: "", enabled: true }]);
     setBody(test.body ?? "");
@@ -1009,7 +1116,7 @@ export default function ApiTesterPage() {
     setUrl(
       endpoint.path.startsWith("http")
         ? endpoint.path
-        : `{{baseUrl}}${endpoint.path.startsWith("/") ? "" : "/"}${endpoint.path}`,
+        : toRunServerUrl(`{{baseUrl}}${endpoint.path.startsWith("/") ? "" : "/"}${endpoint.path}`),
     );
     setSelectedHistoryId(null);
     setResponse(null);
@@ -1333,13 +1440,15 @@ export default function ApiTesterPage() {
     const title = prompt("저장할 테스트 이름을 입력하세요", "New API Test");
     if (!title) return;
 
+    const storedUrl = toStoredUrl(url);
+
     try {
       const saved = await apiJson("/api/test", {
         method: "POST",
         body: JSON.stringify({
           title,
           method,
-          url,
+          url: storedUrl,
           params,
           headers,
           body,
@@ -1361,7 +1470,7 @@ export default function ApiTesterPage() {
         id: saved.id,
         title: saved.title ?? title,
         method: toUiMethod(saved.method ?? method),
-        url: saved.url ?? url,
+        url: saved.url ?? storedUrl,
         params: saved.params ?? params,
         headers: saved.headers ?? headers,
         body: saved.body ?? body,
@@ -1734,11 +1843,11 @@ export default function ApiTesterPage() {
                 </span>
                 <div className="relative">
                   <select
-                    value={selectedEnvironmentId}
-                    onChange={(e) => setSelectedEnvironmentId(e.target.value)}
+                    value={isRunEnvironmentActive ? RUN_SERVER_ENVIRONMENT_ID : selectedEnvironmentId}
+                    onChange={(e) => handleSelectEnvironment(e.target.value)}
                     className="appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-9 text-xs font-semibold text-slate-700 outline-none"
                   >
-                    {environments.map((environment) => (
+                    {environmentOptions.map((environment) => (
                       <option key={environment.id} value={environment.id}>
                         {environment.name}
                       </option>
@@ -1750,9 +1859,15 @@ export default function ApiTesterPage() {
                   />
                 </div>
 
-                <span className="hidden text-[11px] text-slate-400 lg:inline">
-                  URL에서 {"{{baseUrl}}"} 형태로 사용할 수 있습니다.
-                </span>
+                {isRunEnvironmentActive ? (
+                  <span className="text-[11px] text-slate-500">
+                    baseUrl = <span className="font-mono text-slate-700">{runServerUrl}</span>
+                  </span>
+                ) : (
+                  <span className="hidden text-[11px] text-slate-400 lg:inline">
+                    URL에서 {"{{baseUrl}}"} 형태로 사용할 수 있습니다.
+                  </span>
+                )}
               </div>
 
               <button
@@ -1768,7 +1883,14 @@ export default function ApiTesterPage() {
               </button>
             </div>
 
-            {showEnvironmentEditor && selectedEnvironment && (
+            {showEnvironmentEditor && isRunEnvironmentActive && (
+              <p className="mt-3 border-t border-slate-200 pt-3 text-[11px] text-slate-500">
+                IDE 에서 실행한 서버 주소를 자동으로 씁니다. 서버를 다시 실행하면 새 주소로 바뀝니다.
+                주소를 직접 정하려면 다른 Environment 를 고르세요.
+              </p>
+            )}
+
+            {showEnvironmentEditor && !isRunEnvironmentActive && selectedEnvironment && (
               <div className="mt-3 border-t border-slate-200 pt-3">
                 <div className="space-y-2">
                   {selectedEnvironment.variables.map((variable) => (

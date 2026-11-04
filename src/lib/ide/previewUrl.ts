@@ -37,6 +37,56 @@ export function buildProxiedPreviewUrl(
   return `${PREVIEW_BASE_URL}/${port}${rest}`;
 }
 
+const PREVIEW_HOST = process.env.NEXT_PUBLIC_PREVIEW_HOST || "";
+const PREVIEW_PROTOCOL = process.env.NEXT_PUBLIC_PREVIEW_PROTOCOL || "http";
+
+const hasProtocol = (url: string) => /^https?:\/\//i.test(url);
+
+/**
+ * 실행 서버가 알려 준 주소(http://localhost:{포트})를 지금 브라우저가 실제로 열 수 있는 주소로 바꾼다.
+ * https 배포는 서버를 거치는 주소로, 그 밖에는 호스트를 지금 접속한 호스트로 바꾼다.
+ * localhost 는 백엔드 서버 안에서만 맞는 주소라 다른 PC 의 브라우저에서는 열리지 않는다.
+ * WebPreview 와 API 테스터가 같은 규칙을 쓴다.
+ */
+export function toBrowserPreviewUrl(rawUrl: unknown): string {
+  if (!rawUrl) return "";
+
+  const trimmedUrl = String(rawUrl).trim();
+
+  const withProtocol = hasProtocol(trimmedUrl)
+    ? trimmedUrl
+    : `${PREVIEW_PROTOCOL}://${trimmedUrl}`;
+
+  try {
+    const url = new URL(withProtocol);
+
+    const isLocalPreviewHost =
+      url.hostname === "localhost" || url.hostname === "127.0.0.1";
+
+    if (isLocalPreviewHost) {
+      // https 배포에서는 임시 포트에 직접 붙지 못한다. 서버를 거치는 주소로 바꾼다.
+      // 주소창에 localhost:포트 를 직접 쳤을 때도 여기를 지난다.
+      const proxiedUrl = url.port
+        ? buildProxiedPreviewUrl(url.port, `${url.pathname}${url.search}${url.hash}`)
+        : null;
+
+      if (proxiedUrl) return proxiedUrl;
+
+      const replacementHost =
+        PREVIEW_HOST || (typeof window === "undefined" ? "" : window.location.hostname);
+
+      if (replacementHost) {
+        url.protocol = `${PREVIEW_PROTOCOL}:`;
+        url.hostname = replacementHost;
+      }
+    }
+
+    return url.toString();
+  } catch {
+    return withProtocol;
+  }
+}
+
 /**
  * 앱 화면(Swing 화면 중계, noVNC) 주소.
  *

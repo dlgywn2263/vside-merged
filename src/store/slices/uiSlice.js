@@ -44,6 +44,11 @@ const initialState = {
   isPreviewVisible: false,
   previewUrl: "",
 
+  // 이 탭에서 실행한 서버. 실행을 누를 때 워크스페이스·작업폴더를 적어 두고, 서버가 다 켜지면 url 을 채운다.
+  // 중지·종료되면 비운다. previewUrl 은 미리보기 창을 다시 열 때 쓰려고 남겨 두므로 따로 둔다.
+  // API 테스터가 이것으로 지금 작업폴더의 서버 주소를 고른다. url 은 서버가 알려 준 그대로(localhost)다.
+  runServer: null,
+
   // Swing 같은 창 프로그램의 화면 주소. 서버가 화면 중계를 켰을 때만 값이 있다.
   // previewUrl(API 서버 주소)과 따로 둔다. 둘이 동시에 살아 있고 탭으로 오간다.
   guiPreviewUrl: "",
@@ -218,6 +223,17 @@ export const uiSlice = createSlice({
       state.isPreviewVisible = action.payload;
     },
 
+    startRunServer: (state, action) => {
+      const { workspaceId, projectName } = action.payload || {};
+      state.runServer = { workspaceId: String(workspaceId ?? ""), projectName: String(projectName ?? ""), url: "" };
+    },
+    // 실행을 누르지 않은 출력(디버그 등)의 포트로는 채우지 않는다.
+    setRunServerUrl: (state, action) => {
+      if (state.runServer) state.runServer.url = action.payload || "";
+    },
+    clearRunServer: (state) => {
+      state.runServer = null;
+    },
     setPreviewUrl: (state, action) => {
       state.previewUrl = action.payload;
     },
@@ -289,6 +305,9 @@ export const {
 
   setIsPreviewVisible,
   setPreviewUrl,
+  startRunServer,
+  setRunServerUrl,
+  clearRunServer,
   setGuiPreviewUrl,
   setGuiAppReady,
 

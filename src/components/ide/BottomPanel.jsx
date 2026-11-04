@@ -11,6 +11,7 @@ import {
   setPreviewUrl,
   setGuiPreviewUrl,
   setGuiAppReady,
+  setRunServerUrl,
 } from "@/store/slices/uiSlice";
 import { RunSocket } from "@/lib/ide/runSocket";
 import { DebugSocket } from "@/lib/ide/debugSocket";
@@ -74,6 +75,8 @@ export default function BottomPanel({ isSandboxMode = false }) {
     if (isServerReady) dispatch(setGuiAppReady(true));
     if (pendingPreviewUrlRef.current && isServerReady) {
       dispatch(setPreviewUrl(pendingPreviewUrlRef.current));
+      // 포트가 열리기 전에는 요청이 실패하므로 API 테스터에는 다 켜진 뒤에 알린다.
+      dispatch(setRunServerUrl(pendingPreviewUrlRef.current));
       dispatch(setIsPreviewVisible(true));
       pendingPreviewUrlRef.current = null;
     }

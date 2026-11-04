@@ -13,56 +13,8 @@ import {
   VscChromeRestore,
   VscChromeMaximize,
 } from "react-icons/vsc";
-import { buildProxiedPreviewUrl } from "@/lib/ide/previewUrl";
+import { toBrowserPreviewUrl as normalizePreviewUrl } from "@/lib/ide/previewUrl";
 import { RunSocket } from "@/lib/ide/runSocket";
-
-const PREVIEW_HOST = process.env.NEXT_PUBLIC_PREVIEW_HOST || "";
-const PREVIEW_PROTOCOL = process.env.NEXT_PUBLIC_PREVIEW_PROTOCOL || "http";
-
-const hasProtocol = (url) => /^https?:\/\//i.test(String(url || ""));
-
-const getCurrentBrowserHost = () => {
-  if (typeof window === "undefined") return "";
-  return window.location.hostname;
-};
-
-const normalizePreviewUrl = (rawUrl) => {
-  if (!rawUrl) return "";
-
-  const trimmedUrl = String(rawUrl).trim();
-
-  const withProtocol = hasProtocol(trimmedUrl)
-    ? trimmedUrl
-    : `${PREVIEW_PROTOCOL}://${trimmedUrl}`;
-
-  try {
-    const url = new URL(withProtocol);
-
-    const isLocalPreviewHost =
-      url.hostname === "localhost" || url.hostname === "127.0.0.1";
-
-    if (isLocalPreviewHost) {
-      // https 배포에서는 임시 포트에 직접 붙지 못한다. 서버를 거치는 주소로 바꾼다.
-      // 주소창에 localhost:포트 를 직접 쳤을 때도 여기를 지난다.
-      const proxiedUrl = url.port
-        ? buildProxiedPreviewUrl(url.port, `${url.pathname}${url.search}${url.hash}`)
-        : null;
-
-      if (proxiedUrl) return proxiedUrl;
-
-      const replacementHost = PREVIEW_HOST || getCurrentBrowserHost();
-
-      if (replacementHost) {
-        url.protocol = `${PREVIEW_PROTOCOL}:`;
-        url.hostname = replacementHost;
-      }
-    }
-
-    return url.toString();
-  } catch {
-    return withProtocol;
-  }
-};
 
 // 앱 화면(noVNC)은 누른 키만 보내서 한글이 조합되지 않는다(실행 환경에 한글 입력기가 없다).
 // 여기서 내 PC 의 입력기로 조합을 끝낸 글자를 보내면, 서버가 앱 화면에서 지금 선택된 칸에 대신 친다.
