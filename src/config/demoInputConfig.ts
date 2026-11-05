@@ -38,6 +38,8 @@ type DemoTargetBase = {
 export type DemoTargetConfig = DemoTargetBase & {
   /** 기본 skip */
   existing?: DemoExistingPolicy;
+  /** 이 대상을 자동 입력할 계정. 없으면 DEMO_INPUT_ROLES */
+  roles?: readonly DemoRole[];
 };
 
 /**
@@ -109,10 +111,14 @@ export const DEMO_INPUT_TARGETS = {
     text: "병원예약",
   },
 
-  // 팀 채팅. 전송은 발표자가 Enter 나 전송 버튼으로 직접 한다.
+  // 팀 채팅. 보조 시연자가 먼저 보내고 시연자가 답한다. 전송은 각자 Enter 나 전송 버튼으로 직접 한다.
   "ide.teamChat.message": {
     mode: "typing",
-    text: "안녕하세요",
+    roles: ["presenter", "assistant"],
+    text: {
+      assistant: "지금까지 구현한 기능 확인 부탁드립니다.",
+      presenter: "네, 알겠습니다.",
+    },
   },
 
   // 작업폴더 생성(CreateProjectModal)
@@ -201,7 +207,7 @@ export type DemoTargetId = keyof typeof DEMO_INPUT_TARGETS;
 
 /**
  * 일반 입력창(DEMO_INPUT_TARGETS)을 자동 입력하는 계정. 보조 시연자는 코드 에디터만 쓴다.
- * 그래서 DEMO_INPUT_TARGETS 에 보조 시연자 문구를 적어도 입력되지 않는다.
+ * 그래서 DEMO_INPUT_TARGETS 에 보조 시연자 문구를 적어도 입력되지 않는다(대상에 roles 를 적은 팀 채팅 제외).
  */
 export const DEMO_INPUT_ROLES: readonly DemoRole[] = ["presenter"];
 

@@ -75,9 +75,9 @@ export function useDemoAutoInput({
 
   const props = useMemo(() => {
     if (!isActive || disabled || !role || !userKey) return NO_PROPS;
-    if (!DEMO_INPUT_ROLES.includes(role)) return NO_PROPS;
-
     const target: DemoTargetConfig = DEMO_INPUT_TARGETS[targetId];
+    if (!(target.roles ?? DEMO_INPUT_ROLES).includes(role)) return NO_PROPS;
+
     const text = resolveDemoText(target, role);
     if (!text) return NO_PROPS;
 
