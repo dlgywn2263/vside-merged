@@ -1942,6 +1942,17 @@ useEffect(() => {
     );
   }, []);
 
+  // 충돌 배경색은 충돌 목록에서 점프할 때(120ms 뒤 한 번)만 칠했다. 팀 모드는 그때까지
+  // 협업 문서가 아직 안 들어와 빈 화면을 보고 지나가서 색이 가끔 안 나왔고, 탐색기에서
+  // 직접 연 충돌 파일은 아예 안 나왔다. 충돌 목록이 바뀔 때마다 화면 내용 기준으로 다시 칠한다.
+  // (Redux 내용은 팀 모드에서 400ms 늦어 줄 번호가 화면과 다를 수 있어 쓰지 않는다.)
+  useEffect(() => {
+    const model = editorRef.current?.getModel();
+    if (!isEditorReady || !model || model.isDisposed()) return;
+
+    updateConflictDecorations(parseMergeConflicts(model.getValue()));
+  }, [isEditorReady, activeFileId, mergeConflicts, updateConflictDecorations]);
+
   const revealConflict = useCallback((targetConflict = mergeConflicts[0]) => {
     const editor = editorRef.current;
 
