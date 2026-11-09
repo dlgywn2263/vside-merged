@@ -54,7 +54,7 @@ export type DemoEditorExistingPolicy = "insert" | "skip" | "replace";
 
 export type DemoEditorTargetConfig = DemoTargetBase & {
   id: string;
-  /** 파일 이름(경로 제외). 예: SearchFrame.java */
+  /** 파일 이름(경로 제외). 예: CheckFrame.java */
   fileName: string;
   /** 브랜치 폴더 기준 전체 경로. 보조 시연자는 이 경로와 아래 값이 모두 맞아야 입력한다. */
   filePath?: string;
@@ -124,7 +124,7 @@ export const DEMO_INPUT_TARGETS = {
   // 작업폴더 생성(CreateProjectModal)
   "aivs.createFolder.name": {
     mode: "typing",
-    // 보조 시연자 에디터 대상(SEARCH_FRAME_PROJECT)도 이 이름을 쓴다. 실제 시연 작업폴더와 같아야 한다.
+    // 보조 시연자 에디터 대상(CHECK_FRAME_PROJECT)도 이 이름을 쓴다. 실제 시연 작업폴더와 같아야 한다.
     text: "hospital-reservation-demo",
   },
   "aivs.createFolder.description": {
@@ -141,7 +141,7 @@ export const DEMO_INPUT_TARGETS = {
   // 코드맵의 새 컴포넌트 이름. 영문·숫자·밑줄만 넣을 수 있는 칸이다.
   "codemap.createComponent.name": {
     mode: "typing",
-    text: "SearchFrame",
+    text: "CheckFrame",
   },
 
   // 샌드박스 Ctrl+K AI 요청. 샌드박스가 켜져 있을 때만 동작한다.
@@ -149,7 +149,7 @@ export const DEMO_INPUT_TARGETS = {
     mode: "paste",
     existing: "replace",
     rerun: true,
-    text: "기존 Java Swing 예약 조회 화면은 유지하고, 예약 날짜, 시간, 진료과목, 담당의, 예약 상태를 표시하는 결과 테이블을 추가해줘.",
+    text: "기존 Java Swing 코드와 연관없는, 예약 날짜, 시간, 진료과목, 담당의, 예약 상태를 표시하는 결과 GUI 코드 추가해줘.",
   },
 
   // Git 브랜치와 커밋
@@ -215,10 +215,10 @@ export const DEMO_INPUT_ROLES: readonly DemoRole[] = ["presenter"];
 // 작업폴더 이름은 작업폴더 생성 자동 입력 문구와 같아야 한다.
 // 워크스페이스는 발표에서 IDE 시연에 쓰는 팀 워크스페이스의 이름이다. 시연 중에 새로 만드는
 // 워크스페이스(project.create.name, "병원예약관리")와는 다른 워크스페이스라 그 문구를 쓰지 않는다.
-const SEARCH_FRAME_WORKSPACE = "병원 예약 관리 시스템";
-const SEARCH_FRAME_BRANCH = "feature/gui";
-const SEARCH_FRAME_PROJECT = DEMO_INPUT_TARGETS["aivs.createFolder.name"].text;
-const SEARCH_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/SearchFrame.java";
+const CHECK_FRAME_WORKSPACE = "병원 예약 관리 시스템";
+const CHECK_FRAME_BRANCH = "feature/gui";
+const CHECK_FRAME_PROJECT = DEMO_INPUT_TARGETS["aivs.createFolder.name"].text;
+const CHECK_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/CheckFrame.java";
 
 /**
  * 코드 에디터. 문구는 계정별로 둔다(여기 없는 계정은 입력되지 않는다). 한 파일에 계정마다
@@ -227,9 +227,9 @@ const SEARCH_FRAME_PATH = "src/main/java/com/hospital/reservation/gui/SearchFram
  */
 export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
   {
-    id: "ide.searchFrame.nameField",
-    fileName: "SearchFrame.java",
-    filePath: SEARCH_FRAME_PATH,
+    id: "ide.checkFrame.nameField",
+    fileName: "CheckFrame.java",
+    filePath: CHECK_FRAME_PATH,
     mode: "typing",
     charsPerTick: 1,
     typingIntervalMs: 45,
@@ -238,12 +238,12 @@ export const DEMO_EDITOR_TARGETS: DemoEditorTargetConfig[] = [
     text: { presenter: NAME_FIELD_CODE },
   },
   {
-    id: "ide.searchFrame.searchButton",
-    fileName: "SearchFrame.java",
-    filePath: SEARCH_FRAME_PATH,
-    workspaceName: SEARCH_FRAME_WORKSPACE,
-    projectName: SEARCH_FRAME_PROJECT,
-    branchName: SEARCH_FRAME_BRANCH,
+    id: "ide.checkFrame.searchButton",
+    fileName: "CheckFrame.java",
+    filePath: CHECK_FRAME_PATH,
+    workspaceName: CHECK_FRAME_WORKSPACE,
+    projectName: CHECK_FRAME_PROJECT,
+    branchName: CHECK_FRAME_BRANCH,
     pausable: true,
     mode: "typing",
     charsPerTick: 1,
