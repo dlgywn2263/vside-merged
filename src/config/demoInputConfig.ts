@@ -54,7 +54,7 @@ export type DemoEditorExistingPolicy = "insert" | "skip" | "replace";
 
 export type DemoEditorTargetConfig = DemoTargetBase & {
   id: string;
-  /** 파일 이름(경로 제외). 예: CheckFrame.java */
+  /** 파일 이름(경로 제외). 예: SearchFrame.java */
   fileName: string;
   /** 브랜치 폴더 기준 전체 경로. 보조 시연자는 이 경로와 아래 값이 모두 맞아야 입력한다. */
   filePath?: string;
@@ -124,7 +124,7 @@ export const DEMO_INPUT_TARGETS = {
   // 작업폴더 생성(CreateProjectModal)
   "aivs.createFolder.name": {
     mode: "typing",
-    // 보조 시연자 에디터 대상(CHECK_FRAME_PROJECT)도 이 이름을 쓴다. 실제 시연 작업폴더와 같아야 한다.
+    // 보조 시연자 에디터 대상(SEARCH_FRAME_PROJECT)도 이 이름을 쓴다. 실제 시연 작업폴더와 같아야 한다.
     text: "hospital-reservation-demo",
   },
   "aivs.createFolder.description": {
@@ -149,7 +149,7 @@ export const DEMO_INPUT_TARGETS = {
     mode: "paste",
     existing: "replace",
     rerun: true,
-    text: "기존 Java Swing 코드와 연관없는, 예약 날짜, 시간, 진료과목, 담당의, 예약 상태를 표시하는 결과 GUI 코드 추가해줘.",
+    text: "기존 Java Swing 코드와 연관없는, 예약 날짜, 시간, 진료과목, 담당의, 예약 상태를 표시하는 결과 GUI 코드 추가해줘. 해당 GUI를 실행하는 main 메서드는 반드시 작성하지 말아줘",
   },
 
   // Git 브랜치와 커밋
