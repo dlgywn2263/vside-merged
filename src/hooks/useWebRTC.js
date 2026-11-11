@@ -86,10 +86,11 @@ const clampVolume = (value, fallback = 1.0) => {
   return Math.max(0, Math.min(numberValue, 5.0));
 };
 
+// 대화용 채팅이라 브라우저 음성 보정을 켠다. 끄면 에코·잡음이 그대로 가고 목소리 크기가 들쭉날쭉하다.
 const AUDIO_CONSTRAINTS = {
-  echoCancellation: false,
-  noiseSuppression: false,
-  autoGainControl: false,
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
   channelCount: { ideal: 1 },
   sampleRate: { ideal: 48000 },
   sampleSize: { ideal: 16 },
