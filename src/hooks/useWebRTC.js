@@ -86,6 +86,9 @@ const clampVolume = (value, fallback = 1.0) => {
   return Math.max(0, Math.min(numberValue, 5.0));
 };
 
+// 자동 볼륨을 끈 대신 마이크 소리를 이만큼 키워 보낸다(노트북 내장 마이크가 작다). 슬라이더로 0~4배 조절.
+const DEFAULT_MIC_VOLUME = 2.0;
+
 // 대화용 채팅이라 에코·잡음 제거는 켠다. 자동 볼륨은 끈다 — 넓은 시연장에서 말을 멈추면 볼륨을 올려
 // 주변 소음이 "위이잉" 커지고 다시 말할 때 소리가 깨졌다.
 const AUDIO_CONSTRAINTS = {
@@ -270,7 +273,7 @@ export const useWebRTC = (arg1, arg2, arg3) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [speakingUsers, setSpeakingUsers] = useState(new Set());
-  const [micVolume, setMicVolumeState] = useState(1.0);
+  const [micVolume, setMicVolumeState] = useState(DEFAULT_MIC_VOLUME);
   const [mediaError, setMediaError] = useState(null);
 
   const workspaceIdRef = useRef(workspaceId);
@@ -285,7 +288,7 @@ export const useWebRTC = (arg1, arg2, arg3) => {
   const localStreamRef = useRef(null);
   const audioCtxRef = useRef(null);
   const gainNodeRef = useRef(null);
-  const micVolumeRef = useRef(1.0);
+  const micVolumeRef = useRef(DEFAULT_MIC_VOLUME);
 
   const peerConnectionsRef = useRef({});
   const iceQueueRef = useRef({});
@@ -1553,16 +1556,23 @@ export const useWebRTC = (arg1, arg2, arg3) => {
         gainNodeRef.current = gainNode;
 
         /*
-         * 중요:
-         * 기존에는 Web Audio destination.stream을 WebRTC 송신용 stream으로 사용했습니다.
-         * 일부 브라우저/장치 조합에서 이 processed stream이 silent track처럼 동작할 수 있어
-         * 실제 마이크 raw stream을 peer connection에 직접 전달합니다.
+         * 자동 볼륨을 끄면(AUDIO_CONSTRAINTS 참고) 노트북 마이크 소리가 너무 작아서, gainNode 로 키운 소리를 보낸다.
+         * 예전에 이 가공된 stream 이 무음으로 간 적이 있다 — AudioContext 가 멈춰(suspended) 있으면 소리가 안 흐르므로,
+         * 그때는 원래 마이크 stream 을 그대로 보낸다(대신 마이크 볼륨 조절은 안 먹는다).
          */
-        localStreamRef.current = rawStream;
+        const destination = audioCtx.createMediaStreamDestination();
 
-        console.info("[WebRTC] outbound audio uses raw microphone stream", {
+        source.connect(gainNode);
+        gainNode.connect(destination);
+
+        localStreamRef.current =
+          audioCtx.state === "running" ? destination.stream : rawStream;
+
+        console.info("[WebRTC] outbound audio stream", {
+          boosted: localStreamRef.current !== rawStream,
+          audioContextState: audioCtx.state,
           audioConstraints: AUDIO_CONSTRAINTS,
-          audioTracks: rawStream.getAudioTracks?.().map((track) => ({
+          audioTracks: localStreamRef.current.getAudioTracks?.().map((track) => ({
             id: track.id,
             label: track.label,
             enabled: track.enabled,
