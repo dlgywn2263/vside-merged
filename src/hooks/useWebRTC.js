@@ -538,12 +538,8 @@ export const useWebRTC = (arg1, arg2, arg3) => {
     // 옛 연결은 버린다. 다시 들어가면 서버가 USER_JOINED 를 보내 팀원이 새로 OFFER 를 건다.
     Object.keys(peerConnectionsRef.current).forEach((key) => removePeer(key));
 
+    // 마이크를 꺼 둔 상태는 내 USER_JOINED 가 돌아올 때 다시 알린다(USER_JOINED 처리 참고).
     if (!sendSignalingMessage("JOIN", { channelId })) return;
-
-    // 서버 JOIN 은 마이크 상태를 켜짐으로 초기화하므로 꺼 둔 상태였으면 다시 알린다.
-    if (rawStreamRef.current?.getAudioTracks?.()[0]?.enabled === false) {
-      sendSignalingMessage("MUTE", { channelId });
-    }
 
     window.setTimeout(() => {
       requestRoomUsers(channelId);
@@ -1085,7 +1081,19 @@ export const useWebRTC = (arg1, arg2, arg3) => {
           }
 
           case "USER_JOINED": {
-            if (!senderKey || senderKey === myKey) break;
+            /*
+             * 서버 JOIN 은 마이크 상태를 켜짐으로 저장하고, JOIN 직후 보낸 MUTE 는 순서가 뒤바뀌면
+             * "방에 없는 사람"으로 무시된다. 내 USER_JOINED 가 돌아왔다 = JOIN 처리 완료이므로 여기서 MUTE 를 보낸다.
+             */
+            if (senderKey && senderKey === myKey) {
+              if (rawStreamRef.current?.getAudioTracks?.()[0]?.enabled === false) {
+                sendSignalingMessage("MUTE", { channelId: messageChannelId });
+              }
+
+              break;
+            }
+
+            if (!senderKey) break;
 
             setParticipants((prev) =>
               upsertParticipant(
