@@ -518,6 +518,37 @@ export const useWebRTC = (arg1, arg2, arg3) => {
     [stopRemoteAnalyzer],
   );
 
+  /*
+   * 소켓이 끊기면 서버는 나를 음성방 명단에서 지우는데(leaveBySession), 재연결만 하고 JOIN 을 다시 안 보내면
+   * 내 화면은 "참여 중"인데 서버 명단엔 없다 → 새로 온 팀원에게 내가 안 보이고 OFFER 도 거절된다.
+   * 그래서 재연결·"Sender is not in this voice channel" 때 방에 다시 들어간다.
+   */
+  const lastRejoinAtRef = useRef(0);
+
+  const rejoinVoiceChannel = useCallback(() => {
+    const channelId = joinedChannelIdRef.current;
+
+    if (!channelId) return;
+    // 서버가 계속 거절할 때 JOIN 을 무한히 반복하지 않도록 5초에 한 번만
+    if (Date.now() - lastRejoinAtRef.current < 5000) return;
+
+    lastRejoinAtRef.current = Date.now();
+
+    // 옛 연결은 버린다. 다시 들어가면 서버가 USER_JOINED 를 보내 팀원이 새로 OFFER 를 건다.
+    Object.keys(peerConnectionsRef.current).forEach((key) => removePeer(key));
+
+    if (!sendSignalingMessage("JOIN", { channelId })) return;
+
+    // 서버 JOIN 은 마이크 상태를 켜짐으로 초기화하므로 꺼 둔 상태였으면 다시 알린다.
+    if (rawStreamRef.current?.getAudioTracks?.()[0]?.enabled === false) {
+      sendSignalingMessage("MUTE", { channelId });
+    }
+
+    window.setTimeout(() => {
+      requestRoomUsers(channelId);
+    }, 250);
+  }, [removePeer, sendSignalingMessage, requestRoomUsers]);
+
   const cleanupLocalSpeakingMonitor = useCallback(() => {
     if (localSpeakingTimerRef.current) {
       window.clearTimeout(localSpeakingTimerRef.current);
@@ -1234,6 +1265,13 @@ export const useWebRTC = (arg1, arg2, arg3) => {
           case "ERROR": {
             if (!receiverKey || receiverKey === myKey) {
               console.warn("[WebRTC ERROR]", message.errorMessage);
+
+              if (
+                receiverKey === myKey &&
+                message.errorMessage === "Sender is not in this voice channel."
+              ) {
+                rejoinVoiceChannel();
+              }
             }
 
             break;
@@ -1252,6 +1290,7 @@ export const useWebRTC = (arg1, arg2, arg3) => {
       flushIceQueue,
       handleChannelsMessage,
       handleRoomUsersMessage,
+      rejoinVoiceChannel,
       removePeer,
       sendSignalingMessage,
     ],
@@ -1268,6 +1307,7 @@ export const useWebRTC = (arg1, arg2, arg3) => {
 
     let cancelled = false;
     let client = null;
+    let hasConnectedOnce = false;
 
     const connectWebRtcSocket = async () => {
       try {
@@ -1308,6 +1348,9 @@ export const useWebRTC = (arg1, arg2, arg3) => {
             setMediaError(null);
             setIsConnected(true);
 
+            const isReconnect = hasConnectedOnce;
+            hasConnectedOnce = true;
+
             client.subscribe(
               `/topic/workspace/${workspaceId}/webrtc`,
               (stompMessage) => {
@@ -1324,6 +1367,8 @@ export const useWebRTC = (arg1, arg2, arg3) => {
               if (!cancelled) {
                 requestChannels();
                 requestRoomUsers(selectedChannelIdRef.current || DEFAULT_CHANNEL_ID);
+                // 첫 연결의 JOIN 은 음성 시작 effect 가 보낸다. 재연결일 때만 방에 다시 들어간다.
+                if (isReconnect) rejoinVoiceChannel();
               }
             }, 100);
           },
@@ -1392,6 +1437,7 @@ export const useWebRTC = (arg1, arg2, arg3) => {
     requestChannels,
     requestRoomUsers,
     cleanupVoiceResources,
+    rejoinVoiceChannel,
   ]);
 
 
