@@ -86,11 +86,12 @@ const clampVolume = (value, fallback = 1.0) => {
   return Math.max(0, Math.min(numberValue, 5.0));
 };
 
-// 대화용 채팅이라 브라우저 음성 보정을 켠다. 끄면 에코·잡음이 그대로 가고 목소리 크기가 들쭉날쭉하다.
+// 대화용 채팅이라 에코·잡음 제거는 켠다. 자동 볼륨은 끈다 — 넓은 시연장에서 말을 멈추면 볼륨을 올려
+// 주변 소음이 "위이잉" 커지고 다시 말할 때 소리가 깨졌다.
 const AUDIO_CONSTRAINTS = {
   echoCancellation: true,
   noiseSuppression: true,
-  autoGainControl: true,
+  autoGainControl: false,
   channelCount: { ideal: 1 },
   sampleRate: { ideal: 48000 },
   sampleSize: { ideal: 16 },
