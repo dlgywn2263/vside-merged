@@ -1145,7 +1145,9 @@ export default function GitDashboard() {
         setConflictedFiles(restagedStatus.conflicted || []);
       }
 
-      if (latestStagedFiles.length === 0) {
+      // 병합 중이면 바뀐 파일이 없어도 커밋한다. 충돌을 현재 브랜치 쪽 코드로만 고르면 내용이 HEAD 와
+      // 같아져 스테이징 목록이 비는데, 그래도 병합 커밋(상대 브랜치를 두 번째 부모로)은 찍어야 병합이 끝난다.
+      if (latestStagedFiles.length === 0 && !latestStatus.isMerging) {
         showAlert({
           title: "커밋할 파일이 없습니다",
           message:
@@ -2976,7 +2978,7 @@ export default function GitDashboard() {
                       onClick={handleCommit}
                       disabled={
                         !commitMessage.trim() ||
-                        stagedFiles.length === 0 ||
+                        (stagedFiles.length === 0 && !isMerging) ||
                         conflictedFiles.length > 0 ||
                         isLoading
                       }
@@ -2991,7 +2993,7 @@ export default function GitDashboard() {
                       onClick={handleCommitAndPush}
                       disabled={
                         !commitMessage.trim() ||
-                        stagedFiles.length === 0 ||
+                        (stagedFiles.length === 0 && !isMerging) ||
                         conflictedFiles.length > 0 ||
                         isLoading
                       }
